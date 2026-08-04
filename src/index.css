@@ -1,0 +1,93 @@
+@import 'tailwindcss';
+
+@theme {
+  --font-sans:
+    'Rubik', 'Assistant', 'Segoe UI', system-ui, -apple-system, 'Arial Hebrew', Arial, sans-serif;
+}
+
+@layer base {
+  html {
+    color-scheme: dark;
+  }
+
+  body {
+    @apply bg-slate-950 text-slate-100 antialiased;
+    font-family: var(--font-sans);
+    background-image:
+      radial-gradient(60rem 40rem at 85% -10%, rgba(16, 185, 129, 0.14), transparent 60%),
+      radial-gradient(50rem 35rem at 5% 0%, rgba(56, 189, 248, 0.1), transparent 60%);
+    background-attachment: fixed;
+    min-height: 100vh;
+  }
+
+  /* מספרים בשדות קלט תמיד יוצגו משמאל לימין */
+  input[type='number'],
+  input[type='range'] {
+    direction: ltr;
+  }
+
+  ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+  ::-webkit-scrollbar-track {
+    @apply bg-transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    @apply rounded-full bg-slate-700/70;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    @apply bg-slate-600;
+  }
+}
+
+@layer components {
+  .card {
+    @apply rounded-2xl border border-slate-800/80 bg-slate-900/60 shadow-lg shadow-black/20 backdrop-blur-sm;
+  }
+
+  /* Tailwind v4 לא מאפשר @apply על מחלקות מותאמות, לכן הבסיס מוגדר על כל הווריאנטים יחד */
+  .btn,
+  .btn-primary,
+  .btn-ghost,
+  .btn-danger {
+    @apply inline-flex cursor-pointer items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold
+           transition-all select-none active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-40 disabled:active:scale-100;
+  }
+
+  .btn-primary {
+    @apply bg-emerald-500 text-emerald-950 shadow-md shadow-emerald-500/20 hover:bg-emerald-400;
+  }
+
+  .btn-ghost {
+    @apply border border-slate-700/80 bg-slate-800/50 text-slate-200 hover:border-slate-600 hover:bg-slate-800;
+  }
+
+  .btn-danger {
+    @apply bg-rose-500/15 text-rose-300 hover:bg-rose-500/25;
+  }
+
+  .input {
+    @apply w-full rounded-xl border border-slate-700/80 bg-slate-950/60 px-3.5 py-2.5 text-sm text-slate-100
+           outline-none transition placeholder:text-slate-500 focus:border-emerald-500/70 focus:ring-2 focus:ring-emerald-500/20;
+  }
+
+  .label {
+    @apply mb-1.5 block text-xs font-semibold tracking-wide text-slate-400;
+  }
+}
+
+@keyframes pop-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.animate-pop {
+  animation: pop-in 0.22s ease-out both;
+}
