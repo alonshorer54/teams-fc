@@ -6,6 +6,8 @@ import {
   Link2,
   Square,
   SquareCheck,
+  TrendingDown,
+  TrendingUp,
   UserX,
   X,
 } from 'lucide-react';
@@ -19,6 +21,7 @@ export function PlayerPicker({
   players,
   selectedIds,
   cancelledIds,
+  streaks,
   onToggle,
   onSetAll,
   onToggleCancelled,
@@ -26,6 +29,8 @@ export function PlayerPicker({
   players: Player[];
   selectedIds: string[];
   cancelledIds: string[];
+  /** רצף נוכחי לכל שחקן: חיובי = ניצחונות, שלילי = הפסדים */
+  streaks: Map<string, number>;
   onToggle: (id: string) => void;
   onSetAll: (ids: string[]) => void;
   onToggleCancelled: (id: string) => void;
@@ -116,6 +121,7 @@ export function PlayerPicker({
               const isOn = selected.has(p.id);
               const isCancelled = cancelled.has(p.id);
               const friend = p.friendOf ? nameById.get(p.friendOf) : null;
+              const streak = streaks.get(p.id) ?? 0;
 
               return (
                 <li key={p.id} className="flex gap-1">
@@ -139,11 +145,29 @@ export function PlayerPicker({
                     )}
                     <span className="min-w-0 flex-1">
                       <span
-                        className={`block truncate text-sm font-semibold ${
+                        className={`flex items-center gap-1.5 truncate text-sm font-semibold ${
                           isCancelled ? 'text-slate-400 line-through' : 'text-slate-100'
                         }`}
                       >
-                        {p.name}
+                        <span className="truncate">{p.name}</span>
+                        {streak <= -2 && (
+                          <span
+                            className="inline-flex shrink-0 items-center gap-0.5 rounded bg-amber-500/20 px-1 font-mono text-[9px] font-bold text-amber-300"
+                            title={`הפסיד ${Math.abs(streak)} שבועות ברצף — שווה לחזק אותו`}
+                          >
+                            <TrendingDown size={8} />
+                            {Math.abs(streak)}
+                          </span>
+                        )}
+                        {streak >= 2 && (
+                          <span
+                            className="inline-flex shrink-0 items-center gap-0.5 rounded bg-emerald-500/20 px-1 font-mono text-[9px] font-bold text-emerald-300"
+                            title={`ניצח ${streak} שבועות ברצף`}
+                          >
+                            <TrendingUp size={8} />
+                            {streak}
+                          </span>
+                        )}
                       </span>
                       {friend && (
                         <span className="flex items-center gap-1 truncate text-[10px] text-slate-500">

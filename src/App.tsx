@@ -14,6 +14,7 @@ import { useLocalStorage } from './hooks/useLocalStorage';
 import { useAuth } from './hooks/useAuth';
 import { useSyncedStore } from './hooks/useSyncedStore';
 import { todayISO } from './lib/format';
+import { computeHistoryStats, streakByPlayer } from './lib/stats';
 import { DEMO_PLAYERS } from './lib/demoData';
 import { PlayersView } from './components/PlayersView';
 import { DrawView } from './components/DrawView';
@@ -69,6 +70,12 @@ export default function App() {
 
   // טיוטות שנשמרו לפני שנוספו שדות הביטולים והכימיה
   const realDraft = useMemo(() => normalizeDraft(storedDraft, todayISO()), [storedDraft]);
+
+  // רצפי ניצחון/הפסד מההיסטוריה — מוצגים ליד השמות בזמן בחירת המשתתפים
+  const streaks = useMemo(
+    () => (demoPlayers ? new Map<string, number>() : streakByPlayer(computeHistoryStats(history))),
+    [history, demoPlayers],
+  );
 
   const players = demoPlayers ?? realPlayers;
   const draft = isDemo ? demoDraft : realDraft;
@@ -298,6 +305,7 @@ export default function App() {
             players={players}
             draft={draft}
             setDraft={setDraft}
+            streaks={streaks}
             onSaveHistory={saveToHistory}
             notify={notify}
             isDemo={isDemo}

@@ -73,13 +73,15 @@ export const TEAM_META: Record<
     softBg: 'bg-slate-950/40',
   },
   colored: {
+    // שלושה פסים מלאים — כחול / צהוב / אדום, בלי מראה של קשת
     name: 'צבעוני',
-    emoji: '🟠',
-    ring: 'border-orange-500/50',
-    header: 'bg-orange-500 text-orange-950',
-    chip: 'bg-orange-500/15 text-orange-200 border-orange-500/30',
-    dot: 'bg-orange-500',
-    softBg: 'bg-orange-500/[0.05]',
+    emoji: '🔵🟡🔴',
+    ring: 'border-amber-400/50',
+    header:
+      'bg-[linear-gradient(90deg,#2563eb_0_33.34%,#facc15_33.34%_66.67%,#dc2626_66.67%_100%)] text-white [text-shadow:0_1px_3px_rgba(0,0,0,0.55)]',
+    chip: 'bg-amber-400/10 text-amber-100 border-amber-400/30',
+    dot: 'bg-[linear-gradient(90deg,#2563eb_0_33.34%,#facc15_33.34%_66.67%,#dc2626_66.67%_100%)]',
+    softBg: 'bg-amber-400/[0.04]',
   },
 };
 

@@ -28,22 +28,44 @@ export const CHEMISTRY_LABEL: Record<ChemistryLevel, string> = {
   strong: 'כימיה חזקה',
 };
 
+/** הסבר בשפה פשוטה — מוצג למשתמש ליד הבורר. */
+export const CHEMISTRY_HELP: Record<ChemistryLevel, string> = {
+  off: 'מתעלם לגמרי מחברויות. מחלק אך ורק לפי דירוג, גם אם זה מפצל חברים.',
+  light: 'משאיר חברים יחד רק כשזה לא פוגע באיזון. הקבוצות יוצאות שוות, וחלק מהחברים יופרדו.',
+  strong: 'מעדיף להשאיר חברים יחד, ומוכן לפער קטן בין הקבוצות בשביל זה.',
+};
+
 /** כמה נקודות פער-ממוצע שווה שמירת זוג חברים יחד — כדי להסביר למשתמש את המחיר. */
 export const chemistryPriceInRating = (level: ChemistryLevel) =>
   (W_BROKEN_PAIR * CHEMISTRY_FACTOR[level]) / W_SPREAD;
 
 export interface TeamStats {
   count: number;
+  /** סכום הדירוגים — "כמה הקבוצה שווה על הנייר" */
   total: number;
   avg: number;
   /** מספר קשרי חברות שנשמרו בתוך הקבוצה */
   bondsKept: number;
+  /** הבונוס שהכימיה מוסיפה, בנקודות דירוג */
+  chemistryBonus: number;
+  /** דירוג + בונוס כימיה — האומדן ה"אמיתי" לחוזק הקבוצה */
+  combined: number;
 }
+
+/**
+ * כמה נקודות דירוג שווה זוג חברים שמשחקים יחד.
+ * לא מדע מדויק — אומדן שנועד לתת תחושה כמה הכימיה מוסיפה לקבוצה.
+ */
+export const CHEMISTRY_BONUS_PER_BOND = 0.3;
 
 export interface LineupStats {
   teams: Record<TeamId, TeamStats>;
   /** הפרש בין הממוצע הגבוה לממוצע הנמוך */
   spread: number;
+  /** הפרש בין סכום הדירוגים הגבוה לנמוך */
+  totalSpread: number;
+  /** הפרש בין הציון המשוקלל הגבוה לנמוך */
+  combinedSpread: number;
   bondsKept: number;
   bondsBroken: number;
   totalBonds: number;
@@ -99,6 +121,8 @@ export function computeStats(lineup: Lineup, pool: Player[]): LineupStats {
       total: round1(total),
       avg: members.length ? total / members.length : 0,
       bondsKept: 0,
+      chemistryBonus: 0,
+      combined: round1(total),
     };
   }
 
@@ -112,12 +136,23 @@ export function computeStats(lineup: Lineup, pool: Player[]): LineupStats {
     }
   }
 
-  const avgs = TEAM_IDS.filter((t) => teams[t].count > 0).map((t) => teams[t].avg);
-  const spread = avgs.length ? Math.max(...avgs) - Math.min(...avgs) : 0;
+  for (const t of TEAM_IDS) {
+    teams[t].chemistryBonus = round1(teams[t].bondsKept * CHEMISTRY_BONUS_PER_BOND);
+    teams[t].combined = round1(teams[t].total + teams[t].chemistryBonus);
+  }
+
+  const active = TEAM_IDS.filter((t) => teams[t].count > 0);
+  const spreadOf = (pick: (t: TeamId) => number) => {
+    if (!active.length) return 0;
+    const values = active.map(pick);
+    return Math.max(...values) - Math.min(...values);
+  };
 
   return {
     teams,
-    spread,
+    spread: spreadOf((t) => teams[t].avg),
+    totalSpread: spreadOf((t) => teams[t].total),
+    combinedSpread: spreadOf((t) => teams[t].combined),
     bondsKept,
     bondsBroken: bonds.length - bondsKept,
     totalBonds: bonds.length,

@@ -14,11 +14,11 @@ import {
 } from 'lucide-react';
 import { TEAM_IDS, TEAM_META, emptyLineup, type Lineup, type Player } from '../types';
 import {
+  CHEMISTRY_BONUS_PER_BOND,
+  CHEMISTRY_HELP,
   CHEMISTRY_LABEL,
-  chemistryPriceInRating,
   computeStats,
   describeBonds,
-  fmtAvg,
   findTeamOf,
   generateLineup,
   movePlayer,
@@ -40,6 +40,7 @@ export function DrawView({
   players,
   draft,
   setDraft,
+  streaks,
   onSaveHistory,
   notify,
   isDemo,
@@ -47,6 +48,7 @@ export function DrawView({
   players: Player[];
   draft: Draft;
   setDraft: (updater: (prev: Draft) => Draft) => void;
+  streaks: Map<string, number>;
   onSaveHistory: (lineup: Lineup, date: string, cancelledIds: string[]) => void;
   notify: (msg: string) => void;
   isDemo: boolean;
@@ -123,6 +125,7 @@ export function DrawView({
         players={players}
         selectedIds={selectedIds}
         cancelledIds={cancelledIds}
+        streaks={streaks}
         onToggle={(id) =>
           setDraft((p) => ({
             ...p,
@@ -172,6 +175,10 @@ export function DrawView({
           onChange={(next) => setDraft((p) => ({ ...p, chemistry: next }))}
         />
 
+        <p className="max-w-md text-[11px] leading-relaxed text-slate-500">
+          {CHEMISTRY_HELP[chemistry]}
+        </p>
+
         <div className="flex-1" />
 
         {lineup && (
@@ -191,10 +198,10 @@ export function DrawView({
               <button
                 className="btn-ghost"
                 onClick={() => setAdminView((v) => !v)}
-                title="הצגה/הסתרה של דירוגים"
+                title="מסתיר או מציג את הדירוגים והציונים על המסך"
               >
-                {adminView ? <Eye size={16} /> : <EyeOff size={16} />}
-                {adminView ? 'תצוגת מנהל' : 'ללא דירוגים'}
+                {adminView ? <EyeOff size={16} /> : <Eye size={16} />}
+                {adminView ? 'הסתרת דירוגים' : 'הצגת דירוגים'}
               </button>
             )}
 
@@ -298,17 +305,15 @@ function ChemistryPicker({
 }) {
   return (
     <div className="flex items-center gap-2">
-      <span className="text-xs font-semibold text-slate-400">כימיה</span>
+      <span className="text-xs font-semibold text-slate-400" title="כמה חשוב להשאיר חברים באותה קבוצה">
+        כימיה
+      </span>
       <div className="flex rounded-xl border border-slate-700/80 bg-slate-800/40 p-1">
         {CHEMISTRY_LEVELS.map((level) => (
           <button
             key={level}
             onClick={() => onChange(level)}
-            title={
-              level === 'off'
-                ? 'מתעלם לגמרי מקשרי חברות — חלוקה לפי דירוג בלבד'
-                : `מוותר על עד ${chemistryPriceInRating(level).toFixed(3)} נקודות פער בממוצע כדי לשמור זוג חברים יחד`
-            }
+            title={CHEMISTRY_HELP[level]}
             className={`cursor-pointer rounded-lg px-2.5 py-1.5 text-[11px] font-bold transition ${
               value === level ? 'bg-emerald-500 text-emerald-950' : 'text-slate-300 hover:text-white'
             }`}
@@ -331,34 +336,57 @@ function BalanceBar({
   chemistry: ChemistryLevel;
 }) {
   const quality =
-    stats.spread <= 0.1
+    stats.totalSpread <= 0.6
       ? { label: 'איזון מצוין', tone: 'text-emerald-300 bg-emerald-500/15 border-emerald-500/30' }
-      : stats.spread <= 0.25
+      : stats.totalSpread <= 1.5
         ? { label: 'איזון טוב', tone: 'text-sky-300 bg-sky-500/15 border-sky-500/30' }
         : { label: 'איזון בינוני', tone: 'text-amber-300 bg-amber-500/15 border-amber-500/30' };
 
   return (
-    <div className="card flex flex-wrap items-center justify-between gap-3 px-4 py-3">
-      <div className="flex flex-wrap items-center gap-2">
-        {TEAM_IDS.map((id) => (
-          <span
-            key={id}
-            className={`inline-flex items-center gap-2 rounded-lg border px-2.5 py-1.5 text-xs font-semibold ${TEAM_META[id].chip}`}
-          >
-            <span className={`size-2.5 rounded-full ${TEAM_META[id].dot}`} />
-            {TEAM_META[id].name}
-            <span dir="ltr" className="font-mono tabular-nums">
-              {fmtAvg(stats.teams[id].avg)}
-            </span>
-          </span>
-        ))}
+    <div className="card space-y-3 p-4">
+      <div className="grid gap-2 sm:grid-cols-3">
+        {TEAM_IDS.map((id) => {
+          const t = stats.teams[id];
+          return (
+            <div
+              key={id}
+              className={`rounded-xl border px-3 py-2.5 ${TEAM_META[id].chip}`}
+            >
+              <p className="flex items-center gap-2 text-xs font-bold">
+                <span className={`size-2.5 shrink-0 rounded-full ${TEAM_META[id].dot}`} />
+                {TEAM_META[id].name}
+                <span className="mr-auto font-mono text-[10px] opacity-70">{t.count} שחקנים</span>
+              </p>
+              <div className="mt-2 flex items-baseline gap-3">
+                <span className="flex items-baseline gap-1">
+                  <span dir="ltr" className="font-mono text-xl font-bold tabular-nums">
+                    {t.total.toFixed(1)}
+                  </span>
+                  <span className="text-[10px] opacity-70">דירוג</span>
+                </span>
+                <span className="flex items-baseline gap-1 opacity-90">
+                  <span dir="ltr" className="font-mono text-sm font-bold tabular-nums">
+                    {t.combined.toFixed(1)}
+                  </span>
+                  <span className="text-[10px] opacity-70">עם כימיה</span>
+                </span>
+              </div>
+            </div>
+          );
+        })}
       </div>
 
       <div className="flex flex-wrap items-center gap-2 text-xs">
         <span className={`rounded-lg border px-2.5 py-1.5 font-semibold ${quality.tone}`}>
-          {quality.label} · פער{' '}
+          {quality.label} · פער בדירוג{' '}
           <span dir="ltr" className="font-mono tabular-nums">
-            {stats.spread.toFixed(2)}
+            {stats.totalSpread.toFixed(1)}
+          </span>
+        </span>
+        <span className="rounded-lg border border-slate-700 bg-slate-800/50 px-2.5 py-1.5 font-semibold text-slate-300">
+          פער עם כימיה{' '}
+          <span dir="ltr" className="font-mono tabular-nums">
+            {stats.combinedSpread.toFixed(1)}
           </span>
         </span>
         {stats.totalBonds > 0 && (
@@ -366,6 +394,9 @@ function BalanceBar({
             {CHEMISTRY_LABEL[chemistry]}: {stats.bondsKept}/{stats.totalBonds} קשרים
           </span>
         )}
+        <span className="text-[11px] text-slate-500">
+          כל זוג חברים באותה קבוצה שווה {CHEMISTRY_BONUS_PER_BOND} נקודות דירוג
+        </span>
       </div>
     </div>
   );
