@@ -1,11 +1,5 @@
 import { TEAM_IDS, type MatchRecord, type TeamId } from '../types';
 
-export interface TeamRecordStats {
-  wins: number;
-  played: number;
-  winRate: number;
-}
-
 export interface CancellerStats {
   id: string;
   name: string;
@@ -15,44 +9,64 @@ export interface CancellerStats {
   rate: number;
 }
 
-export interface HistoryStats {
-  teams: Record<TeamId, TeamRecordStats>;
+export interface PlayerRecord {
+  id: string;
+  name: string;
+  /** משחקים עם תוצאה מעודכנת */
+  played: number;
+  wins: number;
+  losses: number;
   draws: number;
+  winRate: number;
+  /**
+   * רצף נוכחי: חיובי = ניצחונות ברצף, שלילי = הפסדים ברצף, 0 = תיקו אחרון.
+   * נספר מהמשחק האחרון אחורה.
+   */
+  streak: number;
+  /** התוצאה במשחק האחרון שלו */
+  last: 'win' | 'loss' | 'draw' | null;
+  /** האם שיחק בשבוע האחרון שנשמר */
+  playedLastWeek: boolean;
+}
+
+export interface HistoryStats {
   /** כמה הגרלות עדיין מחכות לעדכון תוצאה */
   pending: number;
   totalWithResult: number;
-  /** הקבוצה עם הכי הרבה ניצחונות (null אם תיקו בפסגה או שאין נתונים) */
-  leader: TeamId | null;
+  players: PlayerRecord[];
+  /** מי מפסיד 2+ שבועות ברצף — מועמדים לחיזוק בשבוע הבא */
+  coldStreak: PlayerRecord[];
+  /** מי מנצח 2+ שבועות ברצף */
+  hotStreak: PlayerRecord[];
   cancellers: CancellerStats[];
-  totalCancellations: number;
+  /** ההגרלה האחרונה עם תוצאה, לצורך "מי היה בקבוצה המנצחת" */
+  lastResolved: { record: MatchRecord; winners: string[]; losers: string[] } | null;
 }
 
+const teamOfPlayer = (record: MatchRecord, playerId: string): TeamId | null => {
+  for (const t of TEAM_IDS) if (record.teams[t].some((p) => p.id === playerId)) return t;
+  return null;
+};
+
 export function computeHistoryStats(history: MatchRecord[]): HistoryStats {
-  const teams = {
-    white: { wins: 0, played: 0, winRate: 0 },
-    black: { wins: 0, played: 0, winRate: 0 },
-    colored: { wins: 0, played: 0, winRate: 0 },
-  } as Record<TeamId, TeamRecordStats>;
-
-  let draws = 0;
-  let pending = 0;
-
+  // ההיסטוריה מגיעה מהחדש לישן; לחישוב רצפים זה בדיוק הסדר שאנחנו רוצים
+  const players = new Map<string, PlayerRecord>();
   const cancelMap = new Map<string, CancellerStats>();
+  /** האם הרצף של השחקן עדיין "פתוח" לספירה */
+  const streakOpen = new Map<string, boolean>();
+
+  let pending = 0;
+  let lastResolved: HistoryStats['lastResolved'] = null;
+  const lastWeekIds = new Set(
+    history[0] ? TEAM_IDS.flatMap((t) => history[0].teams[t].map((p) => p.id)) : [],
+  );
 
   for (const record of history) {
-    if (record.result) {
-      for (const t of TEAM_IDS) teams[t].played++;
-      if (record.result === 'draw') draws++;
-      else teams[record.result].wins++;
-    } else {
-      pending++;
-    }
+    if (!record.result) pending++;
 
-    // כל מי שהופיע ברשימת השבוע — בין אם שיחק ובין אם ביטל
-    const listed = [
-      ...TEAM_IDS.flatMap((t) => record.teams[t]),
-      ...(record.cancelled ?? []),
-    ];
+    const listed = [...TEAM_IDS.flatMap((t) => record.teams[t]), ...(record.cancelled ?? [])];
+
+    // ספירת ביטולים
     for (const p of listed) {
       const entry = cancelMap.get(p.id) ?? {
         id: p.id,
@@ -61,37 +75,90 @@ export function computeHistoryStats(history: MatchRecord[]): HistoryStats {
         appearances: 0,
         rate: 0,
       };
-      entry.name = p.name; // השם העדכני ביותר מנצח
+      entry.name = p.name;
       entry.appearances++;
       cancelMap.set(p.id, entry);
     }
-    for (const p of record.cancelled ?? []) {
-      const entry = cancelMap.get(p.id)!;
-      entry.cancellations++;
+    for (const p of record.cancelled ?? []) cancelMap.get(p.id)!.cancellations++;
+
+    if (!record.result) continue;
+
+    if (!lastResolved) {
+      const winners =
+        record.result === 'draw' ? [] : record.teams[record.result].map((p) => p.id);
+      const losers =
+        record.result === 'draw'
+          ? []
+          : TEAM_IDS.filter((t) => t !== record.result).flatMap((t) =>
+              record.teams[t].map((p) => p.id),
+            );
+      lastResolved = { record, winners, losers };
+    }
+
+    for (const t of TEAM_IDS) {
+      for (const p of record.teams[t]) {
+        const entry = players.get(p.id) ?? {
+          id: p.id,
+          name: p.name,
+          played: 0,
+          wins: 0,
+          losses: 0,
+          draws: 0,
+          winRate: 0,
+          streak: 0,
+          last: null,
+          playedLastWeek: lastWeekIds.has(p.id),
+        };
+        entry.name = p.name;
+        entry.played++;
+
+        const outcome: 'win' | 'loss' | 'draw' =
+          record.result === 'draw' ? 'draw' : teamOfPlayer(record, p.id) === record.result ? 'win' : 'loss';
+
+        if (outcome === 'win') entry.wins++;
+        else if (outcome === 'loss') entry.losses++;
+        else entry.draws++;
+
+        if (entry.last === null) {
+          entry.last = outcome;
+          streakOpen.set(p.id, outcome !== 'draw');
+          entry.streak = outcome === 'win' ? 1 : outcome === 'loss' ? -1 : 0;
+        } else if (streakOpen.get(p.id)) {
+          // ממשיכים לספור אחורה כל עוד התוצאה זהה לאחרונה
+          if (outcome === 'win' && entry.streak > 0) entry.streak++;
+          else if (outcome === 'loss' && entry.streak < 0) entry.streak--;
+          else streakOpen.set(p.id, false);
+        }
+
+        players.set(p.id, entry);
+      }
     }
   }
 
-  const totalWithResult = history.length - pending;
-  for (const t of TEAM_IDS) {
-    teams[t].winRate = teams[t].played ? teams[t].wins / teams[t].played : 0;
-  }
-
-  const ranked = [...TEAM_IDS].sort((a, b) => teams[b].wins - teams[a].wins);
-  const leader =
-    totalWithResult > 0 && teams[ranked[0]].wins > teams[ranked[1]].wins ? ranked[0] : null;
-
-  const cancellers = [...cancelMap.values()]
-    .filter((c) => c.cancellations > 0)
-    .map((c) => ({ ...c, rate: c.appearances ? c.cancellations / c.appearances : 0 }))
-    .sort((a, b) => b.cancellations - a.cancellations || b.rate - a.rate);
+  const list = [...players.values()].map((p) => ({
+    ...p,
+    winRate: p.played ? p.wins / p.played : 0,
+  }));
 
   return {
-    teams,
-    draws,
     pending,
-    totalWithResult,
-    leader,
-    cancellers,
-    totalCancellations: cancellers.reduce((s, c) => s + c.cancellations, 0),
+    totalWithResult: history.length - pending,
+    players: list.sort((a, b) => b.winRate - a.winRate || b.played - a.played),
+    coldStreak: list
+      .filter((p) => p.streak <= -2)
+      .sort((a, b) => a.streak - b.streak || b.played - a.played),
+    hotStreak: list
+      .filter((p) => p.streak >= 2)
+      .sort((a, b) => b.streak - a.streak || b.played - a.played),
+    cancellers: [...cancelMap.values()]
+      .filter((c) => c.cancellations > 0)
+      .map((c) => ({ ...c, rate: c.appearances ? c.cancellations / c.appearances : 0 }))
+      .sort((a, b) => b.cancellations - a.cancellations || b.rate - a.rate),
+    lastResolved,
   };
+}
+
+/** מיפוי מהיר של רצפים, לשימוש במסך בחירת השחקנים. */
+export function streakByPlayer(stats: HistoryStats): Map<string, number> {
+  return new Map(stats.players.map((p) => [p.id, p.streak]));
 }

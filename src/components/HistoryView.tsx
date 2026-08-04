@@ -6,6 +6,8 @@ import {
   History,
   RotateCcw,
   Trash2,
+  TrendingDown,
+  TrendingUp,
   Trophy,
   UserX,
 } from 'lucide-react';
@@ -279,59 +281,70 @@ function ResultPicker({
 
 function StatsPanel({ stats }: { stats: ReturnType<typeof computeHistoryStats> }) {
   const hasResults = stats.totalWithResult > 0;
+  const last = stats.lastResolved;
 
   return (
     <section className="card space-y-4 p-4">
       <div>
-        <h2 className="mb-3 flex flex-wrap items-center gap-2 text-sm font-bold text-slate-100">
+        <h2 className="mb-1 flex flex-wrap items-center gap-2 text-sm font-bold text-slate-100">
           <Trophy size={16} className="text-amber-400" />
-          טבלת הניצחונות
+          מי מנצח ומי מפסיד
           {stats.pending > 0 && (
             <span className="rounded-md bg-slate-700/70 px-1.5 py-0.5 text-[10px] font-semibold text-slate-300">
               {stats.pending} ממתינות לעדכון
             </span>
           )}
         </h2>
+        <p className="mb-3 text-[11px] text-slate-500">
+          לפי שחקנים ולא לפי צבע קבוצה — הצבעים מתחלפים כל שבוע.
+        </p>
 
         {!hasResults ? (
           <p className="text-xs text-slate-400">
-            עדיין לא עודכנה אף תוצאה. פתחו הגרלה למטה וסמנו מי ניצח — הטבלה תתמלא לבד.
+            עדיין לא עודכנה אף תוצאה. פתחו הגרלה למטה וסמנו מי ניצח — כאן תראו מי בסדרת הפסדים.
           </p>
         ) : (
-          <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-            {TEAM_IDS.map((id) => {
-              const t = stats.teams[id];
-              const isLeader = stats.leader === id;
-              return (
-                <div
-                  key={id}
-                  className={`rounded-xl border px-3 py-2.5 text-center ${
-                    isLeader
-                      ? 'border-amber-400/60 bg-amber-500/10'
-                      : 'border-slate-800 bg-slate-900/40'
-                  }`}
-                >
-                  <p className="flex items-center justify-center gap-1 text-[11px] font-semibold text-slate-300">
-                    <span className={`size-2 rounded-full ${TEAM_META[id].dot}`} />
-                    {TEAM_META[id].name}
-                    {isLeader && <Trophy size={10} className="text-amber-400" />}
-                  </p>
-                  <p className="mt-1 font-mono text-2xl font-bold text-slate-100 tabular-nums">
-                    {t.wins}
-                  </p>
-                  <p className="text-[10px] text-slate-500">
-                    {Math.round(t.winRate * 100)}% מתוך {t.played}
-                  </p>
-                </div>
-              );
-            })}
-            <div className="rounded-xl border border-slate-800 bg-slate-900/40 px-3 py-2.5 text-center">
-              <p className="text-[11px] font-semibold text-slate-300">🤝 תיקו</p>
-              <p className="mt-1 font-mono text-2xl font-bold text-slate-100 tabular-nums">
-                {stats.draws}
-              </p>
-              <p className="text-[10px] text-slate-500">משחקים</p>
-            </div>
+          <div className="space-y-4">
+            {last && last.winners.length > 0 && (
+              <div className="rounded-xl border border-emerald-500/25 bg-emerald-500/5 p-3">
+                <p className="mb-2 text-[11px] font-bold text-emerald-300">
+                  הקבוצה המנצחת האחרונה ({formatHebrewDate(last.record.date)})
+                </p>
+                <ul className="flex flex-wrap gap-1.5">
+                  {last.record.result !== 'draw' &&
+                    last.record.teams[last.record.result!].map((p) => (
+                      <li
+                        key={p.id}
+                        className="rounded-lg bg-emerald-500/15 px-2 py-1 text-[11px] font-semibold text-emerald-200"
+                      >
+                        {p.name}
+                      </li>
+                    ))}
+                </ul>
+              </div>
+            )}
+
+            {stats.coldStreak.length > 0 && (
+              <div className="rounded-xl border border-amber-500/30 bg-amber-500/5 p-3">
+                <p className="mb-2 flex items-center gap-1.5 text-[11px] font-bold text-amber-300">
+                  <TrendingDown size={12} />
+                  בסדרת הפסדים — שווה לחזק אותם השבוע
+                </p>
+                <ul className="flex flex-wrap gap-1.5">
+                  {stats.coldStreak.map((p) => (
+                    <li
+                      key={p.id}
+                      className="rounded-lg bg-amber-500/15 px-2 py-1 text-[11px] font-semibold text-amber-200"
+                    >
+                      {p.name}
+                      <span className="mr-1 font-mono opacity-80">{Math.abs(p.streak)} ברצף</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
+            <PlayerTable players={stats.players} />
           </div>
         )}
       </div>
@@ -370,5 +383,78 @@ function StatsPanel({ stats }: { stats: ReturnType<typeof computeHistoryStats> }
         </div>
       )}
     </section>
+  );
+}
+
+/* ------------------------- טבלת שחקנים ------------------------- */
+
+function PlayerTable({ players }: { players: ReturnType<typeof computeHistoryStats>['players'] }) {
+  const [showAll, setShowAll] = useState(false);
+  const visible = showAll ? players : players.slice(0, 8);
+
+  return (
+    <div>
+      <div className="overflow-x-auto">
+        <table className="w-full min-w-[26rem] text-xs">
+          <thead>
+            <tr className="text-[10px] text-slate-500">
+              <th className="px-2 py-1.5 text-right font-semibold">שחקן</th>
+              <th className="px-2 py-1.5 text-center font-semibold">משחקים</th>
+              <th className="px-2 py-1.5 text-center font-semibold">נצ׳</th>
+              <th className="px-2 py-1.5 text-center font-semibold">הפ׳</th>
+              <th className="px-2 py-1.5 text-center font-semibold">אחוז</th>
+              <th className="px-2 py-1.5 text-center font-semibold">רצף</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-slate-800/60">
+            {visible.map((p) => (
+              <tr key={p.id} className="text-slate-200">
+                <td className="max-w-[9rem] truncate px-2 py-1.5 font-semibold">{p.name}</td>
+                <td className="px-2 py-1.5 text-center font-mono text-slate-400 tabular-nums">
+                  {p.played}
+                </td>
+                <td className="px-2 py-1.5 text-center font-mono text-emerald-300 tabular-nums">
+                  {p.wins}
+                </td>
+                <td className="px-2 py-1.5 text-center font-mono text-rose-300 tabular-nums">
+                  {p.losses}
+                </td>
+                <td className="px-2 py-1.5 text-center font-mono tabular-nums">
+                  {Math.round(p.winRate * 100)}%
+                </td>
+                <td className="px-2 py-1.5 text-center">
+                  <StreakBadge streak={p.streak} />
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      {players.length > 8 && (
+        <button
+          className="mt-2 w-full rounded-lg py-1.5 text-[11px] font-semibold text-slate-400 transition hover:bg-slate-800/60 hover:text-slate-200"
+          onClick={() => setShowAll((v) => !v)}
+        >
+          {showAll ? 'הצגת 8 המובילים בלבד' : `הצגת כל ${players.length} השחקנים`}
+        </button>
+      )}
+    </div>
+  );
+}
+
+export function StreakBadge({ streak }: { streak: number }) {
+  if (streak === 0) return <span className="text-slate-600">—</span>;
+  const win = streak > 0;
+  return (
+    <span
+      className={`inline-flex items-center gap-0.5 rounded px-1.5 py-0.5 font-mono text-[10px] font-bold tabular-nums ${
+        win ? 'bg-emerald-500/15 text-emerald-300' : 'bg-rose-500/15 text-rose-300'
+      }`}
+      title={win ? `ניצח ${streak} שבועות ברצף` : `הפסיד ${Math.abs(streak)} שבועות ברצף`}
+    >
+      {win ? <TrendingUp size={9} /> : <TrendingDown size={9} />}
+      {Math.abs(streak)}
+    </span>
   );
 }

@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { GripVertical, Link2, Unlink, Users } from 'lucide-react';
 import { TEAM_META, type Lineup, type Player, type TeamId } from '../types';
-import { bondStatus, fmtAvg, type TeamStats } from '../lib/balance';
+import { CHEMISTRY_BONUS_PER_BOND, bondStatus, type TeamStats } from '../lib/balance';
 import { RatingBadge } from './ui';
 
 export function TeamCard({
@@ -71,10 +71,10 @@ export function TeamCard({
           {adminView && (
             <span
               dir="ltr"
-              className="rounded-lg bg-black/20 px-2 py-1 font-mono text-xs tabular-nums"
-              title="דירוג ממוצע"
+              className="rounded-lg bg-black/20 px-2 py-1 font-mono text-sm tabular-nums"
+              title="סך כל הדירוגים בקבוצה"
             >
-              ⌀ {fmtAvg(stats.avg)}
+              {stats.total.toFixed(1)}
             </span>
           )}
         </div>
@@ -144,14 +144,28 @@ export function TeamCard({
       </ul>
 
       {adminView && stats.count > 0 && (
-        <footer className="flex items-center justify-between border-t border-slate-800/70 bg-slate-950/50 px-4 py-2 text-[11px] text-slate-400">
-          <span>
-            סה״כ דירוג: <span className="font-mono text-slate-200 tabular-nums">{stats.total.toFixed(1)}</span>
-          </span>
-          <span className="inline-flex items-center gap-1">
-            <Link2 size={11} className="text-emerald-400" />
-            {stats.bondsKept} קשרים
-          </span>
+        <footer className="grid grid-cols-3 divide-x divide-x-reverse divide-slate-800/70 border-t border-slate-800/70 bg-slate-950/50 text-center">
+          <div className="px-2 py-2" title="סכום הדירוגים של כל השחקנים בקבוצה">
+            <p className="font-mono text-base font-bold text-slate-100 tabular-nums">
+              {stats.total.toFixed(1)}
+            </p>
+            <p className="text-[10px] text-slate-500">דירוג</p>
+          </div>
+          <div
+            className="px-2 py-2"
+            title={`${stats.bondsKept} זוגות חברים יחד × ${CHEMISTRY_BONUS_PER_BOND} נקודות`}
+          >
+            <p className="inline-flex items-center gap-1 font-mono text-base font-bold text-emerald-300 tabular-nums">
+              <Link2 size={11} />+{stats.chemistryBonus.toFixed(1)}
+            </p>
+            <p className="text-[10px] text-slate-500">כימיה ({stats.bondsKept})</p>
+          </div>
+          <div className="px-2 py-2" title="דירוג + בונוס הכימיה — האומדן לחוזק האמיתי">
+            <p className="font-mono text-base font-bold text-sky-300 tabular-nums">
+              {stats.combined.toFixed(1)}
+            </p>
+            <p className="text-[10px] text-slate-500">משוקלל</p>
+          </div>
         </footer>
       )}
     </section>
