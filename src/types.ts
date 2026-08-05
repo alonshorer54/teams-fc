@@ -48,6 +48,8 @@ export interface Player {
   hateIds: string[];
   /** מלל חופשי לגמרי: "לא בכושר", "רץ הרבה", "חוזר מפציעה" — מה שתרצו */
   tags: string[];
+  /** מנהל הקבוצה — מי שסוגר את המגרש ואוסף את הכסף */
+  isManager?: boolean;
   /** @deprecated שדה ישן מגרסה קודמת — מומר ל-friendIds בטעינה */
   friendOf?: string | null;
   /** @deprecated שדה ישן — ההערה הופכת לתגית בטעינה */

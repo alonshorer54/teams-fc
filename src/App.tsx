@@ -1,5 +1,14 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { BarChart3, Database, FlaskConical, History, Shuffle, Users, X } from 'lucide-react';
+import {
+  BarChart3,
+  Database,
+  FlaskConical,
+  History,
+  Shuffle,
+  Users,
+  Wallet,
+  X,
+} from 'lucide-react';
 import {
   TEAM_IDS,
   normalizePlayers,
@@ -9,7 +18,13 @@ import {
   type Player,
   type TeamId,
 } from './types';
-import { STORAGE_KEYS, emptyDraft, normalizeDraft, type Draft } from './lib/storage';
+import {
+  STORAGE_KEYS,
+  emptyDraft,
+  normalizeDraft,
+  normalizeSettings,
+  type Draft,
+} from './lib/storage';
 import { isCloudConfigured } from './lib/supabase';
 import { useLocalStorage } from './hooks/useLocalStorage';
 import { useAuth } from './hooks/useAuth';
@@ -23,17 +38,20 @@ import { PlayersView } from './components/PlayersView';
 import { DrawView } from './components/DrawView';
 import { HistoryView } from './components/HistoryView';
 import { AnalysisView } from './components/AnalysisView';
+import { PaymentsView } from './components/PaymentsView';
+import { InstallButton } from './components/InstallButton';
 import { BackupCard } from './components/BackupCard';
 import { AuthGate, CloudNotConfigured } from './components/AuthGate';
 import { SyncBadge } from './components/SyncBadge';
 import { Toast } from './components/ui';
 import type { PlayerDraft } from './components/PlayerFormModal';
 
-type Tab = 'players' | 'draw' | 'history' | 'analysis';
+type Tab = 'players' | 'draw' | 'payments' | 'history' | 'analysis';
 
 const TABS: { id: Tab; label: string; icon: typeof Users }[] = [
   { id: 'players', label: 'שחקנים', icon: Users },
   { id: 'draw', label: 'כוחות', icon: Shuffle },
+  { id: 'payments', label: 'תשלומים', icon: Wallet },
   { id: 'history', label: 'היסטוריה', icon: History },
   { id: 'analysis', label: 'מגמות', icon: BarChart3 },
 ];
@@ -97,10 +115,11 @@ export default function App() {
   // אפקטים נלמדים לזוגות — זמינים להגרלה כשהקריטריון דלוק
   const pairEffects = useMemo(() => pairEffectMap(computePairChemistry(history)), [history]);
 
-  // סדר העדיפויות מסתנכרן בענן יחד עם השחקנים וההיסטוריה
+  // ההגדרות מסתנכרנות בענן יחד עם השחקנים וההיסטוריה
+  const settings = useMemo(() => normalizeSettings(store.settings), [store.settings]);
   const priorities = useMemo(
-    () => normalizePriorities(store.settings.priorities),
-    [store.settings.priorities],
+    () => normalizePriorities(settings.priorities),
+    [settings.priorities],
   );
   const setPriorities = useCallback(
     (next: CriterionSetting[]) => store.setSettings((prev) => ({ ...prev, priorities: next })),
@@ -266,6 +285,7 @@ export default function App() {
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
+          <InstallButton notify={notify} />
           {!isDemo && (
             <button className="btn-ghost text-xs" onClick={enterDemo}>
               <FlaskConical size={14} />
@@ -382,6 +402,17 @@ export default function App() {
             }}
             onSetResult={setResult}
             onRestore={restoreRecord}
+            notify={notify}
+          />
+        )}
+
+        {tab === 'payments' && (
+          <PaymentsView
+            players={players}
+            roundPlayerIds={draft.selectedIds}
+            matchDate={draft.matchDate}
+            settings={settings}
+            onChange={store.setSettings}
             notify={notify}
           />
         )}

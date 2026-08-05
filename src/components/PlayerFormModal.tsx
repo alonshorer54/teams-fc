@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Heart, HeartCrack, Link2, Plus, Tag, UserPen, UserPlus, X } from 'lucide-react';
+import { Heart, HeartCrack, Link2, Plus, ShieldCheck, Tag, UserPen, UserPlus, X } from 'lucide-react';
 import type { Player } from '../types';
 import { Modal } from './ui';
 
@@ -10,6 +10,7 @@ export interface PlayerDraft {
   loveIds: string[];
   hateIds: string[];
   tags: string[];
+  isManager: boolean;
 }
 
 const clampRating = (n: number) => Math.min(5, Math.max(1, Math.round(n * 10) / 10));
@@ -36,6 +37,7 @@ export function PlayerFormModal({
   const [loveIds, setLoveIds] = useState<string[]>([]);
   const [hateIds, setHateIds] = useState<string[]>([]);
   const [tags, setTags] = useState<string[]>([]);
+  const [isManager, setIsManager] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -46,6 +48,7 @@ export function PlayerFormModal({
     setLoveIds(editing?.loveIds ?? []);
     setHateIds(editing?.hateIds ?? []);
     setTags(editing?.tags ?? []);
+    setIsManager(editing?.isManager ?? false);
     setError(null);
   }, [open, editing]);
 
@@ -72,6 +75,7 @@ export function PlayerFormModal({
       loveIds: loveIds.filter((id) => !hateIds.includes(id) && !friendIds.includes(id)),
       hateIds: hateIds.filter((id) => !friendIds.includes(id)),
       tags,
+      isManager,
     });
   };
 
@@ -171,6 +175,25 @@ export function PlayerFormModal({
         />
 
         <TagPicker knownTags={knownTags} value={tags} onChange={setTags} />
+
+        <label className="flex cursor-pointer items-start gap-3 rounded-xl border border-slate-800 bg-slate-950/40 p-3">
+          <input
+            type="checkbox"
+            className="mt-0.5 size-4 accent-amber-500"
+            checked={isManager}
+            onChange={(e) => setIsManager(e.target.checked)}
+          />
+          <span>
+            <span className="flex items-center gap-1.5 text-sm font-semibold text-slate-100">
+              <ShieldCheck size={14} className="text-amber-400" />
+              מנהל קבוצה
+            </span>
+            <span className="mt-0.5 block text-[11px] leading-relaxed text-slate-500">
+              מי שסוגר את המגרש ואוסף את הכסף. מסומן ברשימות, ומופיע ראשון במסך התשלומים. אפשר לסמן
+              יותר מאחד.
+            </span>
+          </span>
+        </label>
 
         {error && (
           <p className="rounded-lg bg-rose-500/10 px-3 py-2 text-xs font-semibold text-rose-300">

@@ -6,6 +6,7 @@ import {
   Link2,
   Pencil,
   Search,
+  ShieldCheck,
   Tag,
   Trash2,
   UserPlus,
@@ -29,7 +30,8 @@ export function PlayersView({
   onDelete: (id: string) => void;
 }) {
   const [query, setQuery] = useState('');
-  const [sortKey, setSortKey] = useState<SortKey>('rating');
+  // ברירת מחדל לפי א"ב — הכי נוח למצוא שחקן מסוים
+  const [sortKey, setSortKey] = useState<SortKey>('name');
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState<Player | null>(null);
   const [pendingDelete, setPendingDelete] = useState<Player | null>(null);
@@ -137,7 +139,12 @@ export function PlayersView({
                 </div>
 
                 <div className="min-w-0 flex-1 space-y-0.5">
-                  <p className="truncate font-semibold text-slate-100">{p.name}</p>
+                  <p className="flex items-center gap-1.5 truncate font-semibold text-slate-100">
+                    <span className="truncate">{p.name}</span>
+                    {p.isManager && (
+                      <ShieldCheck size={13} className="shrink-0 text-amber-400" aria-label="מנהל קבוצה" />
+                    )}
+                  </p>
 
                   {p.friendIds.length > 0 && (
                     <p className="flex items-center gap-1 truncate text-[11px] text-slate-400">
