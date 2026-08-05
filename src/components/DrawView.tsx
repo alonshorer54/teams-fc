@@ -3,38 +3,41 @@ import {
   ArrowLeftRight,
   Eye,
   EyeOff,
+  Heart,
+  HeartCrack,
   Link2,
   Save,
   Scale,
   Shuffle,
   Sparkles,
   Trash2,
-  Unlink,
   Users,
 } from 'lucide-react';
 import { TEAM_IDS, TEAM_META, emptyLineup, type Lineup, type Player } from '../types';
 import {
   CHEMISTRY_BONUS_PER_BOND,
-  CHEMISTRY_HELP,
-  CHEMISTRY_LABEL,
   computeStats,
   describeBonds,
   findTeamOf,
   generateLineup,
   movePlayer,
   swapPlayers,
-  type ChemistryLevel,
 } from '../lib/balance';
+import {
+  CRITERION_META,
+  penaltyBreakdown,
+  type CriterionId,
+  type CriterionSetting,
+} from '../lib/criteria';
 import type { Draft } from '../lib/storage';
 import { EmptyState } from './ui';
 import { RoundPanel } from './RoundPanel';
+import { PrioritiesPanel } from './PrioritiesPanel';
 import { TeamCard } from './TeamCard';
 import { ShareView } from './ShareView';
 import type { ShareTeams } from '../lib/format';
 
 type Mode = 'admin' | 'share';
-
-const CHEMISTRY_LEVELS: ChemistryLevel[] = ['off', 'light', 'strong'];
 
 export function DrawView({
   players,
@@ -42,6 +45,8 @@ export function DrawView({
   setDraft,
   streaks,
   pairEffects,
+  priorities,
+  setPriorities,
   onSaveHistory,
   notify,
   isDemo,
@@ -52,6 +57,8 @@ export function DrawView({
   streaks: Map<string, number>;
   /** אפקטים נלמדים לזוגות, מתוך ההיסטוריה */
   pairEffects: Map<string, number>;
+  priorities: CriterionSetting[];
+  setPriorities: (next: CriterionSetting[]) => void;
   onSaveHistory: (lineup: Lineup, date: string, cancelledIds: string[]) => void;
   notify: (msg: string) => void;
   isDemo: boolean;
@@ -60,24 +67,44 @@ export function DrawView({
   const [adminView, setAdminView] = useState(true);
   const [selectedPlayer, setSelectedPlayer] = useState<string | null>(null);
 
-  const { selectedIds, cancelledIds, substitutions, lineup, matchDate, chemistry, gameChemistry } =
-    draft;
+  const { selectedIds, cancelledIds, substitutions, lineup, matchDate } = draft;
 
   const pool = useMemo(() => {
     const set = new Set(selectedIds);
     return players.filter((p) => set.has(p.id));
   }, [players, selectedIds]);
 
-  // האפקטים הנלמדים משפיעים רק כשהמתג דלוק
+  // הכימיה המשחקית נכנסת לחישוב רק אם הקריטריון דלוק בסדר העדיפויות
+  const gameChemistryOn = priorities.find((p) => p.id === 'gameChemistry')?.enabled;
   const activeEffects = useMemo(
-    () => (gameChemistry ? pairEffects : new Map<string, number>()),
-    [gameChemistry, pairEffects],
+    () => (gameChemistryOn ? pairEffects : new Map<string, number>()),
+    [gameChemistryOn, pairEffects],
   );
 
   const stats = useMemo(
     () => computeStats(lineup ?? emptyLineup(), pool, activeEffects),
     [lineup, pool, activeEffects],
   );
+
+  const ratingOf = useMemo(() => new Map(pool.map((p) => [p.id, p.rating])), [pool]);
+  const breakdown = useMemo(
+    () =>
+      penaltyBreakdown(
+        { lineup: lineup ?? emptyLineup(), pool, ratingOf, pairEffects: activeEffects },
+        priorities,
+      ),
+    [lineup, pool, ratingOf, activeEffects, priorities],
+  );
+
+  const unavailable = useMemo(() => {
+    const map: Partial<Record<CriterionId, string>> = {};
+    if (!pairEffects.size) map.gameChemistry = 'עוד אין מספיק היסטוריה עם תוצאות כדי ללמוד זוגות';
+    if (!players.some((p) => p.tags.length)) map.tags = 'עוד לא הוגדרו תגיות לשחקנים';
+    if (!players.some((p) => p.loveIds.length || p.hateIds.length))
+      map.affinity = 'עוד לא הוגדרו העדפות אהבה/שנאה';
+    if (!players.some((p) => p.friendIds.length)) map.friends = 'עוד לא הוגדרו חברויות';
+    return map;
+  }, [pairEffects, players]);
   const bonds = useMemo(() => describeBonds(lineup ?? emptyLineup(), pool), [lineup, pool]);
   const nameById = useMemo(() => new Map(players.map((p) => [p.id, p.name])), [players]);
 
@@ -97,7 +124,11 @@ export function DrawView({
       notify('צריך לבחור לפחות 3 שחקנים');
       return;
     }
-    setLineup(generateLineup(pool, { chemistry, pairEffects: activeEffects }));
+    // קריטריונים בלי נתונים מכובים כדי שלא יבזבזו משקל
+    const effective = priorities.map((p) =>
+      unavailable[p.id] ? { ...p, enabled: false } : p,
+    );
+    setLineup(generateLineup(pool, { priorities: effective, pairEffects: activeEffects }));
     setSelectedPlayer(null);
     notify('הכוחות הוגרלו! ⚽');
   };
@@ -177,6 +208,12 @@ export function DrawView({
         }
       />
 
+      <PrioritiesPanel
+        priorities={priorities}
+        onChange={setPriorities}
+        unavailable={unavailable}
+      />
+
       {/* סרגל הגרלה */}
       <div className="card flex flex-col gap-3 p-4 xl:flex-row xl:items-center">
         <button className="btn-primary xl:w-44" onClick={generate} disabled={pool.length < 3}>
@@ -196,21 +233,6 @@ export function DrawView({
             onChange={(e) => setDraft((p) => ({ ...p, matchDate: e.target.value }))}
           />
         </div>
-
-        <ChemistryPicker
-          value={chemistry}
-          onChange={(next) => setDraft((p) => ({ ...p, chemistry: next }))}
-        />
-
-        <GameChemistryToggle
-          enabled={gameChemistry}
-          available={pairEffects.size}
-          onChange={(next) => setDraft((p) => ({ ...p, gameChemistry: next }))}
-        />
-
-        <p className="max-w-sm text-[11px] leading-relaxed text-slate-500">
-          {CHEMISTRY_HELP[chemistry]}
-        </p>
 
         <div className="flex-1" />
 
@@ -276,7 +298,8 @@ export function DrawView({
         <>
           {adminView && (
             <>
-              <BalanceBar stats={stats} chemistry={chemistry} gameChemistry={gameChemistry} />
+              <BalanceBar stats={stats} gameChemistry={!!gameChemistryOn} />
+              <CriteriaScores breakdown={breakdown} unavailable={unavailable} />
               {bonds.length > 0 && <BondsPanel bonds={bonds} />}
             </>
           )}
@@ -327,74 +350,45 @@ export function DrawView({
   );
 }
 
-/* ------------------------- בורר עוצמת הכימיה ------------------------- */
+/* --------------------- ציון לכל קריטריון בהגרלה --------------------- */
 
-function ChemistryPicker({
-  value,
-  onChange,
+function CriteriaScores({
+  breakdown,
+  unavailable,
 }: {
-  value: ChemistryLevel;
-  onChange: (next: ChemistryLevel) => void;
+  breakdown: ReturnType<typeof penaltyBreakdown>;
+  unavailable: Partial<Record<CriterionId, string>>;
 }) {
+  const active = breakdown.filter((b) => b.enabled && !unavailable[b.id]);
+  if (!active.length) return null;
+
   return (
-    <div className="flex items-center gap-2">
-      <span className="text-xs font-semibold text-slate-400" title="כמה חשוב להשאיר חברים באותה קבוצה">
-        כימיה
-      </span>
-      <div className="flex rounded-xl border border-slate-700/80 bg-slate-800/40 p-1">
-        {CHEMISTRY_LEVELS.map((level) => (
-          <button
-            key={level}
-            onClick={() => onChange(level)}
-            title={CHEMISTRY_HELP[level]}
-            className={`cursor-pointer rounded-lg px-2.5 py-1.5 text-[11px] font-bold transition ${
-              value === level ? 'bg-emerald-500 text-emerald-950' : 'text-slate-300 hover:text-white'
-            }`}
+    <div className="card flex flex-wrap items-center gap-2 px-4 py-3">
+      <span className="text-[11px] font-bold text-slate-400">עמידה בקריטריונים:</span>
+      {active.map((b) => {
+        const meta = CRITERION_META[b.id];
+        const tone =
+          b.score >= 90
+            ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-300'
+            : b.score >= 70
+              ? 'border-sky-500/30 bg-sky-500/10 text-sky-300'
+              : 'border-amber-500/30 bg-amber-500/10 text-amber-300';
+
+        return (
+          <span
+            key={b.id}
+            className={`inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-[11px] font-semibold ${tone}`}
+            title={`${meta.help} — עדיפות ${b.rank + 1}`}
           >
-            {CHEMISTRY_LABEL[level]}
-          </button>
-        ))}
-      </div>
+            <span className="font-mono text-[10px] opacity-70">{b.rank + 1}</span>
+            {meta.emoji} {meta.label}
+            <span dir="ltr" className="font-mono tabular-nums">
+              {b.score}
+            </span>
+          </span>
+        );
+      })}
     </div>
-  );
-}
-
-/* --------------------- מתג הכימיה המשחקית הנלמדת --------------------- */
-
-function GameChemistryToggle({
-  enabled,
-  available,
-  onChange,
-}: {
-  enabled: boolean;
-  /** כמה זוגות נלמדו מההיסטוריה */
-  available: number;
-  onChange: (next: boolean) => void;
-}) {
-  const usable = available > 0;
-
-  return (
-    <label
-      className={`flex items-center gap-2 text-xs font-semibold ${
-        usable ? 'cursor-pointer text-slate-300' : 'cursor-not-allowed text-slate-600'
-      }`}
-      title={
-        usable
-          ? `${available} זוגות נלמדו מההיסטוריה. כשדלוק, ההגרלה מתחשבת בהם בחישוב חוזק הקבוצה ומקזזת אותם.`
-          : 'צריך עוד היסטוריה עם תוצאות כדי ללמוד זוגות'
-      }
-    >
-      <input
-        type="checkbox"
-        className="size-4 accent-violet-500"
-        checked={enabled && usable}
-        disabled={!usable}
-        onChange={(e) => onChange(e.target.checked)}
-      />
-      <Sparkles size={13} className={enabled && usable ? 'text-violet-400' : undefined} />
-      כימיה משחקית
-      {usable && <span className="font-mono text-[10px] text-slate-500">({available})</span>}
-    </label>
   );
 }
 
@@ -402,11 +396,9 @@ function GameChemistryToggle({
 
 function BalanceBar({
   stats,
-  chemistry,
   gameChemistry,
 }: {
   stats: ReturnType<typeof computeStats>;
-  chemistry: ChemistryLevel;
   gameChemistry: boolean;
 }) {
   // כשהקבוצות לא באותו גודל, השוואת סכומים תמיד תיראה גרועה — הקבוצה הקטנה
@@ -502,7 +494,7 @@ function BalanceBar({
         )}
         {stats.totalBonds > 0 && (
           <span className="rounded-lg border border-slate-700 bg-slate-800/50 px-2.5 py-1.5 font-semibold text-slate-300">
-            {CHEMISTRY_LABEL[chemistry]}: {stats.bondsKept}/{stats.totalBonds} קשרים
+            חברויות: {stats.bondsKept}/{stats.totalBonds} נשמרו
           </span>
         )}
         <span className="text-[11px] text-slate-500">
@@ -515,31 +507,47 @@ function BalanceBar({
 
 /* ------------------------ פירוט קשרי החברות ------------------------ */
 
+const BOND_KIND = {
+  friend: { label: 'חברים', wantsTogether: true, icon: Link2 },
+  love: { label: 'אוהב', wantsTogether: true, icon: Heart },
+  hate: { label: 'לא רוצה', wantsTogether: false, icon: HeartCrack },
+} as const;
+
 function BondsPanel({ bonds }: { bonds: ReturnType<typeof describeBonds> }) {
-  const kept = bonds.filter((b) => b.together);
+  const isSatisfied = (b: (typeof bonds)[number]) =>
+    BOND_KIND[b.kind].wantsTogether ? b.together : !b.together;
+  const ok = bonds.filter(isSatisfied).length;
 
   return (
     <div className="card p-4">
       <h3 className="mb-3 text-xs font-bold tracking-wide text-slate-400">
-        קשרי חברות — {kept.length} מתוך {bonds.length} נשמרו
+        קשרים בין שחקנים — {ok} מתוך {bonds.length} כובדו
       </h3>
       <ul className="flex flex-wrap gap-2">
-        {bonds.map((b) => (
-          <li
-            key={`${b.aId}-${b.bId}`}
-            className={`inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-[11px] font-semibold ${
-              b.together
-                ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-200'
-                : 'border-amber-500/30 bg-amber-500/10 text-amber-200'
-            }`}
-          >
-            {b.together ? <Link2 size={11} /> : <Unlink size={11} />}
-            {b.aName} · {b.bName}
-            <span className="opacity-70">
-              {b.together && b.team ? `יחד ב${TEAM_META[b.team].name}` : 'מופרדים'}
-            </span>
-          </li>
-        ))}
+        {bonds.map((b) => {
+          const kind = BOND_KIND[b.kind];
+          const Icon = kind.icon;
+          const good = isSatisfied(b);
+
+          return (
+            <li
+              key={`${b.kind}-${b.aId}-${b.bId}`}
+              className={`inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-[11px] font-semibold ${
+                good
+                  ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-200'
+                  : 'border-amber-500/30 bg-amber-500/10 text-amber-200'
+              }`}
+              title={`${kind.label}: ${b.aName} ו${b.bName}`}
+            >
+              <Icon size={11} />
+              {b.aName} · {b.bName}
+              <span className="opacity-70">
+                {b.together && b.team ? `יחד ב${TEAM_META[b.team].name}` : 'מופרדים'}
+              </span>
+              {!good && <span className="text-amber-400">✕</span>}
+            </li>
+          );
+        })}
       </ul>
     </div>
   );

@@ -4,27 +4,34 @@ import { TEAM_IDS, type MatchRecord, type MatchResult, type Player, type TeamId 
  * 21 שחקני דוגמה (3 קבוצות של 7) לבדיקה מהירה של האפליקציה.
  * friendOfIndex מצביע על מיקום ברשימה — המזהים האמיתיים נוצרים בזמן הטעינה.
  */
-export const DEMO_PLAYERS: { name: string; rating: number; friendOfIndex?: number }[] = [
-  { name: 'איתי לוי', rating: 4.8 },
-  { name: 'עומר כהן', rating: 4.6 },
-  { name: 'דניאל מזרחי', rating: 4.5, friendOfIndex: 0 },
-  { name: 'יונתן פרץ', rating: 4.3 },
+export const DEMO_PLAYERS: {
+  name: string;
+  rating: number;
+  friendOfIndex?: number;
+  loveIndex?: number;
+  hateIndex?: number;
+  tags?: string[];
+}[] = [
+  { name: 'איתי לוי', rating: 4.8, tags: ['נלחם'] },
+  { name: 'עומר כהן', rating: 4.6, hateIndex: 4 },
+  { name: 'דניאל מזרחי', rating: 4.5, friendOfIndex: 0, tags: ['רץ הרבה'] },
+  { name: 'יונתן פרץ', rating: 4.3, tags: ['רץ הרבה'] },
   { name: 'רועי בן דוד', rating: 4.2 },
   { name: 'אלון שרון', rating: 4.0, friendOfIndex: 1 },
-  { name: 'ניר אברהמי', rating: 3.9 },
-  { name: 'שחר גולן', rating: 3.8 },
+  { name: 'ניר אברהמי', rating: 3.9, loveIndex: 7 },
+  { name: 'שחר גולן', rating: 3.8, tags: ['נלחם'] },
   { name: 'עידו ביטון', rating: 3.7, friendOfIndex: 3 },
-  { name: 'טל אשכנזי', rating: 3.6 },
+  { name: 'טל אשכנזי', rating: 3.6, tags: ['לא בכושר'] },
   { name: 'גיא מלכה', rating: 3.5 },
-  { name: 'אורי דהן', rating: 3.4, friendOfIndex: 10 },
-  { name: 'מתן שמש', rating: 3.3 },
+  { name: 'אורי דהן', rating: 3.4, friendOfIndex: 10, tags: ['רץ הרבה'] },
+  { name: 'מתן שמש', rating: 3.3, tags: ['לא בכושר'] },
   { name: 'ליאור אוחנה', rating: 3.2 },
-  { name: 'עידן חדד', rating: 3.1, friendOfIndex: 13 },
-  { name: 'נדב ברששת', rating: 3.0 },
-  { name: 'יובל אלמוג', rating: 2.8 },
+  { name: 'עידן חדד', rating: 3.1, friendOfIndex: 13, hateIndex: 16 },
+  { name: 'נדב ברששת', rating: 3.0, tags: ['נלחם'] },
+  { name: 'יובל אלמוג', rating: 2.8, tags: ['לא בכושר'] },
   { name: 'רן שטרן', rating: 2.7, friendOfIndex: 16 },
-  { name: 'אסף נחום', rating: 2.5 },
-  { name: 'עמית קדוש', rating: 2.3 },
+  { name: 'אסף נחום', rating: 2.5, loveIndex: 10 },
+  { name: 'עמית קדוש', rating: 2.3, tags: ['לא בכושר'] },
   { name: 'בר יוספי', rating: 2.0, friendOfIndex: 19 },
 ];
 

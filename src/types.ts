@@ -12,9 +12,54 @@ export interface Player {
   name: string;
   /** דירוג בין 1.0 ל-5.0, בקפיצות של 0.1 */
   rating: number;
-  /** "חבר של" — מזהה של שחקן אחר */
+  /** חברים — קשר דו-כיווני, בלי הגבלת מספר */
+  friendIds: string[];
+  /** רוצה לשחק איתם (מד אהבה) */
+  loveIds: string[];
+  /** מעדיף לא לשחק איתם (מד שנאה) */
+  hateIds: string[];
+  /** תגיות חופשיות: "לא בכושר", "רץ הרבה", "נלחם" */
+  tags: string[];
+  /** הערה חופשית על השחקן */
+  notes?: string;
+  /** @deprecated שדה ישן מגרסה קודמת — מומר ל-friendIds בטעינה */
   friendOf?: string | null;
 }
+
+/**
+ * משלים שדות חסרים וממיר נתונים ישנים.
+ * החברויות נהפכות לסימטריות: אם א' רשום כחבר של ב', גם ב' יקבל את א'.
+ */
+export function normalizePlayers(raw: Player[]): Player[] {
+  const players = raw.map((p) => ({
+    ...p,
+    friendIds: [...new Set(p.friendIds ?? (p.friendOf ? [p.friendOf] : []))],
+    loveIds: [...new Set(p.loveIds ?? [])],
+    hateIds: [...new Set(p.hateIds ?? [])],
+    tags: [...new Set(p.tags ?? [])],
+  }));
+
+  const byId = new Map(players.map((p) => [p.id, p]));
+  for (const p of players) {
+    // מסירים הפניות לשחקנים שנמחקו, ואת השחקן מעצמו
+    p.friendIds = p.friendIds.filter((id) => id !== p.id && byId.has(id));
+    p.loveIds = p.loveIds.filter((id) => id !== p.id && byId.has(id));
+    p.hateIds = p.hateIds.filter((id) => id !== p.id && byId.has(id));
+  }
+  for (const p of players) {
+    for (const friendId of p.friendIds) {
+      const friend = byId.get(friendId)!;
+      if (!friend.friendIds.includes(p.id)) friend.friendIds.push(p.id);
+    }
+  }
+
+  for (const p of players) delete p.friendOf;
+  return players;
+}
+
+/** כל התגיות שקיימות במאגר, למילוי אוטומטי */
+export const collectTags = (players: Player[]): string[] =>
+  [...new Set(players.flatMap((p) => p.tags ?? []))].sort((a, b) => a.localeCompare(b, 'he'));
 
 /** הרכב הכוחות: לכל קבוצה רשימת מזהי שחקנים. */
 export type Lineup = Record<TeamId, string[]>;

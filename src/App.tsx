@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { BarChart3, FlaskConical, History, Shuffle, Users, X } from 'lucide-react';
 import {
   TEAM_IDS,
+  normalizePlayers,
   type Lineup,
   type MatchRecord,
   type MatchResult,
@@ -16,6 +17,11 @@ import { useSyncedStore } from './hooks/useSyncedStore';
 import { todayISO } from './lib/format';
 import { computeHistoryStats, streakByPlayer } from './lib/stats';
 import { computePairChemistry, pairEffectMap } from './lib/pairs';
+import {
+  DEFAULT_PRIORITIES,
+  normalizePriorities,
+  type CriterionSetting,
+} from './lib/criteria';
 import { DEMO_PLAYERS, buildDemoHistory } from './lib/demoData';
 import { PlayersView } from './components/PlayersView';
 import { DrawView } from './components/DrawView';
@@ -43,12 +49,17 @@ const newId = () =>
 
 function buildDemoPlayers(): Player[] {
   const ids = DEMO_PLAYERS.map(() => newId());
-  return DEMO_PLAYERS.map((p, i) => ({
-    id: ids[i],
-    name: p.name,
-    rating: p.rating,
-    friendOf: p.friendOfIndex != null ? ids[p.friendOfIndex] : null,
-  }));
+  return normalizePlayers(
+    DEMO_PLAYERS.map((p, i) => ({
+      id: ids[i],
+      name: p.name,
+      rating: p.rating,
+      friendIds: p.friendOfIndex != null ? [ids[p.friendOfIndex]] : [],
+      loveIds: p.loveIndex != null ? [ids[p.loveIndex]] : [],
+      hateIds: p.hateIndex != null ? [ids[p.hateIndex]] : [],
+      tags: p.tags ?? [],
+    })),
+  );
 }
 
 export default function App() {
@@ -75,7 +86,10 @@ export default function App() {
   // טיוטות שנשמרו לפני שנוספו שדות הביטולים והכימיה
   const realDraft = useMemo(() => normalizeDraft(storedDraft, todayISO()), [storedDraft]);
 
-  const players = demoPlayers ?? realPlayers;
+  // נתונים ישנים (friendOf יחיד) מומרים כאן לשדות החדשים
+  const migratedPlayers = useMemo(() => normalizePlayers(realPlayers), [realPlayers]);
+
+  const players = demoPlayers ?? migratedPlayers;
   const history = isDemo ? demoHistory : realHistory;
   const setHistory = isDemo ? setDemoHistory : setRealHistory;
   const draft = isDemo ? demoDraft : realDraft;
@@ -84,8 +98,15 @@ export default function App() {
   // רצפי ניצחון/הפסד מההיסטוריה — מוצגים ליד השמות בזמן בחירת המשתתפים
   const streaks = useMemo(() => streakByPlayer(computeHistoryStats(history)), [history]);
 
-  // אפקטים נלמדים לזוגות — זמינים להגרלה כשהמתג דלוק
+  // אפקטים נלמדים לזוגות — זמינים להגרלה כשהקריטריון דלוק
   const pairEffects = useMemo(() => pairEffectMap(computePairChemistry(history)), [history]);
+
+  // סדר העדיפויות נשמר מקומית לכל מכשיר
+  const [storedPriorities, setStoredPriorities] = useLocalStorage<CriterionSetting[]>(
+    STORAGE_KEYS.priorities,
+    DEFAULT_PRIORITIES,
+  );
+  const priorities = useMemo(() => normalizePriorities(storedPriorities), [storedPriorities]);
 
   const [toast, setToast] = useState<string | null>(null);
   const toastTimer = useRef<number | undefined>(undefined);
@@ -100,9 +121,11 @@ export default function App() {
 
   /* ------------------------------ שחקנים ------------------------------ */
 
+  /** כל כתיבה עוברת נרמול — כך החברויות תמיד נשארות דו-כיווניות */
   const applyToPlayers = (updater: (prev: Player[]) => Player[]) => {
-    if (isDemo) setDemoPlayers((prev) => updater(prev ?? []));
-    else setPlayers(updater);
+    const wrapped = (prev: Player[]) => normalizePlayers(updater(prev));
+    if (isDemo) setDemoPlayers((prev) => wrapped(prev ?? []));
+    else setPlayers(wrapped);
   };
 
   const createPlayer = (d: PlayerDraft) => {
@@ -111,15 +134,22 @@ export default function App() {
   };
 
   const updatePlayer = (id: string, d: PlayerDraft) => {
-    applyToPlayers((prev) => prev.map((p) => (p.id === id ? { ...p, ...d } : p)));
+    applyToPlayers((prev) =>
+      prev.map((p) => {
+        if (p.id === id) return { ...p, ...d };
+        // מי שהוסר מרשימת החברים צריך לאבד את הקשר גם מהצד שלו
+        if (!d.friendIds.includes(p.id) && p.friendIds.includes(id)) {
+          return { ...p, friendIds: p.friendIds.filter((x) => x !== id) };
+        }
+        return p;
+      }),
+    );
     notify('הפרטים עודכנו');
   };
 
   const deletePlayer = (id: string) => {
-    applyToPlayers((prev) =>
-      // מנקים גם קישורי חברות שמצביעים על השחקן שנמחק
-      prev.filter((p) => p.id !== id).map((p) => (p.friendOf === id ? { ...p, friendOf: null } : p)),
-    );
+    // normalizePlayers מנקה לבד הפניות לשחקן שנמחק
+    applyToPlayers((prev) => prev.filter((p) => p.id !== id));
     setDraft((prev) => ({
       ...prev,
       selectedIds: prev.selectedIds.filter((x) => x !== id),
@@ -317,6 +347,8 @@ export default function App() {
             setDraft={setDraft}
             streaks={streaks}
             pairEffects={pairEffects}
+            priorities={priorities}
+            setPriorities={setStoredPriorities}
             onSaveHistory={saveToHistory}
             notify={notify}
             isDemo={isDemo}
