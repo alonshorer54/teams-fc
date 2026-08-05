@@ -26,6 +26,8 @@ export interface Substitution {
 export interface Draft {
   selectedIds: string[];
   lineup: Lineup | null;
+  /** ההגרלה כפי שיצאה מהאלגוריתם, לפני עריכות ידניות — בסיס להשוואה */
+  baseline: Lineup | null;
   matchDate: string;
   /** מי אישר הגעה ואז ביטל השבוע */
   cancelledIds: string[];
@@ -35,6 +37,7 @@ export interface Draft {
 export const emptyDraft = (matchDate: string): Draft => ({
   selectedIds: [],
   lineup: null,
+  baseline: null,
   matchDate,
   cancelledIds: [],
   substitutions: [],

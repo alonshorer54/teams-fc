@@ -230,6 +230,8 @@ export default function App() {
       selectedIds: TEAM_IDS.flatMap((t) => lineup[t]),
       cancelledIds: (record.cancelled ?? []).map((p) => p.id).filter((id) => existing.has(id)),
       lineup,
+      // ההגרלה ששוחזרה היא נקודת ההשוואה לעריכות שיבואו אחריה
+      baseline: lineup,
       matchDate: record.date,
     }));
     setTab('draw');
