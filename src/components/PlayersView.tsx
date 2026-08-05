@@ -163,14 +163,13 @@ export function PlayersView({
                       {p.tags.map((tag) => (
                         <span
                           key={tag}
-                          className="rounded bg-amber-500/15 px-1.5 text-[10px] font-semibold text-amber-200"
+                          className="max-w-full rounded bg-amber-500/15 px-1.5 text-[10px] font-semibold break-words text-amber-200"
                         >
                           {tag}
                         </span>
                       ))}
                     </p>
                   )}
-                  {p.notes && <p className="truncate text-[11px] text-slate-500">{p.notes}</p>}
                 </div>
 
                 <div className="flex shrink-0 gap-1">
