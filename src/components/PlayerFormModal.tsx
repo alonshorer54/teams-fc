@@ -119,7 +119,7 @@ export function PlayerFormModal({
           <label className="label" htmlFor="player-friend">
             <span className="inline-flex items-center gap-1.5">
               <Link2 size={13} />
-              הגיע דרך / חבר של (אופציונלי)
+              חבר של (אופציונלי)
             </span>
           </label>
           <select

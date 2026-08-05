@@ -37,18 +37,6 @@ export function PlayersView({
     ? players.reduce((s, p) => s + p.rating, 0) / players.length
     : 0;
 
-  // מי מקושר למי — כולל הכיוון ההפוך ("הביא את...")
-  const broughtBy = useMemo(() => {
-    const map = new Map<string, string[]>();
-    for (const p of players) {
-      if (!p.friendOf) continue;
-      const list = map.get(p.friendOf) ?? [];
-      list.push(p.name);
-      map.set(p.friendOf, list);
-    }
-    return map;
-  }, [players]);
-
   return (
     <div className="space-y-4">
       {/* סרגל פעולות */}
@@ -101,7 +89,7 @@ export function PlayersView({
           hint={
             players.length
               ? 'נסו לשנות את מונח החיפוש.'
-              : 'הוסיפו את השחקנים הקבועים שלכם — שם, דירוג, ומי הביא את מי.'
+              : 'הוסיפו את השחקנים הקבועים שלכם — שם, דירוג, ומי חבר של מי.'
           }
           action={
             !players.length ? (
@@ -122,7 +110,6 @@ export function PlayersView({
         <ul className="grid gap-2.5 sm:grid-cols-2 xl:grid-cols-3">
           {visible.map((p) => {
             const friendName = p.friendOf ? nameById.get(p.friendOf) : null;
-            const brought = broughtBy.get(p.id);
             return (
               <li
                 key={p.id}
@@ -132,12 +119,10 @@ export function PlayersView({
 
                 <div className="min-w-0 flex-1">
                   <p className="truncate font-semibold text-slate-100">{p.name}</p>
-                  {(friendName || brought) && (
+                  {friendName && (
                     <p className="mt-0.5 flex items-center gap-1 truncate text-[11px] text-slate-400">
                       <Link2 size={11} className="shrink-0 text-emerald-400/80" />
-                      {friendName && <span className="truncate">חבר של {friendName}</span>}
-                      {friendName && brought && <span className="text-slate-600">·</span>}
-                      {brought && <span className="truncate">הביא את {brought.join(', ')}</span>}
+                      <span className="truncate">חבר של {friendName}</span>
                     </p>
                   )}
                 </div>
