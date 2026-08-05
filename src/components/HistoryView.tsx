@@ -304,7 +304,7 @@ function ResultPicker({
           <button
             key={p.label}
             onClick={() => onChange(p.build())}
-            className="cursor-pointer rounded-lg border border-slate-700 bg-slate-800/50 px-2 py-1 text-[10px] font-semibold text-slate-300 transition hover:border-amber-500/40 hover:text-amber-200"
+            className="cursor-pointer rounded-lg border border-slate-700 bg-slate-800/50 px-2.5 py-2 text-[11px] font-semibold text-slate-300 transition hover:border-amber-500/40 hover:text-amber-200"
           >
             {p.label}
           </button>
@@ -340,7 +340,7 @@ function ResultPicker({
 
       {value && (
         <button
-          className="mt-2 w-full rounded-lg py-1 text-[10px] font-semibold text-slate-500 transition hover:bg-slate-800/60 hover:text-slate-300"
+          className="mt-2 w-full rounded-lg py-2 text-[11px] font-semibold text-slate-500 transition hover:bg-slate-800/60 hover:text-slate-300"
           onClick={() => onChange(null)}
         >
           ניקוי התוצאה

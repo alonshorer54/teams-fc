@@ -382,8 +382,9 @@ export function DrawView({
             ))}
           </div>
 
-          <p className="text-center text-[11px] text-slate-500">
-            אפשר לגרור שחקנים בין הקבוצות, או ללחוץ על שניים כדי להחליף ביניהם — הממוצעים מתעדכנים מיד.
+          <p className="text-center text-[11px] leading-relaxed text-slate-500">
+            לחיצה על שני שחקנים מחליפה ביניהם, ולחיצה על שחקן ואז על כותרת קבוצה מעבירה אליה.
+            <span className="hidden sm:inline"> במחשב אפשר גם לגרור.</span>
           </p>
         </>
       )}
