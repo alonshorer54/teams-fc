@@ -68,9 +68,9 @@ export function PlayerFormModal({
       name: trimmed,
       rating: clampRating(rating),
       friendIds,
-      // אי אפשר גם לאהוב וגם לשנוא — השנאה גוברת כי היא ההגבלה החזקה
-      loveIds: loveIds.filter((id) => !hateIds.includes(id)),
-      hateIds,
+      // חברות גוברת על השתיים; ובין אהבה לשנאה — השנאה גוברת
+      loveIds: loveIds.filter((id) => !hateIds.includes(id) && !friendIds.includes(id)),
+      hateIds: hateIds.filter((id) => !friendIds.includes(id)),
       tags,
     });
   };
@@ -141,15 +141,20 @@ export function PlayerFormModal({
           icon={<Link2 size={13} className="text-emerald-400" />}
           options={others}
           value={friendIds}
-          onChange={setFriendIds}
+          onChange={(next) => {
+            setFriendIds(next);
+            // מי שהפך לחבר יורד מהאהבה/שנאה — החברות כבר מכסה את זה
+            setLoveIds((prev) => prev.filter((id) => !next.includes(id)));
+            setHateIds((prev) => prev.filter((id) => !next.includes(id)));
+          }}
           tone="emerald"
         />
 
         <PlayerMultiSelect
           label="אוהב לשחק עם"
-          hint="העדפה אישית, לא קשורה לחברות. ההגרלה תנסה לחבר ביניהם."
+          hint="למי שהוא לא חבר שלו. חברים כבר משובצים יחד ממילא, אז הם לא מופיעים כאן."
           icon={<Heart size={13} className="text-pink-400" />}
-          options={others.filter((p) => !hateIds.includes(p.id))}
+          options={others.filter((p) => !hateIds.includes(p.id) && !friendIds.includes(p.id))}
           value={loveIds}
           onChange={setLoveIds}
           tone="pink"
@@ -157,9 +162,9 @@ export function PlayerFormModal({
 
         <PlayerMultiSelect
           label="מעדיף לא לשחק עם"
-          hint="ההגרלה תנסה להפריד ביניהם."
+          hint="ההגרלה תנסה להפריד ביניהם. חברים לא מופיעים כאן — זו הייתה סתירה."
           icon={<HeartCrack size={13} className="text-rose-400" />}
-          options={others.filter((p) => !loveIds.includes(p.id))}
+          options={others.filter((p) => !loveIds.includes(p.id) && !friendIds.includes(p.id))}
           value={hateIds}
           onChange={setHateIds}
           tone="rose"

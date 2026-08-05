@@ -82,6 +82,13 @@ export function normalizePlayers(raw: Player[]): Player[] {
     }
   }
 
+  // חברות כבר אומרת "להשאיר יחד", אז אהבה על אותו אדם היא כפילות
+  // ושנאה עליו היא סתירה. החברות גוברת.
+  for (const p of players) {
+    p.loveIds = p.loveIds.filter((id) => !p.friendIds.includes(id));
+    p.hateIds = p.hateIds.filter((id) => !p.friendIds.includes(id));
+  }
+
   for (const p of players) {
     delete p.friendOf;
     delete p.notes;
