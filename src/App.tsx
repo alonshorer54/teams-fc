@@ -92,22 +92,45 @@ export default function App() {
   const [demoDraft, setDemoDraft] = useState<Draft>(() => emptyDraft(todayISO()));
   const isDemo = demoPlayers !== null;
 
-  const [storedDraft, setStoredDraft] = useLocalStorage<Draft>(
-    STORAGE_KEYS.draft,
-    emptyDraft(todayISO()),
-  );
-
-  // טיוטות שנשמרו לפני שנוספו שדות הביטולים והכימיה
-  const realDraft = useMemo(() => normalizeDraft(storedDraft, todayISO()), [storedDraft]);
+  // טיוטה ישנה שנשמרה מקומית — משמשת רק להעברה חד-פעמית לענן
+  const [legacyDraft, setLegacyDraft] = useLocalStorage<Draft | null>(STORAGE_KEYS.draft, null);
 
   // נתונים ישנים (friendOf יחיד) מומרים כאן לשדות החדשים
   const migratedPlayers = useMemo(() => normalizePlayers(realPlayers), [realPlayers]);
+
+  const settings = useMemo(() => normalizeSettings(store.settings), [store.settings]);
+
+  /** המחזור הנוכחי מגיע מההגדרות המסונכרנות, כדי שהטלפון והמחשב יראו אותו דבר */
+  const realDraft = useMemo(
+    () => (settings.round.matchDate ? settings.round : emptyDraft(todayISO())),
+    [settings.round],
+  );
+
+  const setRealDraft = useCallback(
+    (updater: (prev: Draft) => Draft) =>
+      store.setSettings((prev) => {
+        const base = normalizeSettings(prev);
+        const current = base.round.matchDate ? base.round : emptyDraft(todayISO());
+        return { ...base, round: updater(current) };
+      }),
+    [store],
+  );
 
   const players = demoPlayers ?? migratedPlayers;
   const history = isDemo ? demoHistory : realHistory;
   const setHistory = isDemo ? setDemoHistory : setRealHistory;
   const draft = isDemo ? demoDraft : realDraft;
-  const setDraft = isDemo ? setDemoDraft : setStoredDraft;
+  const setDraft = isDemo ? setDemoDraft : setRealDraft;
+
+  // העברה חד-פעמית של מחזור שנשמר מקומית לפני שהסנכרון הופעל
+  const migratedRound = useRef(false);
+  useEffect(() => {
+    if (migratedRound.current || isDemo || store.status === 'loading') return;
+    if (!legacyDraft?.selectedIds?.length || settings.round.matchDate) return;
+    migratedRound.current = true;
+    setRealDraft(() => normalizeDraft(legacyDraft, legacyDraft.matchDate || todayISO()));
+    setLegacyDraft(null);
+  }, [legacyDraft, settings.round.matchDate, isDemo, store.status, setRealDraft, setLegacyDraft]);
 
   // רצפי ניצחון/הפסד מההיסטוריה — מוצגים ליד השמות בזמן בחירת המשתתפים
   const streaks = useMemo(() => streakByPlayer(computeHistoryStats(history)), [history]);
@@ -115,8 +138,6 @@ export default function App() {
   // אפקטים נלמדים לזוגות — זמינים להגרלה כשהקריטריון דלוק
   const pairEffects = useMemo(() => pairEffectMap(computePairChemistry(history)), [history]);
 
-  // ההגדרות מסתנכרנות בענן יחד עם השחקנים וההיסטוריה
-  const settings = useMemo(() => normalizeSettings(store.settings), [store.settings]);
   const priorities = useMemo(
     () => normalizePriorities(settings.priorities),
     [settings.priorities],
@@ -354,15 +375,6 @@ export default function App() {
             {/* בטלפון מוותרים על האייקון כדי שהטקסט המלא ייכנס */}
             <Icon size={15} className="hidden shrink-0 sm:block" />
             <span className="truncate">{label}</span>
-            {id === 'history' && history.length > 0 && (
-              <span
-                className={`hidden rounded-md px-1.5 font-mono text-[10px] tabular-nums sm:inline ${
-                  tab === id ? 'bg-emerald-900/25' : 'bg-slate-700/70'
-                }`}
-              >
-                {history.length}
-              </span>
-            )}
           </button>
         ))}
       </nav>
@@ -383,7 +395,7 @@ export default function App() {
                 notify={notify}
                 onImport={(nextPlayers, nextHistory) => {
                   void store.flush(nextPlayers, nextHistory);
-                  setStoredDraft(emptyDraft(todayISO()));
+                  setRealDraft(() => emptyDraft(todayISO()));
                 }}
               />
             )}

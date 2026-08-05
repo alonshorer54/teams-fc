@@ -1,6 +1,7 @@
 import { useMemo, useRef, useState } from 'react';
 import {
   ArrowLeftRight,
+  ChevronDown,
   Eye,
   EyeOff,
   Heart,
@@ -207,6 +208,7 @@ export function DrawView({
         cancelledIds={cancelledIds}
         substitutions={substitutions}
         streaks={streaks}
+        hasLineup={!!lineup}
         onSetAll={(ids) =>
           setDraft((p) => ({ ...p, selectedIds: ids, cancelledIds: [], substitutions: [] }))
         }
@@ -308,10 +310,12 @@ export function DrawView({
 
             <button
               className="btn-ghost !px-2.5 text-slate-400 hover:text-rose-300"
-              title="ניקוי ההגרלה הנוכחית"
+              title="מחיקת החלוקה לקבוצות. רשימת מי שמשחק נשארת — כדי לנקות אותה יש 'ניקוי המחזור' למעלה"
               onClick={() => {
                 setDraft((p) => ({ ...p, lineup: null, baseline: null }));
                 setSelectedPlayer(null);
+                setLastChange(null);
+                notify('החלוקה נמחקה — רשימת המשתתפים נשארה');
               }}
             >
               <Trash2 size={16} />
@@ -470,37 +474,37 @@ function BalanceBar({
 
   return (
     <div className="card space-y-3 p-4">
-      <div className="grid gap-2 sm:grid-cols-3">
+      <div className="grid grid-cols-3 gap-2">
         {TEAM_IDS.map((id) => {
           const t = stats.teams[id];
           return (
             <div
               key={id}
-              className={`rounded-xl border px-3 py-2.5 ${TEAM_META[id].chip}`}
+              className={`rounded-xl border px-2 py-2 text-center sm:px-3 sm:py-2.5 sm:text-right ${TEAM_META[id].chip}`}
+              title={
+                `${t.count} שחקנים · דירוג ${t.total.toFixed(1)} + חברויות ${t.chemistryBonus.toFixed(1)}` +
+                (gameChemistry ? ` + כימיה משחקית ${t.gameBonus.toFixed(1)}` : '')
+              }
             >
-              <p className="flex items-center gap-2 text-xs font-bold">
-                <span className={`size-2.5 shrink-0 rounded-full ${TEAM_META[id].dot}`} />
+              <p className="flex items-center justify-center gap-1.5 text-[11px] font-bold sm:justify-start sm:text-xs">
+                <span className={`size-2 shrink-0 rounded-full sm:size-2.5 ${TEAM_META[id].dot}`} />
                 {TEAM_META[id].name}
-                <span className="mr-auto font-mono text-[10px] opacity-70">{t.count} שחקנים</span>
+                <span className="hidden font-mono text-[10px] opacity-70 sm:mr-auto sm:inline">
+                  {t.count} שחקנים
+                </span>
               </p>
-              <div className="mt-2 flex items-baseline gap-3">
+              <div className="mt-1 flex flex-col items-center gap-0 sm:mt-2 sm:flex-row sm:items-baseline sm:gap-3">
                 <span className="flex items-baseline gap-1">
-                  <span dir="ltr" className="font-mono text-xl font-bold tabular-nums">
+                  <span dir="ltr" className="font-mono text-lg font-bold tabular-nums sm:text-xl">
                     {t.total.toFixed(1)}
                   </span>
                   <span className="text-[10px] opacity-70">דירוג</span>
                 </span>
-                <span
-                  className="flex items-baseline gap-1 opacity-90"
-                  title={
-                    `דירוג ${t.total.toFixed(1)} + חברויות ${t.chemistryBonus.toFixed(1)}` +
-                    (gameChemistry ? ` + כימיה משחקית ${t.gameBonus.toFixed(1)}` : '')
-                  }
-                >
-                  <span dir="ltr" className="font-mono text-sm font-bold tabular-nums">
+                <span className="flex items-baseline gap-1 opacity-90">
+                  <span dir="ltr" className="font-mono text-xs font-bold tabular-nums sm:text-sm">
                     {t.combined.toFixed(1)}
                   </span>
-                  <span className="text-[10px] opacity-70">עם כימיה</span>
+                  <span className="text-[10px] opacity-70">כימיה</span>
                 </span>
               </div>
             </div>
@@ -572,13 +576,28 @@ function BondsPanel({ bonds }: { bonds: ReturnType<typeof describeBonds> }) {
   const isSatisfied = (b: (typeof bonds)[number]) =>
     BOND_KIND[b.kind].wantsTogether ? b.together : !b.together;
   const ok = bonds.filter(isSatisfied).length;
+  const broken = bonds.length - ok;
+  // ברירת מחדל סגור — הפירוט המלא ארוך, ובדרך כלל מספיק לדעת כמה נשברו
+  const [open, setOpen] = useState(false);
 
   return (
-    <div className="card p-4">
-      <h3 className="mb-3 text-xs font-bold tracking-wide text-slate-400">
-        קשרים בין שחקנים — {ok} מתוך {bonds.length} כובדו
-      </h3>
-      <ul className="flex flex-wrap gap-2">
+    <div className="card overflow-hidden">
+      <button
+        className="flex w-full items-center justify-between gap-3 px-4 py-3 text-right transition hover:bg-slate-800/40"
+        onClick={() => setOpen((v) => !v)}
+      >
+        <h3 className="text-xs font-bold tracking-wide text-slate-400">
+          קשרים בין שחקנים — {ok} מתוך {bonds.length} כובדו
+          {broken > 0 && <span className="text-amber-300"> · {broken} לא</span>}
+        </h3>
+        <ChevronDown
+          size={16}
+          className={`shrink-0 text-slate-500 transition-transform ${open ? 'rotate-180' : ''}`}
+        />
+      </button>
+
+      {!open ? null : (
+      <ul className="flex flex-wrap gap-2 px-4 pb-4">
         {bonds.map((b) => {
           const kind = BOND_KIND[b.kind];
           const Icon = kind.icon;
@@ -604,6 +623,7 @@ function BondsPanel({ bonds }: { bonds: ReturnType<typeof describeBonds> }) {
           );
         })}
       </ul>
+      )}
     </div>
   );
 }

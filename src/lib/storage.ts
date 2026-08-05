@@ -41,20 +41,21 @@ export const emptyPayments = (matchDate: string): PaymentRound => ({
 export interface AppSettings {
   priorities: CriterionSetting[];
   payments: PaymentRound;
-  /** קישור תשלום קבוע (ביט/פייבוקס) שמצורף להודעת התזכורת */
-  paymentLink?: string;
+  /** המחזור הנוכחי — מסונכרן כדי שהטלפון והמחשב יראו את אותם כוחות */
+  round: Draft;
 }
 
 export const defaultSettings = (): AppSettings => ({
   priorities: DEFAULT_PRIORITIES,
   payments: emptyPayments(''),
+  round: emptyDraft(''),
 });
 
 /** משלים שדות שנוספו אחרי שההגדרות כבר נשמרו בענן. */
 export const normalizeSettings = (raw: Partial<AppSettings> | undefined): AppSettings => ({
   priorities: raw?.priorities ?? DEFAULT_PRIORITIES,
   payments: raw?.payments ?? emptyPayments(''),
-  paymentLink: raw?.paymentLink,
+  round: normalizeDraft(raw?.round ?? {}, raw?.round?.matchDate ?? ''),
 });
 
 /** טיוטת העבודה הנוכחית — נשמרת כדי שרענון דף לא יאבד את ההגרלה. */
