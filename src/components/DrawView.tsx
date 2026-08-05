@@ -4,13 +4,13 @@ import {
   ChevronDown,
   Eye,
   EyeOff,
-  Heart,
-  HeartCrack,
   Link2,
   Save,
   Scale,
   Shuffle,
   Sparkles,
+  ThumbsDown,
+  ThumbsUp,
   Trash2,
   Users,
 } from 'lucide-react';
@@ -121,7 +121,7 @@ export function DrawView({
     if (!pairEffects.size) map.gameChemistry = 'עוד אין מספיק היסטוריה עם תוצאות כדי ללמוד זוגות';
     if (!players.some((p) => p.tags.length)) map.tags = 'עוד לא הוגדרו תגיות לשחקנים';
     if (!players.some((p) => p.loveIds.length || p.hateIds.length))
-      map.affinity = 'עוד לא הוגדרו העדפות אהבה/שנאה';
+      map.affinity = 'עוד לא הוגדרו העדפות "עם / בלי" לשחקנים';
     if (!players.some((p) => p.friendIds.length)) map.friends = 'עוד לא הוגדרו חברויות';
     return map;
   }, [pairEffects, players]);
@@ -568,8 +568,8 @@ function BalanceBar({
 
 const BOND_KIND = {
   friend: { label: 'חברים', wantsTogether: true, icon: Link2 },
-  love: { label: 'אוהב', wantsTogether: true, icon: Heart },
-  hate: { label: 'לא רוצה', wantsTogether: false, icon: HeartCrack },
+  love: { label: 'מעדיף עם', wantsTogether: true, icon: ThumbsUp },
+  hate: { label: 'מעדיף בלי', wantsTogether: false, icon: ThumbsDown },
 } as const;
 
 function BondsPanel({ bonds }: { bonds: ReturnType<typeof describeBonds> }) {
