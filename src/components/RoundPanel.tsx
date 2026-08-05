@@ -419,11 +419,12 @@ function PlayerChip({
 
       <RatingBadge rating={player.rating} size="sm" />
 
+      {/* p-2 כדי שיהיה נוח ללחוץ באצבע בטלפון */}
       <button
         onClick={action.onClick}
         title={action.label}
         aria-label={action.label}
-        className="rounded-lg p-1 text-slate-400 transition hover:bg-slate-700/60 hover:text-white"
+        className="rounded-lg p-2 text-slate-400 transition hover:bg-slate-700/60 hover:text-white"
       >
         {action.icon}
       </button>
@@ -433,7 +434,7 @@ function PlayerChip({
           onClick={secondaryAction.onClick}
           title={secondaryAction.label}
           aria-label={secondaryAction.label}
-          className="rounded-lg p-1 text-slate-500 transition hover:bg-slate-700/60 hover:text-white"
+          className="rounded-lg p-2 text-slate-500 transition hover:bg-slate-700/60 hover:text-white"
         >
           {secondaryAction.icon}
         </button>

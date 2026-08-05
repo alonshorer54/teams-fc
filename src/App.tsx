@@ -309,22 +309,22 @@ export default function App() {
         </div>
       )}
 
-      <nav className="mb-5 flex gap-1 rounded-2xl border border-slate-800/80 bg-slate-900/50 p-1.5 backdrop-blur">
+      <nav className="mb-5 flex gap-0.5 rounded-2xl border border-slate-800/80 bg-slate-900/50 p-1.5 backdrop-blur sm:gap-1">
         {TABS.map(({ id, label, icon: Icon }) => (
           <button
             key={id}
             onClick={() => setTab(id)}
-            className={`flex flex-1 cursor-pointer items-center justify-center gap-2 rounded-xl px-3 py-2.5 text-sm font-bold transition ${
+            className={`flex min-w-0 flex-1 cursor-pointer items-center justify-center gap-1 rounded-xl px-1 py-2.5 text-xs font-bold transition sm:gap-2 sm:px-3 sm:text-sm ${
               tab === id
                 ? 'bg-emerald-500 text-emerald-950 shadow-md shadow-emerald-500/20'
                 : 'text-slate-300 hover:bg-slate-800/70 hover:text-white'
             }`}
           >
-            <Icon size={16} />
-            {label}
+            <Icon size={15} className="shrink-0" />
+            <span className="truncate">{label}</span>
             {id === 'history' && history.length > 0 && (
               <span
-                className={`rounded-md px-1.5 font-mono text-[10px] tabular-nums ${
+                className={`hidden rounded-md px-1.5 font-mono text-[10px] tabular-nums sm:inline ${
                   tab === id ? 'bg-emerald-900/25' : 'bg-slate-700/70'
                 }`}
               >
