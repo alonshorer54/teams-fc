@@ -1,6 +1,17 @@
 import { useMemo, useState } from 'react';
-import { ArrowDownUp, Link2, Pencil, Search, Trash2, UserPlus, Users } from 'lucide-react';
-import type { Player } from '../types';
+import {
+  ArrowDownUp,
+  Heart,
+  HeartCrack,
+  Link2,
+  Pencil,
+  Search,
+  Tag,
+  Trash2,
+  UserPlus,
+  Users,
+} from 'lucide-react';
+import { collectTags, type Player } from '../types';
 import { ConfirmDialog, EmptyState, RatingBadge } from './ui';
 import { PlayerFormModal, type PlayerDraft } from './PlayerFormModal';
 
@@ -24,6 +35,7 @@ export function PlayersView({
   const [pendingDelete, setPendingDelete] = useState<Player | null>(null);
 
   const nameById = useMemo(() => new Map(players.map((p) => [p.id, p.name])), [players]);
+  const knownTags = useMemo(() => collectTags(players), [players]);
 
   const visible = useMemo(() => {
     const q = query.trim();
@@ -77,7 +89,10 @@ export function PlayersView({
         <div className="grid grid-cols-3 gap-3">
           <Stat label="שחקנים במאגר" value={String(players.length)} />
           <Stat label="דירוג ממוצע" value={avg.toFixed(2)} />
-          <Stat label="קשרי חברות" value={String(players.filter((p) => p.friendOf).length)} />
+          <Stat
+            label="קשרי חברות"
+            value={String(players.reduce((s, p) => s + p.friendIds.length, 0) / 2)}
+          />
         </div>
       )}
 
@@ -109,22 +124,53 @@ export function PlayersView({
       ) : (
         <ul className="grid gap-2.5 sm:grid-cols-2 xl:grid-cols-3">
           {visible.map((p) => {
-            const friendName = p.friendOf ? nameById.get(p.friendOf) : null;
+            const names = (ids: string[]) =>
+              ids.map((id) => nameById.get(id)).filter(Boolean).join(', ');
+
             return (
               <li
                 key={p.id}
-                className="card flex items-center gap-3 p-3.5 transition hover:border-slate-700"
+                className="card flex items-start gap-3 p-3.5 transition hover:border-slate-700"
               >
-                <RatingBadge rating={p.rating} />
+                <div className="pt-0.5">
+                  <RatingBadge rating={p.rating} />
+                </div>
 
-                <div className="min-w-0 flex-1">
+                <div className="min-w-0 flex-1 space-y-0.5">
                   <p className="truncate font-semibold text-slate-100">{p.name}</p>
-                  {friendName && (
-                    <p className="mt-0.5 flex items-center gap-1 truncate text-[11px] text-slate-400">
+
+                  {p.friendIds.length > 0 && (
+                    <p className="flex items-center gap-1 truncate text-[11px] text-slate-400">
                       <Link2 size={11} className="shrink-0 text-emerald-400/80" />
-                      <span className="truncate">חבר של {friendName}</span>
+                      <span className="truncate">חבר של {names(p.friendIds)}</span>
                     </p>
                   )}
+                  {p.loveIds.length > 0 && (
+                    <p className="flex items-center gap-1 truncate text-[11px] text-slate-400">
+                      <Heart size={11} className="shrink-0 text-pink-400/80" />
+                      <span className="truncate">אוהב עם {names(p.loveIds)}</span>
+                    </p>
+                  )}
+                  {p.hateIds.length > 0 && (
+                    <p className="flex items-center gap-1 truncate text-[11px] text-slate-400">
+                      <HeartCrack size={11} className="shrink-0 text-rose-400/80" />
+                      <span className="truncate">לא עם {names(p.hateIds)}</span>
+                    </p>
+                  )}
+                  {p.tags.length > 0 && (
+                    <p className="flex flex-wrap items-center gap-1 pt-0.5">
+                      <Tag size={11} className="shrink-0 text-amber-400/80" />
+                      {p.tags.map((tag) => (
+                        <span
+                          key={tag}
+                          className="rounded bg-amber-500/15 px-1.5 text-[10px] font-semibold text-amber-200"
+                        >
+                          {tag}
+                        </span>
+                      ))}
+                    </p>
+                  )}
+                  {p.notes && <p className="truncate text-[11px] text-slate-500">{p.notes}</p>}
                 </div>
 
                 <div className="flex shrink-0 gap-1">
@@ -156,6 +202,7 @@ export function PlayersView({
         open={formOpen}
         editing={editing}
         players={players}
+        knownTags={knownTags}
         onClose={() => setFormOpen(false)}
         onSave={(draft) => {
           if (editing) onUpdate(editing.id, draft);

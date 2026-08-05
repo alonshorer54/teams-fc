@@ -1,11 +1,11 @@
 import type { Lineup, MatchRecord, Player } from '../types';
-import type { ChemistryLevel } from './balance';
 
 // המפתחות נשמרו בשמם המקורי כדי שנתונים קיימים אצל משתמשים לא יאבדו בשינוי השם
 export const STORAGE_KEYS = {
   players: 'kohot.players.v1',
   history: 'kohot.history.v1',
   draft: 'kohot.draft.v1',
+  priorities: 'kohot.priorities.v1',
 } as const;
 
 /** טיוטת העבודה הנוכחית — נשמרת כדי שרענון דף לא יאבד את ההגרלה. */
@@ -21,9 +21,6 @@ export interface Draft {
   matchDate: string;
   /** מי אישר הגעה ואז ביטל השבוע */
   cancelledIds: string[];
-  chemistry: ChemistryLevel;
-  /** האם לשקלל את הכימיה המשחקית הנלמדת בהגרלה */
-  gameChemistry: boolean;
   substitutions: Substitution[];
 }
 
@@ -32,8 +29,6 @@ export const emptyDraft = (matchDate: string): Draft => ({
   lineup: null,
   matchDate,
   cancelledIds: [],
-  chemistry: 'light',
-  gameChemistry: false,
   substitutions: [],
 });
 
@@ -42,8 +37,6 @@ export const normalizeDraft = (draft: Partial<Draft>, matchDate: string): Draft 
   ...emptyDraft(matchDate),
   ...draft,
   cancelledIds: draft.cancelledIds ?? [],
-  chemistry: draft.chemistry ?? 'light',
-  gameChemistry: draft.gameChemistry ?? false,
   substitutions: draft.substitutions ?? [],
 });
 
