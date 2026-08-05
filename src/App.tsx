@@ -120,9 +120,13 @@ export default function App() {
 
   /* ------------------------------ שחקנים ------------------------------ */
 
-  /** כל כתיבה עוברת נרמול — כך החברויות תמיד נשארות דו-כיווניות */
+  /**
+   * כל כתיבה עוברת נרמול משני הצדדים:
+   * לפני העדכון — כדי שהמעדכן יקבל שחקנים עם כל השדות גם אם באחסון עוד יושב
+   * הפורמט הישן; ואחרי — כדי שהחברויות יישארו דו-כיווניות.
+   */
   const applyToPlayers = (updater: (prev: Player[]) => Player[]) => {
-    const wrapped = (prev: Player[]) => normalizePlayers(updater(prev));
+    const wrapped = (prev: Player[]) => normalizePlayers(updater(normalizePlayers(prev)));
     if (isDemo) setDemoPlayers((prev) => wrapped(prev ?? []));
     else setPlayers(wrapped);
   };
