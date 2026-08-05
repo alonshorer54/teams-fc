@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { BarChart3, FlaskConical, History, Shuffle, Users, X } from 'lucide-react';
+import { BarChart3, Database, FlaskConical, History, Shuffle, Users, X } from 'lucide-react';
 import {
   TEAM_IDS,
   normalizePlayers,
@@ -17,11 +17,7 @@ import { useSyncedStore } from './hooks/useSyncedStore';
 import { todayISO } from './lib/format';
 import { computeHistoryStats, streakByPlayer } from './lib/stats';
 import { computePairChemistry, pairEffectMap } from './lib/pairs';
-import {
-  DEFAULT_PRIORITIES,
-  normalizePriorities,
-  type CriterionSetting,
-} from './lib/criteria';
+import { normalizePriorities, type CriterionSetting } from './lib/criteria';
 import { DEMO_PLAYERS, buildDemoHistory } from './lib/demoData';
 import { PlayersView } from './components/PlayersView';
 import { DrawView } from './components/DrawView';
@@ -101,12 +97,15 @@ export default function App() {
   // אפקטים נלמדים לזוגות — זמינים להגרלה כשהקריטריון דלוק
   const pairEffects = useMemo(() => pairEffectMap(computePairChemistry(history)), [history]);
 
-  // סדר העדיפויות נשמר מקומית לכל מכשיר
-  const [storedPriorities, setStoredPriorities] = useLocalStorage<CriterionSetting[]>(
-    STORAGE_KEYS.priorities,
-    DEFAULT_PRIORITIES,
+  // סדר העדיפויות מסתנכרן בענן יחד עם השחקנים וההיסטוריה
+  const priorities = useMemo(
+    () => normalizePriorities(store.settings.priorities),
+    [store.settings.priorities],
   );
-  const priorities = useMemo(() => normalizePriorities(storedPriorities), [storedPriorities]);
+  const setPriorities = useCallback(
+    (next: CriterionSetting[]) => store.setSettings((prev) => ({ ...prev, priorities: next })),
+    [store],
+  );
 
   const [toast, setToast] = useState<string | null>(null);
   const toastTimer = useRef<number | undefined>(undefined);
@@ -277,6 +276,17 @@ export default function App() {
 
       {!isCloudConfigured && <CloudNotConfigured />}
 
+      {isCloudConfigured && auth.userId && !store.settingsSynced && (
+        <div className="mb-4 flex items-start gap-2.5 rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-xs leading-relaxed text-amber-200">
+          <Database size={15} className="mt-0.5 shrink-0" />
+          <span>
+            <b>סדר העדיפויות עדיין לא מסתנכרן.</b> חסרה עמודה במסד הנתונים — הריצו את{' '}
+            <code className="rounded bg-black/30 px-1">supabase-add-settings.sql</code> ב-SQL Editor
+            של Supabase, ורעננו. השחקנים וההיסטוריה מסתנכרנים כרגיל.
+          </span>
+        </div>
+      )}
+
       {isDemo && (
         <div className="mb-4 flex flex-wrap items-center gap-2.5 rounded-xl border border-violet-500/40 bg-violet-500/10 px-4 py-3 text-xs text-violet-200">
           <FlaskConical size={15} className="shrink-0" />
@@ -348,7 +358,7 @@ export default function App() {
             streaks={streaks}
             pairEffects={pairEffects}
             priorities={priorities}
-            setPriorities={setStoredPriorities}
+            setPriorities={setPriorities}
             onSaveHistory={saveToHistory}
             notify={notify}
             isDemo={isDemo}

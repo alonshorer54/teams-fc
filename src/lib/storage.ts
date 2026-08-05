@@ -1,12 +1,20 @@
 import type { Lineup, MatchRecord, Player } from '../types';
+import { DEFAULT_PRIORITIES, type CriterionSetting } from './criteria';
 
 // המפתחות נשמרו בשמם המקורי כדי שנתונים קיימים אצל משתמשים לא יאבדו בשינוי השם
 export const STORAGE_KEYS = {
   players: 'kohot.players.v1',
   history: 'kohot.history.v1',
   draft: 'kohot.draft.v1',
-  priorities: 'kohot.priorities.v1',
+  settings: 'kohot.settings.v1',
 } as const;
+
+/** הגדרות שמסתנכרנות בין המכשירים יחד עם השחקנים וההיסטוריה. */
+export interface AppSettings {
+  priorities: CriterionSetting[];
+}
+
+export const defaultSettings = (): AppSettings => ({ priorities: DEFAULT_PRIORITIES });
 
 /** טיוטת העבודה הנוכחית — נשמרת כדי שרענון דף לא יאבד את ההגרלה. */
 /** מי החליף את מי במחזור הנוכחי */
