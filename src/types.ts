@@ -12,7 +12,7 @@ export interface Player {
   name: string;
   /** דירוג בין 1.0 ל-5.0, בקפיצות של 0.1 */
   rating: number;
-  /** "הגיע דרך / חבר של" — מזהה של שחקן אחר */
+  /** "חבר של" — מזהה של שחקן אחר */
   friendOf?: string | null;
 }
 
