@@ -15,6 +15,7 @@ import { useAuth } from './hooks/useAuth';
 import { useSyncedStore } from './hooks/useSyncedStore';
 import { todayISO } from './lib/format';
 import { computeHistoryStats, streakByPlayer } from './lib/stats';
+import { computePairChemistry, pairEffectMap } from './lib/pairs';
 import { DEMO_PLAYERS, buildDemoHistory } from './lib/demoData';
 import { PlayersView } from './components/PlayersView';
 import { DrawView } from './components/DrawView';
@@ -83,6 +84,9 @@ export default function App() {
   // רצפי ניצחון/הפסד מההיסטוריה — מוצגים ליד השמות בזמן בחירת המשתתפים
   const streaks = useMemo(() => streakByPlayer(computeHistoryStats(history)), [history]);
 
+  // אפקטים נלמדים לזוגות — זמינים להגרלה כשהמתג דלוק
+  const pairEffects = useMemo(() => pairEffectMap(computePairChemistry(history)), [history]);
+
   const [toast, setToast] = useState<string | null>(null);
   const toastTimer = useRef<number | undefined>(undefined);
 
@@ -146,11 +150,12 @@ export default function App() {
 
   const saveToHistory = (lineup: Lineup, date: string, cancelledIds: string[]) => {
     const byId = new Map(players.map((p) => [p.id, p]));
+    const one = (id: string) => {
+      const p = byId.get(id);
+      return p ? { id: p.id, name: p.name, rating: p.rating } : null;
+    };
     const snapshot = (ids: string[]) =>
-      ids
-        .map((id) => byId.get(id))
-        .filter((p): p is Player => !!p)
-        .map(({ id, name, rating }) => ({ id, name, rating }));
+      ids.map(one).filter((p): p is NonNullable<ReturnType<typeof one>> => !!p);
 
     const record: MatchRecord = {
       id: newId(),
@@ -162,6 +167,11 @@ export default function App() {
         colored: snapshot(lineup.colored),
       },
       cancelled: snapshot(cancelledIds),
+      substitutions: draft.substitutions
+        .map((s) => ({ out: one(s.outId), in: one(s.inId) }))
+        .filter((s): s is { out: NonNullable<typeof s.out>; in: NonNullable<typeof s.in> } =>
+          Boolean(s.out && s.in),
+        ),
     };
     setHistory((prev) => [record, ...prev]);
   };
@@ -306,6 +316,7 @@ export default function App() {
             draft={draft}
             setDraft={setDraft}
             streaks={streaks}
+            pairEffects={pairEffects}
             onSaveHistory={saveToHistory}
             notify={notify}
             isDemo={isDemo}

@@ -48,6 +48,18 @@ export const CONFIDENCE_LABEL: Record<PairStat['confidence'], string> = {
   high: 'מדגם טוב',
 };
 
+/**
+ * מפה של אפקטים לשימוש באלגוריתם ההגרלה.
+ * רק זוגות שעברו את סף המדגם ושהאפקט שלהם משמעותי מספיק נכללים.
+ */
+export function pairEffectMap(report: PairReport): Map<string, number> {
+  const map = new Map<string, number>();
+  for (const p of [...report.strong, ...report.weak]) {
+    map.set([p.aId, p.bId].sort().join('|'), p.effect);
+  }
+  return map;
+}
+
 export function computePairChemistry(history: MatchRecord[]): PairReport {
   const resolved = history.filter((r) => r.result);
 

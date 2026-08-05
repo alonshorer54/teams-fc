@@ -9,6 +9,12 @@ export const STORAGE_KEYS = {
 } as const;
 
 /** טיוטת העבודה הנוכחית — נשמרת כדי שרענון דף לא יאבד את ההגרלה. */
+/** מי החליף את מי במחזור הנוכחי */
+export interface Substitution {
+  outId: string;
+  inId: string;
+}
+
 export interface Draft {
   selectedIds: string[];
   lineup: Lineup | null;
@@ -16,6 +22,9 @@ export interface Draft {
   /** מי אישר הגעה ואז ביטל השבוע */
   cancelledIds: string[];
   chemistry: ChemistryLevel;
+  /** האם לשקלל את הכימיה המשחקית הנלמדת בהגרלה */
+  gameChemistry: boolean;
+  substitutions: Substitution[];
 }
 
 export const emptyDraft = (matchDate: string): Draft => ({
@@ -24,6 +33,8 @@ export const emptyDraft = (matchDate: string): Draft => ({
   matchDate,
   cancelledIds: [],
   chemistry: 'light',
+  gameChemistry: false,
+  substitutions: [],
 });
 
 /** משלים שדות שנוספו בגרסאות מאוחרות, כדי שטיוטות ישנות לא יישברו. */
@@ -32,6 +43,8 @@ export const normalizeDraft = (draft: Partial<Draft>, matchDate: string): Draft 
   ...draft,
   cancelledIds: draft.cancelledIds ?? [],
   chemistry: draft.chemistry ?? 'light',
+  gameChemistry: draft.gameChemistry ?? false,
+  substitutions: draft.substitutions ?? [],
 });
 
 export function loadJSON<T>(key: string, fallback: T): T {
