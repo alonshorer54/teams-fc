@@ -31,7 +31,7 @@ export function AnalysisView({
       <EmptyState
         icon={<BarChart3 size={28} />}
         title="אין עדיין מספיק נתונים"
-        hint="שמרו כמה הגרלות ועדכנו מי ניצח — כאן יופיעו מגמות נוכחות וכימיה משחקית."
+        hint="שמרו כמה הגרלות ועדכנו איפה כל קבוצה סיימה — כאן יופיעו מגמות נוכחות וכימיה משחקית."
       />
     );
   }
@@ -193,7 +193,7 @@ function PairSection({ report }: { report: ReturnType<typeof computePairChemistr
       {!enough ? (
         <p className="rounded-xl border border-slate-800 bg-slate-950/40 p-3 text-xs leading-relaxed text-slate-400">
           עוד אין מספיק נתונים. יש {report.resolvedMatches} משחקים עם תוצאה מעודכנת — צריך שיצטברו
-          זוגות ששיחקו יחד לפחות {MIN_GAMES_TOGETHER} פעמים. עדכנו מי ניצח בכל שבוע וזה יתמלא לבד.
+          זוגות ששיחקו יחד לפחות {MIN_GAMES_TOGETHER} פעמים. עדכנו את הדירוג בכל שבוע וזה יתמלא לבד.
         </p>
       ) : (
         <div className="grid gap-3 lg:grid-cols-2">
