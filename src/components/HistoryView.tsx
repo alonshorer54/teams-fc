@@ -71,8 +71,7 @@ export function HistoryView({
       <StatsPanel stats={stats} />
 
       <p className="px-1 text-xs text-slate-400">
-        {history.length === 1 ? 'הגרלה אחת שמורה' : `${history.length} הגרלות שמורות`} · הכי חדשות
-        למעלה
+        {history.length === 1 ? 'שיחקתם פעם אחת' : `שיחקתם ${history.length} פעמים`} · הכי חדש למעלה
       </p>
 
       {history.map((record) => {

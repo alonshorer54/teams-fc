@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ArrowLeftRight,
   CheckCheck,
@@ -31,6 +31,7 @@ export function RoundPanel({
   cancelledIds,
   substitutions,
   streaks,
+  hasLineup,
   onSetAll,
   onToggle,
   onCancel,
@@ -43,14 +44,23 @@ export function RoundPanel({
   cancelledIds: string[];
   substitutions: Substitution[];
   streaks: Map<string, number>;
+  /** האם כבר בוצעה הגרלה — משפיע על פתיחת הרשימה כברירת מחדל */
+  hasLineup: boolean;
   onSetAll: (ids: string[]) => void;
   onToggle: (id: string) => void;
   onCancel: (id: string) => void;
   onUncancel: (id: string) => void;
   onSubstitute: (outId: string, inId: string) => void;
 }) {
-  const [open, setOpen] = useState(true);
+  // פתוח כל עוד בוחרים מי משחק; אחרי ההגרלה נסגר לבד כדי לפנות מקום לקבוצות
+  const [open, setOpen] = useState(!hasLineup);
   const [pasteOpen, setPasteOpen] = useState(false);
+
+  const hadLineup = useRef(hasLineup);
+  useEffect(() => {
+    if (hasLineup && !hadLineup.current) setOpen(false);
+    hadLineup.current = hasLineup;
+  }, [hasLineup]);
   /** למי מהמבטלים פתוח כרגע בורר המחליף */
   const [replacingFor, setReplacingFor] = useState<string | null>(null);
 
@@ -133,7 +143,11 @@ export function RoundPanel({
               <CheckCheck size={14} />
               בחירת הכל
             </button>
-            <button className="btn-ghost !py-1.5 text-xs" onClick={() => onSetAll([])}>
+            <button
+              className="btn-ghost !py-1.5 text-xs"
+              onClick={() => onSetAll([])}
+              title="מרוקן את רשימת מי שמשחק, כדי להתחיל מחזור חדש"
+            >
               <X size={14} />
               ניקוי המחזור
             </button>

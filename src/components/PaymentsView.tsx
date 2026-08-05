@@ -1,15 +1,5 @@
 import { useMemo, useState } from 'react';
-import {
-  Banknote,
-  Check,
-  CircleAlert,
-  Copy,
-  ExternalLink,
-  Link as LinkIcon,
-  RotateCcw,
-  ShieldCheck,
-  Wallet,
-} from 'lucide-react';
+import { Check, CircleAlert, Copy, RotateCcw, ShieldCheck, Wallet } from 'lucide-react';
 import type { Player } from '../types';
 import {
   PAYMENT_METHODS,
@@ -79,7 +69,6 @@ export function PaymentsView({
       '',
       'עדיין לא שילמו:',
       ...owing.map((p) => `• ${p.name}`),
-      settings.paymentLink ? `\nלתשלום: ${settings.paymentLink}` : null,
     ].filter((l) => l !== null);
     return lines.join('\n');
   };
@@ -100,8 +89,8 @@ export function PaymentsView({
         <div className="flex flex-wrap items-center gap-2.5 rounded-xl border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-xs text-amber-200">
           <CircleAlert size={15} className="shrink-0" />
           <span>
-            הגבייה שמוצגת היא מ־{formatHebrewDate(payments.matchDate)}, והמחזור הנוכחי הוא מ־
-            {formatHebrewDate(matchDate)}.
+            <b>הגבייה הזו היא מ־{formatHebrewDate(payments.matchDate)}</b>, והמחזור הנוכחי הוא מ־
+            {formatHebrewDate(matchDate)}. הסימונים לא מתאפסים לבד — כדי לא למחוק לכם נתונים בטעות.
           </span>
           <button
             className="btn-ghost mr-auto !py-1.5 text-xs"
@@ -181,6 +170,11 @@ export function PaymentsView({
           </div>
         </header>
 
+        <p className="border-b border-slate-800/70 px-4 py-2 text-[10px] leading-relaxed text-slate-500">
+          הרשימה מתעדכנת לפי מי שמשחק במחזור הנוכחי. הסימונים נשארים עד שתלחצו "איפוס" — גם אם
+          עברתם למחזור חדש.
+        </p>
+
         <ul className="divide-y divide-slate-800/60">
           {roster.map((p) => {
             const record = payments.paid[p.id];
@@ -232,49 +226,6 @@ export function PaymentsView({
             );
           })}
         </ul>
-      </section>
-
-      {/* קישור תשלום */}
-      <section className="card p-4">
-        <label className="label" htmlFor="pay-link">
-          <span className="inline-flex items-center gap-1.5">
-            <LinkIcon size={13} className="text-sky-400" />
-            קישור תשלום קבוע (אופציונלי)
-          </span>
-        </label>
-        <input
-          id="pay-link"
-          dir="ltr"
-          className="input text-left"
-          placeholder="https://www.bitpay.co.il/app/me/..."
-          value={settings.paymentLink ?? ''}
-          onChange={(e) => onChange((prev) => ({ ...prev, paymentLink: e.target.value.trim() }))}
-        />
-        <p className="mt-1.5 text-[11px] leading-relaxed text-slate-500">
-          אם יש לכם קישור בקשת תשלום קבוע מביט או מפייבוקס, הדביקו אותו כאן והוא יצורף אוטומטית
-          להודעת התזכורת.
-        </p>
-        {settings.paymentLink && (
-          <a
-            href={settings.paymentLink}
-            target="_blank"
-            rel="noreferrer"
-            className="btn-ghost mt-2 !py-1.5 text-xs"
-          >
-            <ExternalLink size={13} />
-            פתיחת הקישור לבדיקה
-          </a>
-        )}
-      </section>
-
-      {/* הבהרה על ביט */}
-      <section className="card flex items-start gap-2.5 p-4 text-[11px] leading-relaxed text-slate-400">
-        <Banknote size={15} className="mt-0.5 shrink-0 text-slate-500" />
-        <span>
-          <b className="text-slate-300">למה הסימון ידני?</b> לביט אין ממשק ציבורי שמאפשר לאפליקציות
-          חיצוניות לראות מי העביר כסף — זה חסום מטעמי אבטחה ורגולציה, אצל כל הארנקים הישראליים.
-          בפועל אתם רואים את ההעברות בביט, ומסמנים כאן בקליק. הסימון מסתנכרן לכל המכשירים.
-        </span>
       </section>
 
       <ConfirmDialog
