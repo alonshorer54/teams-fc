@@ -9,12 +9,50 @@ export const STORAGE_KEYS = {
   settings: 'kohot.settings.v1',
 } as const;
 
+/** גבייה שבועית — מתאפסת בכל מחזור חדש. */
+export interface PaymentRound {
+  /** תאריך המחזור שעליו הגבייה */
+  matchDate: string;
+  /** כמה כל אחד משלם */
+  amount: number;
+  /** מי כבר שילם, ואיך */
+  paid: Record<string, { at: string; method: PaymentMethod }>;
+}
+
+export type PaymentMethod = 'bit' | 'cash' | 'paybox' | 'other';
+
+export const PAYMENT_METHODS: Record<PaymentMethod, string> = {
+  bit: 'ביט',
+  cash: 'מזומן',
+  paybox: 'פייבוקס',
+  other: 'אחר',
+};
+
+export const emptyPayments = (matchDate: string): PaymentRound => ({
+  matchDate,
+  amount: 0,
+  paid: {},
+});
+
 /** הגדרות שמסתנכרנות בין המכשירים יחד עם השחקנים וההיסטוריה. */
 export interface AppSettings {
   priorities: CriterionSetting[];
+  payments: PaymentRound;
+  /** קישור תשלום קבוע (ביט/פייבוקס) שמצורף להודעת התזכורת */
+  paymentLink?: string;
 }
 
-export const defaultSettings = (): AppSettings => ({ priorities: DEFAULT_PRIORITIES });
+export const defaultSettings = (): AppSettings => ({
+  priorities: DEFAULT_PRIORITIES,
+  payments: emptyPayments(''),
+});
+
+/** משלים שדות שנוספו אחרי שההגדרות כבר נשמרו בענן. */
+export const normalizeSettings = (raw: Partial<AppSettings> | undefined): AppSettings => ({
+  priorities: raw?.priorities ?? DEFAULT_PRIORITIES,
+  payments: raw?.payments ?? emptyPayments(''),
+  paymentLink: raw?.paymentLink,
+});
 
 /** טיוטת העבודה הנוכחית — נשמרת כדי שרענון דף לא יאבד את ההגרלה. */
 /** מי החליף את מי במחזור הנוכחי */

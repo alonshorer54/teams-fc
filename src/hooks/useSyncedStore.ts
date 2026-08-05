@@ -1,7 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { MatchRecord, Player } from '../types';
-import { STORAGE_KEYS, defaultSettings, type AppSettings } from '../lib/storage';
-import { normalizePriorities } from '../lib/criteria';
+import {
+  STORAGE_KEYS,
+  defaultSettings,
+  normalizeSettings,
+  type AppSettings,
+} from '../lib/storage';
 import { TABLE, isCloudConfigured, supabase } from '../lib/supabase';
 import { useLocalStorage } from './useLocalStorage';
 
@@ -85,9 +89,10 @@ export function useSyncedStore(userId: string | null) {
       if (data) {
         const cloudPlayers = (data.players ?? []) as Player[];
         const cloudHistory = (data.history ?? []) as MatchRecord[];
-        const cloudSettings: AppSettings = hasSettingsColumn && data.settings
-          ? { priorities: normalizePriorities((data.settings as AppSettings).priorities) }
-          : settings;
+        const cloudSettings: AppSettings =
+          hasSettingsColumn && data.settings
+            ? normalizeSettings(data.settings as Partial<AppSettings>)
+            : settings;
 
         setPlayers(cloudPlayers);
         setHistory(cloudHistory);
@@ -168,7 +173,7 @@ export function useSyncedStore(userId: string | null) {
           if (!row?.players) return;
 
           const nextSettings: AppSettings = row.settings
-            ? { priorities: normalizePriorities(row.settings.priorities) }
+            ? normalizeSettings(row.settings)
             : settings;
           const incoming = fingerprint(row.players, row.history ?? [], nextSettings);
           if (incoming === cloudFingerprint.current) return; // ההד של השמירה שלנו

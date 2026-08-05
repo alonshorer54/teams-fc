@@ -1,7 +1,8 @@
 import { useMemo, useState } from 'react';
-import { CalendarDays, Copy, Share2 } from 'lucide-react';
+import { CalendarDays, Copy, Image as ImageIcon, Share2 } from 'lucide-react';
 import { TEAM_IDS, TEAM_META } from '../types';
 import { buildWhatsAppText, copyToClipboard, formatHebrewDate, type ShareTeams } from '../lib/format';
+import { canShareImage, downloadImage, renderTeamsImage, shareImage } from '../lib/shareImage';
 
 /**
  * "מצב וואטסאפ" — תצוגה נקייה לחלוטין: שמות קבוצות ושמות שחקנים בלבד.
@@ -23,9 +24,29 @@ export function ShareView({
     [teams, includeDate, date],
   );
 
+  const [busy, setBusy] = useState(false);
+
   const copy = async () => {
     const ok = await copyToClipboard(text);
     onCopied(ok ? 'הועתק ללוח — אפשר להדביק בוואטסאפ 📋' : 'ההעתקה נכשלה, נסו לסמן ידנית');
+  };
+
+  const sendImage = async () => {
+    setBusy(true);
+    try {
+      const blob = await renderTeamsImage(teams, date, { includeDate });
+      if (!blob) {
+        onCopied('יצירת התמונה נכשלה');
+        return;
+      }
+      const filename = `teams-${date}.png`;
+      if (await shareImage(blob, filename, 'כוחות למשחק')) return;
+      // אין תפריט שיתוף (בעיקר במחשב) — מורידים את הקובץ במקום
+      downloadImage(blob, filename);
+      onCopied('התמונה ירדה — אפשר לצרף אותה לוואטסאפ');
+    } finally {
+      setBusy(false);
+    }
   };
 
   return (
@@ -46,9 +67,13 @@ export function ShareView({
             <CalendarDays size={13} />
             לצרף תאריך
           </label>
-          <button className="btn-primary" onClick={copy}>
+          <button className="btn-primary" onClick={sendImage} disabled={busy}>
+            <ImageIcon size={16} />
+            {busy ? 'מכין תמונה...' : canShareImage() ? 'שליחת תמונה' : 'הורדת תמונה'}
+          </button>
+          <button className="btn-ghost" onClick={copy}>
             <Copy size={16} />
-            העתיקו לוואטסאפ
+            העתקת טקסט
           </button>
         </div>
       </div>
