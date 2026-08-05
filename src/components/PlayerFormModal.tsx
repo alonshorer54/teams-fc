@@ -10,7 +10,6 @@ export interface PlayerDraft {
   loveIds: string[];
   hateIds: string[];
   tags: string[];
-  notes?: string;
 }
 
 const clampRating = (n: number) => Math.min(5, Math.max(1, Math.round(n * 10) / 10));
@@ -37,7 +36,6 @@ export function PlayerFormModal({
   const [loveIds, setLoveIds] = useState<string[]>([]);
   const [hateIds, setHateIds] = useState<string[]>([]);
   const [tags, setTags] = useState<string[]>([]);
-  const [notes, setNotes] = useState('');
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -48,7 +46,6 @@ export function PlayerFormModal({
     setLoveIds(editing?.loveIds ?? []);
     setHateIds(editing?.hateIds ?? []);
     setTags(editing?.tags ?? []);
-    setNotes(editing?.notes ?? '');
     setError(null);
   }, [open, editing]);
 
@@ -75,7 +72,6 @@ export function PlayerFormModal({
       loveIds: loveIds.filter((id) => !hateIds.includes(id)),
       hateIds,
       tags,
-      notes: notes.trim() || undefined,
     });
   };
 
@@ -170,19 +166,6 @@ export function PlayerFormModal({
         />
 
         <TagPicker knownTags={knownTags} value={tags} onChange={setTags} />
-
-        <div>
-          <label className="label" htmlFor="player-notes">
-            הערה חופשית (אופציונלי)
-          </label>
-          <input
-            id="player-notes"
-            className="input"
-            value={notes}
-            placeholder="לדוגמה: חוזר מפציעה"
-            onChange={(e) => setNotes(e.target.value)}
-          />
-        </div>
 
         {error && (
           <p className="rounded-lg bg-rose-500/10 px-3 py-2 text-xs font-semibold text-rose-300">
@@ -314,7 +297,10 @@ function TagPicker({
       <label className="label" htmlFor="player-tags">
         <span className="inline-flex items-center gap-1.5">
           <Tag size={13} className="text-amber-400" />
-          תגיות
+          תגיות — מלל חופשי
+          {value.length > 0 && (
+            <span className="font-mono text-[10px] text-slate-500">({value.length})</span>
+          )}
         </span>
       </label>
 
@@ -323,7 +309,7 @@ function TagPicker({
           {value.map((tag) => (
             <span
               key={tag}
-              className="inline-flex items-center gap-1 rounded-lg border border-amber-500/40 bg-amber-500/15 px-2 py-1 text-[11px] font-semibold text-amber-200"
+              className="inline-flex max-w-full items-center gap-1 rounded-lg border border-amber-500/40 bg-amber-500/15 px-2 py-1 text-[11px] font-semibold break-words text-amber-200"
             >
               {tag}
               <button
@@ -343,7 +329,7 @@ function TagPicker({
         <input
           id="player-tags"
           className="input py-1.5 text-xs"
-          placeholder="לדוגמה: לא בכושר, רץ הרבה, נלחם"
+          placeholder="כתבו כל דבר ולחצו Enter — למשל: חוזר מפציעה"
           value={input}
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={(e) => {
@@ -353,28 +339,37 @@ function TagPicker({
             }
           }}
         />
-        <button type="button" className="btn-ghost !px-3 !py-1.5" onClick={() => add(input)}>
+        <button
+          type="button"
+          className="btn-ghost !px-3 !py-1.5"
+          onClick={() => add(input)}
+          aria-label="הוספת תגית"
+        >
           <Plus size={14} />
         </button>
       </div>
 
       {suggestions.length > 0 && (
-        <div className="mt-2 flex flex-wrap gap-1.5">
-          {suggestions.map((tag) => (
-            <button
-              key={tag}
-              type="button"
-              onClick={() => add(tag)}
-              className="rounded-lg border border-slate-700 bg-slate-800/60 px-2 py-0.5 text-[11px] text-slate-300 transition hover:border-amber-500/40 hover:text-amber-200"
-            >
-              + {tag}
-            </button>
-          ))}
+        <div className="mt-2">
+          <p className="mb-1 text-[10px] text-slate-500">תגיות שכבר השתמשתם בהן:</p>
+          <div className="flex flex-wrap gap-1.5">
+            {suggestions.map((tag) => (
+              <button
+                key={tag}
+                type="button"
+                onClick={() => add(tag)}
+                className="rounded-lg border border-slate-700 bg-slate-800/60 px-2 py-0.5 text-[11px] text-slate-300 transition hover:border-amber-500/40 hover:text-amber-200"
+              >
+                + {tag}
+              </button>
+            ))}
+          </div>
         </div>
       )}
 
-      <p className="mt-1.5 text-[11px] leading-relaxed text-slate-500">
-        ההגרלה מפזרת שווה בין הקבוצות שחקנים עם אותה תגית — כך שלא כל מי שלא בכושר ייפול לאותה קבוצה.
+      <p className="mt-2 text-[11px] leading-relaxed text-slate-500">
+        אין רשימה סגורה — כתבו מה שתרצו. תגית שמופיעה אצל כמה שחקנים תפוזר שווה בין הקבוצות (למשל
+        "לא בכושר"), ותגית אישית שמופיעה אצל אחד בלבד היא סתם הערה ולא משפיעה על ההגרלה.
       </p>
     </div>
   );

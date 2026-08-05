@@ -18,12 +18,12 @@ export interface Player {
   loveIds: string[];
   /** מעדיף לא לשחק איתם (מד שנאה) */
   hateIds: string[];
-  /** תגיות חופשיות: "לא בכושר", "רץ הרבה", "נלחם" */
+  /** מלל חופשי לגמרי: "לא בכושר", "רץ הרבה", "חוזר מפציעה" — מה שתרצו */
   tags: string[];
-  /** הערה חופשית על השחקן */
-  notes?: string;
   /** @deprecated שדה ישן מגרסה קודמת — מומר ל-friendIds בטעינה */
   friendOf?: string | null;
+  /** @deprecated שדה ישן — ההערה הופכת לתגית בטעינה */
+  notes?: string;
 }
 
 /**
@@ -36,7 +36,8 @@ export function normalizePlayers(raw: Player[]): Player[] {
     friendIds: [...new Set(p.friendIds ?? (p.friendOf ? [p.friendOf] : []))],
     loveIds: [...new Set(p.loveIds ?? [])],
     hateIds: [...new Set(p.hateIds ?? [])],
-    tags: [...new Set(p.tags ?? [])],
+    // שדה ההערה בוטל לטובת תגיות חופשיות — ההערה הישנה נשמרת כתגית
+    tags: [...new Set([...(p.tags ?? []), ...(p.notes?.trim() ? [p.notes.trim()] : [])])],
   }));
 
   const byId = new Map(players.map((p) => [p.id, p]));
@@ -53,7 +54,10 @@ export function normalizePlayers(raw: Player[]): Player[] {
     }
   }
 
-  for (const p of players) delete p.friendOf;
+  for (const p of players) {
+    delete p.friendOf;
+    delete p.notes;
+  }
   return players;
 }
 
