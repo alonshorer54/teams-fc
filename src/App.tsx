@@ -15,7 +15,7 @@ import { useAuth } from './hooks/useAuth';
 import { useSyncedStore } from './hooks/useSyncedStore';
 import { todayISO } from './lib/format';
 import { computeHistoryStats, streakByPlayer } from './lib/stats';
-import { DEMO_PLAYERS } from './lib/demoData';
+import { DEMO_PLAYERS, buildDemoHistory } from './lib/demoData';
 import { PlayersView } from './components/PlayersView';
 import { DrawView } from './components/DrawView';
 import { HistoryView } from './components/HistoryView';
@@ -53,7 +53,7 @@ function buildDemoPlayers(): Player[] {
 export default function App() {
   const auth = useAuth();
   const store = useSyncedStore(auth.userId);
-  const { players: realPlayers, setPlayers, history, setHistory } = store;
+  const { players: realPlayers, setPlayers, history: realHistory, setHistory: setRealHistory } = store;
 
   const [tab, setTab] = useState<Tab>('players');
 
@@ -62,6 +62,7 @@ export default function App() {
    * ולא בענן. יוצאים ממנו והכל נעלם.
    */
   const [demoPlayers, setDemoPlayers] = useState<Player[] | null>(null);
+  const [demoHistory, setDemoHistory] = useState<MatchRecord[]>([]);
   const [demoDraft, setDemoDraft] = useState<Draft>(() => emptyDraft(todayISO()));
   const isDemo = demoPlayers !== null;
 
@@ -73,15 +74,14 @@ export default function App() {
   // טיוטות שנשמרו לפני שנוספו שדות הביטולים והכימיה
   const realDraft = useMemo(() => normalizeDraft(storedDraft, todayISO()), [storedDraft]);
 
-  // רצפי ניצחון/הפסד מההיסטוריה — מוצגים ליד השמות בזמן בחירת המשתתפים
-  const streaks = useMemo(
-    () => (demoPlayers ? new Map<string, number>() : streakByPlayer(computeHistoryStats(history))),
-    [history, demoPlayers],
-  );
-
   const players = demoPlayers ?? realPlayers;
+  const history = isDemo ? demoHistory : realHistory;
+  const setHistory = isDemo ? setDemoHistory : setRealHistory;
   const draft = isDemo ? demoDraft : realDraft;
   const setDraft = isDemo ? setDemoDraft : setStoredDraft;
+
+  // רצפי ניצחון/הפסד מההיסטוריה — מוצגים ליד השמות בזמן בחירת המשתתפים
+  const streaks = useMemo(() => streakByPlayer(computeHistoryStats(history)), [history]);
 
   const [toast, setToast] = useState<string | null>(null);
   const toastTimer = useRef<number | undefined>(undefined);
@@ -126,7 +126,9 @@ export default function App() {
   };
 
   const enterDemo = () => {
-    setDemoPlayers(buildDemoPlayers());
+    const demo = buildDemoPlayers();
+    setDemoPlayers(demo);
+    setDemoHistory(buildDemoHistory(demo));
     setDemoDraft(emptyDraft(todayISO()));
     setTab('draw');
     notify('מצב דוגמה — שום דבר כאן לא נשמר');
@@ -134,6 +136,7 @@ export default function App() {
 
   const exitDemo = () => {
     setDemoPlayers(null);
+    setDemoHistory([]);
     setDemoDraft(emptyDraft(todayISO()));
     setTab('players');
     notify('חזרת למאגר האמיתי');
@@ -142,11 +145,6 @@ export default function App() {
   /* ------------------------------ היסטוריה ---------------------------- */
 
   const saveToHistory = (lineup: Lineup, date: string, cancelledIds: string[]) => {
-    if (isDemo) {
-      notify('במצב דוגמה לא נשמרת היסטוריה');
-      return;
-    }
-
     const byId = new Map(players.map((p) => [p.id, p]));
     const snapshot = (ids: string[]) =>
       ids
@@ -266,7 +264,7 @@ export default function App() {
           >
             <Icon size={16} />
             {label}
-            {id === 'history' && history.length > 0 && !isDemo && (
+            {id === 'history' && history.length > 0 && (
               <span
                 className={`rounded-md px-1.5 font-mono text-[10px] tabular-nums ${
                   tab === id ? 'bg-emerald-900/25' : 'bg-slate-700/70'
@@ -316,7 +314,7 @@ export default function App() {
 
         {tab === 'history' && (
           <HistoryView
-            history={isDemo ? [] : history}
+            history={history}
             onDelete={(id) => {
               setHistory((prev) => prev.filter((r) => r.id !== id));
               notify('ההגרלה נמחקה');
@@ -327,9 +325,7 @@ export default function App() {
           />
         )}
 
-        {tab === 'analysis' && (
-          <AnalysisView players={players} history={isDemo ? [] : history} />
-        )}
+        {tab === 'analysis' && <AnalysisView players={players} history={history} />}
       </main>
 
       <Toast message={toast} />
