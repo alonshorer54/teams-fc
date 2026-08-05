@@ -38,10 +38,13 @@ export interface AttendanceReport {
   slipping: PlayerAttendance[];
   /** תאריכי השבועות, מהחדש לישן — כותרות הטיימליין */
   weekDates: string[];
+  /** מזהי ההגרלות — משמשים כמפתחות, כי שתי הגרלות יכולות ליפול באותו תאריך */
+  weekIds: string[];
 }
 
 export function computeAttendance(players: Player[], history: MatchRecord[]): AttendanceReport {
   const weekDates = history.map((r) => r.date);
+  const weekIds = history.map((r) => r.id);
   const total = history.length;
 
   const rows: PlayerAttendance[] = players.map((player) => {
@@ -102,6 +105,7 @@ export function computeAttendance(players: Player[], history: MatchRecord[]): At
 
   return {
     weekDates,
+    weekIds,
     players: rows.sort(
       (a, b) => (a.weeksSinceLast ?? 999) - (b.weeksSinceLast ?? 999) || b.playedCount - a.playedCount,
     ),
