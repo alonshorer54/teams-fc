@@ -8,8 +8,13 @@ create table if not exists public.kohot_data (
   user_id    uuid primary key references auth.users (id) on delete cascade,
   players    jsonb       not null default '[]'::jsonb,
   history    jsonb       not null default '[]'::jsonb,
+  settings   jsonb       not null default '{}'::jsonb,
   updated_at timestamptz not null default now()
 );
+
+-- לטבלאות שנוצרו לפני שעמודת ההגדרות התווספה
+alter table public.kohot_data
+  add column if not exists settings jsonb not null default '{}'::jsonb;
 
 -- הפעלת אבטחת שורות: כל משתמש רואה ומעדכן אך ורק את הנתונים שלו
 alter table public.kohot_data enable row level security;
