@@ -209,7 +209,7 @@ export function DrawView({
               className="btn-ghost"
               onClick={() => {
                 onSaveHistory(lineup, matchDate, cancelledIds);
-                if (!isDemo) notify('הכוחות נשמרו בהיסטוריה ✔');
+                notify(isDemo ? 'נוסף להיסטוריית הדוגמה (זמני)' : 'הכוחות נשמרו בהיסטוריה ✔');
               }}
             >
               <Save size={16} />

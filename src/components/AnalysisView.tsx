@@ -216,8 +216,9 @@ function PairSection({ report }: { report: ReturnType<typeof computePairChemistr
 
       {enough && (
         <p className="text-[10px] leading-relaxed text-slate-500">
-          שימו לב למדגם: זוג עם 3 משחקים משותפים זה כיוון, לא הוכחה. ככל שיצטברו שבועות המספרים
-          יתייצבו.
+          שימו לב למדגם: זוג עם {MIN_GAMES_TOGETHER} משחקים משותפים זה כיוון, לא הוכחה — ריחוף על
+          המספרים מראה את הפירוט. שימו לב גם ששני שחקנים שתמיד משובצים יחד לא יופיעו כאן, כי אי אפשר
+          להפריד בין התרומה המשותפת שלהם לביצועים האישיים.
         </p>
       )}
     </section>
@@ -264,9 +265,13 @@ function PairList({
               </span>
               <span
                 className="shrink-0 font-mono text-[10px] text-slate-500 tabular-nums"
-                title={`${p.wins} ניצחונות מתוך ${p.games} · ${CONFIDENCE_LABEL[p.confidence]}`}
+                title={
+                  `ניצחו ${Math.round(p.winRate * 100)}% מהמשחקים יחד, צפוי היה ${Math.round(p.expected * 100)}%` +
+                  ` · ${p.wins} ניצחונות${p.draws ? ` ו-${p.draws} תיקו` : ''} מתוך ${p.games}` +
+                  ` · ${CONFIDENCE_LABEL[p.confidence]}`
+                }
               >
-                {p.wins}/{p.games}
+                {Math.round(p.winRate * 100)}% מ-{p.games}
               </span>
               <span className={`w-12 shrink-0 text-left font-mono font-bold tabular-nums ${colors.text}`}>
                 {p.effect > 0 ? '+' : ''}
