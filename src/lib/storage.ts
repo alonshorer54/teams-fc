@@ -19,14 +19,17 @@ export interface PaymentRound {
   paid: Record<string, { at: string; method: PaymentMethod }>;
 }
 
-export type PaymentMethod = 'bit' | 'cash' | 'paybox' | 'other';
+export type PaymentMethod = 'bitGroup' | 'bit' | 'paybox' | 'cash';
 
+/** הסדר כאן הוא הסדר שמוצג במסך התשלומים */
 export const PAYMENT_METHODS: Record<PaymentMethod, string> = {
-  bit: 'ביט',
+  bitGroup: 'בקבוצה בביט',
+  bit: 'בביט רגיל',
+  paybox: 'בפייבוקס',
   cash: 'מזומן',
-  paybox: 'פייבוקס',
-  other: 'אחר',
 };
+
+export const PAYMENT_METHOD_ORDER: PaymentMethod[] = ['bitGroup', 'bit', 'paybox', 'cash'];
 
 export const emptyPayments = (matchDate: string): PaymentRound => ({
   matchDate,
