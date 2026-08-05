@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { FlaskConical, History, Shuffle, Users, X } from 'lucide-react';
+import { BarChart3, FlaskConical, History, Shuffle, Users, X } from 'lucide-react';
 import {
   TEAM_IDS,
   type Lineup,
@@ -19,18 +19,20 @@ import { DEMO_PLAYERS } from './lib/demoData';
 import { PlayersView } from './components/PlayersView';
 import { DrawView } from './components/DrawView';
 import { HistoryView } from './components/HistoryView';
+import { AnalysisView } from './components/AnalysisView';
 import { BackupCard } from './components/BackupCard';
 import { AuthGate, CloudNotConfigured } from './components/AuthGate';
 import { SyncBadge } from './components/SyncBadge';
 import { Toast } from './components/ui';
 import type { PlayerDraft } from './components/PlayerFormModal';
 
-type Tab = 'players' | 'draw' | 'history';
+type Tab = 'players' | 'draw' | 'history' | 'analysis';
 
 const TABS: { id: Tab; label: string; icon: typeof Users }[] = [
   { id: 'players', label: 'שחקנים', icon: Users },
   { id: 'draw', label: 'כוחות', icon: Shuffle },
   { id: 'history', label: 'היסטוריה', icon: History },
+  { id: 'analysis', label: 'מגמות', icon: BarChart3 },
 ];
 
 const newId = () =>
@@ -323,6 +325,10 @@ export default function App() {
             onRestore={restoreRecord}
             notify={notify}
           />
+        )}
+
+        {tab === 'analysis' && (
+          <AnalysisView players={players} history={isDemo ? [] : history} />
         )}
       </main>
 
