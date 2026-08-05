@@ -1,5 +1,15 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Heart, HeartCrack, Link2, Plus, ShieldCheck, Tag, UserPen, UserPlus, X } from 'lucide-react';
+import {
+  Link2,
+  Plus,
+  ShieldCheck,
+  Tag,
+  ThumbsDown,
+  ThumbsUp,
+  UserPen,
+  UserPlus,
+  X,
+} from 'lucide-react';
 import type { Player } from '../types';
 import { Modal } from './ui';
 
@@ -155,19 +165,19 @@ export function PlayerFormModal({
         />
 
         <PlayerMultiSelect
-          label="אוהב לשחק עם"
+          label="מעדיף להיות עם"
           hint="למי שהוא לא חבר שלו. חברים כבר משובצים יחד ממילא, אז הם לא מופיעים כאן."
-          icon={<Heart size={13} className="text-pink-400" />}
+          icon={<ThumbsUp size={13} className="text-sky-400" />}
           options={others.filter((p) => !hateIds.includes(p.id) && !friendIds.includes(p.id))}
           value={loveIds}
           onChange={setLoveIds}
-          tone="pink"
+          tone="sky"
         />
 
         <PlayerMultiSelect
-          label="מעדיף לא לשחק עם"
+          label="מעדיף להיות בלי"
           hint="ההגרלה תנסה להפריד ביניהם. חברים לא מופיעים כאן — זו הייתה סתירה."
-          icon={<HeartCrack size={13} className="text-rose-400" />}
+          icon={<ThumbsDown size={13} className="text-rose-400" />}
           options={others.filter((p) => !loveIds.includes(p.id) && !friendIds.includes(p.id))}
           value={hateIds}
           onChange={setHateIds}
@@ -218,7 +228,7 @@ export function PlayerFormModal({
 
 const TONES = {
   emerald: 'border-emerald-500/50 bg-emerald-500/15 text-emerald-200',
-  pink: 'border-pink-500/50 bg-pink-500/15 text-pink-200',
+  sky: 'border-sky-500/50 bg-sky-500/15 text-sky-200',
   rose: 'border-rose-500/50 bg-rose-500/15 text-rose-200',
 } as const;
 

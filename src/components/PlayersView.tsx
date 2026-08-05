@@ -1,13 +1,13 @@
 import { useMemo, useState } from 'react';
 import {
   ArrowDownUp,
-  Heart,
-  HeartCrack,
   Link2,
   Pencil,
   Search,
   ShieldCheck,
   Tag,
+  ThumbsDown,
+  ThumbsUp,
   Trash2,
   UserPlus,
   Users,
@@ -154,14 +154,14 @@ export function PlayersView({
                   )}
                   {p.loveIds.length > 0 && (
                     <p className="flex items-center gap-1 truncate text-[11px] text-slate-400">
-                      <Heart size={11} className="shrink-0 text-pink-400/80" />
-                      <span className="truncate">אוהב עם {names(p.loveIds)}</span>
+                      <ThumbsUp size={11} className="shrink-0 text-sky-400/80" />
+                      <span className="truncate">מעדיף עם {names(p.loveIds)}</span>
                     </p>
                   )}
                   {p.hateIds.length > 0 && (
                     <p className="flex items-center gap-1 truncate text-[11px] text-slate-400">
-                      <HeartCrack size={11} className="shrink-0 text-rose-400/80" />
-                      <span className="truncate">לא עם {names(p.hateIds)}</span>
+                      <ThumbsDown size={11} className="shrink-0 text-rose-400/80" />
+                      <span className="truncate">מעדיף בלי {names(p.hateIds)}</span>
                     </p>
                   )}
                   {p.tags.length > 0 && (

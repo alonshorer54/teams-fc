@@ -104,10 +104,10 @@ export function compareLineups(
         kind: 'warn',
         text:
           b.kind === 'hate'
-            ? `${names} לא רוצים לשחק יחד — ועכשיו הם באותה קבוצה`
+            ? `${names} מעדיפים לא לשחק יחד — ועכשיו הם באותה קבוצה`
             : b.kind === 'friend'
               ? `${names} חברים — והופרדו`
-              : `${names} רצו לשחק יחד — והופרדו`,
+              : `${names} מעדיפים לשחק יחד — והופרדו`,
       });
     } else if (!was && now) {
       issues.push({
