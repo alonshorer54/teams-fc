@@ -120,7 +120,12 @@ function AttendanceSection({ report }: { report: ReturnType<typeof computeAttend
         <table className="w-full text-xs">
           <tbody className="divide-y divide-slate-800/60">
             {visible.map((p) => (
-              <AttendanceRow key={p.id} player={p} weekDates={report.weekDates} />
+              <AttendanceRow
+                key={p.id}
+                player={p}
+                weekDates={report.weekDates}
+                weekIds={report.weekIds}
+              />
             ))}
           </tbody>
         </table>
@@ -138,7 +143,15 @@ function AttendanceSection({ report }: { report: ReturnType<typeof computeAttend
   );
 }
 
-function AttendanceRow({ player, weekDates }: { player: PlayerAttendance; weekDates: string[] }) {
+function AttendanceRow({
+  player,
+  weekDates,
+  weekIds,
+}: {
+  player: PlayerAttendance;
+  weekDates: string[];
+  weekIds: string[];
+}) {
   const tone =
     player.status === 'gone'
       ? 'text-rose-300'
@@ -155,7 +168,7 @@ function AttendanceRow({ player, weekDates }: { player: PlayerAttendance; weekDa
         <div className="flex gap-[3px]">
           {player.weeks.map((w, i) => (
             <span
-              key={weekDates[i]}
+              key={weekIds[i]}
               className={`h-4 w-4 shrink-0 rounded-sm ${CELL[w].className}`}
               title={`${formatHebrewDate(weekDates[i])} — ${CELL[w].label}`}
             />
