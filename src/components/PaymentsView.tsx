@@ -13,6 +13,7 @@ import {
 import type { Player } from '../types';
 import {
   PAYMENT_METHODS,
+  PAYMENT_METHOD_ORDER,
   type AppSettings,
   type PaymentMethod,
   type PaymentRound,
@@ -64,7 +65,7 @@ export function PaymentsView({
   const update = (next: Partial<PaymentRound>) =>
     onChange((prev) => ({ ...prev, payments: { ...prev.payments, matchDate, ...next } }));
 
-  const togglePaid = (id: string, method: PaymentMethod = 'bit') => {
+  const togglePaid = (id: string, method: PaymentMethod = 'bitGroup') => {
     const paid = { ...payments.paid };
     if (paid[id]) delete paid[id];
     else paid[id] = { at: new Date().toISOString(), method };
@@ -215,12 +216,12 @@ export function PaymentsView({
                     {PAYMENT_METHODS[record.method]}
                   </span>
                 ) : (
-                  <span className="flex shrink-0 gap-1">
-                    {(Object.keys(PAYMENT_METHODS) as PaymentMethod[]).map((m) => (
+                  <span className="flex shrink-0 flex-wrap justify-end gap-1">
+                    {PAYMENT_METHOD_ORDER.map((m) => (
                       <button
                         key={m}
                         onClick={() => togglePaid(p.id, m)}
-                        className="rounded-lg border border-slate-700 bg-slate-800/50 px-2 py-1 text-[10px] font-semibold text-slate-400 transition hover:border-emerald-500/40 hover:text-emerald-200"
+                        className="rounded-lg border border-slate-700 bg-slate-800/50 px-2 py-1.5 text-[10px] font-semibold text-slate-400 transition hover:border-emerald-500/40 hover:text-emerald-200"
                       >
                         {PAYMENT_METHODS[m]}
                       </button>

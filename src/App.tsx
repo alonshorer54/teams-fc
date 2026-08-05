@@ -41,7 +41,7 @@ import { AnalysisView } from './components/AnalysisView';
 import { PaymentsView } from './components/PaymentsView';
 import { InstallButton } from './components/InstallButton';
 import { BackupCard } from './components/BackupCard';
-import { AuthGate, CloudNotConfigured } from './components/AuthGate';
+import { AuthGate, CloudNotConfigured, PasswordRecovery } from './components/AuthGate';
 import { SyncBadge } from './components/SyncBadge';
 import { Toast } from './components/ui';
 import type { PlayerDraft } from './components/PlayerFormModal';
@@ -269,8 +269,19 @@ export default function App() {
     );
   }
 
+  // הגיע דרך קישור שחזור — קודם קובעים סיסמה חדשה
+  if (isCloudConfigured && auth.recovering) {
+    return <PasswordRecovery onSubmit={auth.setNewPassword} onCancel={auth.signOut} />;
+  }
+
   if (isCloudConfigured && !auth.userId) {
-    return <AuthGate onSignIn={auth.signIn} onSignUp={auth.signUp} />;
+    return (
+      <AuthGate
+        onSignIn={auth.signIn}
+        onSignUp={auth.signUp}
+        onForgotPassword={auth.requestPasswordReset}
+      />
+    );
   }
 
   return (
@@ -340,7 +351,8 @@ export default function App() {
                 : 'text-slate-300 hover:bg-slate-800/70 hover:text-white'
             }`}
           >
-            <Icon size={15} className="shrink-0" />
+            {/* בטלפון מוותרים על האייקון כדי שהטקסט המלא ייכנס */}
+            <Icon size={15} className="hidden shrink-0 sm:block" />
             <span className="truncate">{label}</span>
             {id === 'history' && history.length > 0 && (
               <span
