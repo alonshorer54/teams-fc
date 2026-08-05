@@ -1,4 +1,10 @@
-import { TEAM_IDS, type MatchRecord } from '../types';
+import {
+  PLACEMENT_POINTS,
+  TEAM_IDS,
+  recordPlacements,
+  type MatchRecord,
+  type Placements,
+} from '../types';
 
 /**
  * "כימיה משחקית" — נלמדת מהתוצאות, בניגוד לכימיה החברית שאתה מגדיר ידנית.
@@ -61,25 +67,29 @@ export function pairEffectMap(report: PairReport): Map<string, number> {
 }
 
 export function computePairChemistry(history: MatchRecord[]): PairReport {
-  const resolved = history.filter((r) => r.result);
+  const resolved = history
+    .map((record) => ({ record, placements: recordPlacements(record) }))
+    .filter((r): r is { record: MatchRecord; placements: Placements } => !!r.placements);
 
   // ביצועים אישיים — הבסיס להשוואה
   const solo = new Map<string, { games: number; points: number; name: string }>();
   // תוצאות של זוגות
   const pairs = new Map<string, { a: string; b: string; games: number; wins: number; draws: number }>();
 
-  for (const record of resolved) {
+  for (const { record, placements } of resolved) {
     for (const team of TEAM_IDS) {
       const members = record.teams[team];
-      const won = record.result === team;
-      const drew = record.result === 'draw';
+      const place = placements[team];
+      const points = PLACEMENT_POINTS[place];
+      const won = place === 1;
+      const drew = place === 2;
 
       for (const p of members) {
         const entry = solo.get(p.id) ?? { games: 0, points: 0, name: p.name };
         entry.name = p.name;
         entry.games++;
-        // תיקו נספר כחצי ניצחון, כדי שהבסיס יהיה הוגן
-        entry.points += won ? 1 : drew ? 0.5 : 0;
+        // מקום שני נספר כחצי ניצחון, כדי שהבסיס יהיה הוגן
+        entry.points += points;
         solo.set(p.id, entry);
       }
 

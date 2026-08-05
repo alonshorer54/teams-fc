@@ -3,8 +3,36 @@ export type TeamId = 'white' | 'black' | 'colored';
 
 export const TEAM_IDS: readonly TeamId[] = ['white', 'black', 'colored'] as const;
 
-/** תוצאת המשחק: הקבוצה המנצחת, תיקו, או טרם עודכן. */
+/** @deprecated פורמט ישן — מנצחת יחידה או תיקו. מומר לדירוג מקומות בקריאה. */
 export type MatchResult = TeamId | 'draw';
+
+/** מקום בסיום הערב: 1 = הכי טובה, 3 = הכי פחות. שוויון מותר. */
+export type Placement = 1 | 2 | 3;
+export type Placements = Record<TeamId, Placement>;
+
+/** נקודות לכל מקום — הבסיס לכל הסטטיסטיקות. */
+export const PLACEMENT_POINTS: Record<Placement, number> = { 1: 1, 2: 0.5, 3: 0 };
+
+export const PLACEMENT_META: Record<Placement, { label: string; emoji: string }> = {
+  1: { label: 'ניצחה', emoji: '🥇' },
+  2: { label: 'באמצע', emoji: '🥈' },
+  3: { label: 'הפסידה', emoji: '🥉' },
+};
+
+/**
+ * מחזיר את דירוג המקומות של הגרלה, כולל המרה מהפורמט הישן.
+ * null = התוצאה עדיין לא עודכנה.
+ */
+export function recordPlacements(record: MatchRecord): Placements | null {
+  if (record.placements) return record.placements;
+  if (!record.result) return null;
+
+  // ישן: "לבן ניצחה" = לבן ראשונה, השאר אחרונות; תיקו = כולן באמצע
+  if (record.result === 'draw') return { white: 2, black: 2, colored: 2 };
+  const placements = {} as Placements;
+  for (const t of TEAM_IDS) placements[t] = t === record.result ? 1 : 3;
+  return placements;
+}
 
 /** שחקן במאגר הקבוע. */
 export interface Player {
@@ -84,7 +112,9 @@ export interface MatchRecord {
   date: string;
   title?: string;
   teams: Record<TeamId, HistoryPlayer[]>;
-  /** מי ניצח — מתעדכן אחרי המשחק. undefined = טרם עודכן */
+  /** דירוג הקבוצות בסיום הערב — מתעדכן אחרי המשחק */
+  placements?: Placements;
+  /** @deprecated פורמט ישן של תוצאה יחידה; נקרא דרך recordPlacements */
   result?: MatchResult;
   /** מי אישר הגעה ואז ביטל באותו שבוע */
   cancelled?: HistoryPlayer[];

@@ -5,7 +5,7 @@ import {
   normalizePlayers,
   type Lineup,
   type MatchRecord,
-  type MatchResult,
+  type Placements,
   type Player,
   type TeamId,
 } from './types';
@@ -209,13 +209,15 @@ export default function App() {
     setHistory((prev) => [record, ...prev]);
   };
 
-  const setResult = (recordId: string, result: MatchResult | null) => {
+  const setResult = (recordId: string, placements: Placements | null) => {
     setHistory((prev) =>
       prev.map((r) => {
         if (r.id !== recordId) return r;
         const next = { ...r };
-        if (result) next.result = result;
-        else delete next.result;
+        // התוצאה נשמרת רק בפורמט החדש; הישן נמחק כדי שלא יסתור אותו
+        delete next.result;
+        if (placements) next.placements = placements;
+        else delete next.placements;
         return next;
       }),
     );

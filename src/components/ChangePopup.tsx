@@ -4,29 +4,24 @@ import { TEAM_META } from '../types';
 import { CRITERION_META } from '../lib/criteria';
 import type { LineupDiff } from '../lib/diff';
 
-/** כמה זמן ההודעה נשארת על המסך לפני שהיא נעלמת לבד */
-const AUTO_HIDE_MS = 9000;
-
 /**
- * קופצת אחרי כל שינוי ידני בכוחות ומסבירה מה הפעולה הזו עשתה —
- * בניגוד ל-ChangeReport שמראה את התמונה המצטברת מול ההגרלה המקורית.
+ * נפתחת אחרי כל שינוי ידני בכוחות ומסבירה מה הפעולה הזו עשתה.
+ * נשארת על המסך עד שסוגרים אותה — בכוונה, כדי שלא תתפספס.
  */
 export function ChangePopup({
   diff,
-  /** משתנה בכל פעולה חדשה, כדי לאפס את טיימר ההיעלמות */
-  changeId,
   onUndo,
   onClose,
 }: {
   diff: LineupDiff;
-  changeId: number;
   onUndo: () => void;
   onClose: () => void;
 }) {
   useEffect(() => {
-    const timer = window.setTimeout(onClose, AUTO_HIDE_MS);
-    return () => window.clearTimeout(timer);
-  }, [changeId, onClose]);
+    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onClose();
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [onClose]);
 
   const warnings = diff.issues.filter((i) => i.kind === 'warn');
   const improvements = diff.issues.filter((i) => i.kind === 'good');
@@ -34,15 +29,20 @@ export function ChangePopup({
   const clean = warnings.length === 0;
 
   return (
-    <div className="pointer-events-none fixed inset-x-0 bottom-4 z-50 flex justify-center px-4">
+    <div
+      className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-950/70 p-4 backdrop-blur-sm"
+      role="dialog"
+      aria-modal="true"
+    >
+      <div className="absolute inset-0" onClick={onClose} aria-hidden />
+
       <div
-        className={`animate-pop pointer-events-auto w-full max-w-lg overflow-hidden rounded-2xl border-2 shadow-2xl shadow-black/60 backdrop-blur ${
-          clean ? 'border-emerald-500/50 bg-slate-900/95' : 'border-amber-500/60 bg-slate-900/95'
+        className={`animate-pop relative w-full max-w-lg overflow-hidden rounded-2xl border-2 bg-slate-900 shadow-2xl shadow-black/60 ${
+          clean ? 'border-emerald-500/50' : 'border-amber-500/60'
         }`}
-        role="status"
       >
         <header
-          className={`flex items-center justify-between gap-2 px-4 py-2.5 ${
+          className={`flex items-center justify-between gap-2 px-4 py-3 ${
             clean ? 'bg-emerald-500/15' : 'bg-amber-500/15'
           }`}
         >
@@ -51,20 +51,19 @@ export function ChangePopup({
               clean ? 'text-emerald-300' : 'text-amber-300'
             }`}
           >
-            {clean ? <CheckCircle2 size={15} /> : <AlertTriangle size={15} />}
-            {clean ? 'השינוי בוצע — אין בעיות' : 'השינוי בוצע — שימו לב'}
+            {clean ? <AlertTriangle size={16} className="opacity-0" /> : <AlertTriangle size={16} />}
+            {clean ? 'השינוי בוצע — לא נוצרו בעיות' : 'השינוי בוצע — שימו לב לבעיות'}
           </h3>
           <button
             onClick={onClose}
             aria-label="סגירה"
             className="rounded-lg p-1 text-slate-400 transition hover:bg-slate-800 hover:text-white"
           >
-            <X size={15} />
+            <X size={16} />
           </button>
         </header>
 
-        <div className="max-h-[50vh] space-y-2.5 overflow-y-auto p-3.5">
-          {/* מה זז עכשיו */}
+        <div className="max-h-[55vh] space-y-2.5 overflow-y-auto p-4">
           <ul className="flex flex-wrap gap-1.5">
             {diff.moved.map((m) => (
               <li
@@ -84,9 +83,9 @@ export function ChangePopup({
           {warnings.map((issue, i) => (
             <p
               key={`w${i}`}
-              className="flex items-start gap-2 rounded-lg border border-amber-500/25 bg-amber-500/10 px-3 py-2 text-[11px] leading-relaxed text-amber-200"
+              className="flex items-start gap-2 rounded-lg border border-amber-500/25 bg-amber-500/10 px-3 py-2 text-xs leading-relaxed text-amber-200"
             >
-              <AlertTriangle size={12} className="mt-0.5 shrink-0" />
+              <AlertTriangle size={13} className="mt-0.5 shrink-0" />
               {issue.text}
             </p>
           ))}
@@ -94,15 +93,15 @@ export function ChangePopup({
           {improvements.map((issue, i) => (
             <p
               key={`g${i}`}
-              className="flex items-start gap-2 rounded-lg border border-emerald-500/25 bg-emerald-500/10 px-3 py-2 text-[11px] leading-relaxed text-emerald-200"
+              className="flex items-start gap-2 rounded-lg border border-emerald-500/25 bg-emerald-500/10 px-3 py-2 text-xs leading-relaxed text-emerald-200"
             >
-              <CheckCircle2 size={12} className="mt-0.5 shrink-0" />
+              <CheckCircle2 size={13} className="mt-0.5 shrink-0" />
               {issue.text}
             </p>
           ))}
 
-          {clean && warnings.length === 0 && improvements.length === 0 && (
-            <p className="px-1 text-[11px] text-slate-400">
+          {warnings.length === 0 && improvements.length === 0 && (
+            <p className="px-1 text-xs text-slate-400">
               לא נשברו קשרים והאיזון כמעט לא זז.
             </p>
           )}
@@ -131,10 +130,13 @@ export function ChangePopup({
           )}
         </div>
 
-        <footer className="border-t border-slate-800 p-2.5">
-          <button className="btn-ghost w-full !py-1.5 text-xs" onClick={onUndo}>
-            <Undo2 size={13} />
-            ביטול השינוי הזה
+        <footer className="flex gap-2 border-t border-slate-800 p-3">
+          <button className="btn-primary flex-1" onClick={onClose}>
+            סגירה
+          </button>
+          <button className="btn-ghost" onClick={onUndo}>
+            <Undo2 size={14} />
+            ביטול השינוי
           </button>
         </footer>
       </div>
