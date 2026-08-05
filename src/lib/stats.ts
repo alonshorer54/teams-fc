@@ -1,4 +1,4 @@
-import { TEAM_IDS, type MatchRecord, type TeamId } from '../types';
+import { TEAM_IDS, recordPlacements, type MatchRecord, type Placement, type TeamId } from '../types';
 
 export interface CancellerStats {
   id: string;
@@ -48,6 +48,10 @@ const teamOfPlayer = (record: MatchRecord, playerId: string): TeamId | null => {
   return null;
 };
 
+/** מקום ראשון = ניצחון, שלישי = הפסד, שני = באמצע */
+const outcomeOf = (place: Placement): 'win' | 'loss' | 'draw' =>
+  place === 1 ? 'win' : place === 3 ? 'loss' : 'draw';
+
 export function computeHistoryStats(history: MatchRecord[]): HistoryStats {
   // ההיסטוריה מגיעה מהחדש לישן; לחישוב רצפים זה בדיוק הסדר שאנחנו רוצים
   const players = new Map<string, PlayerRecord>();
@@ -62,7 +66,8 @@ export function computeHistoryStats(history: MatchRecord[]): HistoryStats {
   );
 
   for (const record of history) {
-    if (!record.result) pending++;
+    const placements = recordPlacements(record);
+    if (!placements) pending++;
 
     const listed = [...TEAM_IDS.flatMap((t) => record.teams[t]), ...(record.cancelled ?? [])];
 
@@ -81,18 +86,15 @@ export function computeHistoryStats(history: MatchRecord[]): HistoryStats {
     }
     for (const p of record.cancelled ?? []) cancelMap.get(p.id)!.cancellations++;
 
-    if (!record.result) continue;
+    if (!placements) continue;
 
     if (!lastResolved) {
-      const winners =
-        record.result === 'draw' ? [] : record.teams[record.result].map((p) => p.id);
-      const losers =
-        record.result === 'draw'
-          ? []
-          : TEAM_IDS.filter((t) => t !== record.result).flatMap((t) =>
-              record.teams[t].map((p) => p.id),
-            );
-      lastResolved = { record, winners, losers };
+      const teamsAt = (place: Placement) => TEAM_IDS.filter((t) => placements[t] === place);
+      lastResolved = {
+        record,
+        winners: teamsAt(1).flatMap((t) => record.teams[t].map((p) => p.id)),
+        losers: teamsAt(3).flatMap((t) => record.teams[t].map((p) => p.id)),
+      };
     }
 
     for (const t of TEAM_IDS) {
@@ -112,8 +114,8 @@ export function computeHistoryStats(history: MatchRecord[]): HistoryStats {
         entry.name = p.name;
         entry.played++;
 
-        const outcome: 'win' | 'loss' | 'draw' =
-          record.result === 'draw' ? 'draw' : teamOfPlayer(record, p.id) === record.result ? 'win' : 'loss';
+        const team = teamOfPlayer(record, p.id) ?? t;
+        const outcome = outcomeOf(placements[team]);
 
         if (outcome === 'win') entry.wins++;
         else if (outcome === 'loss') entry.losses++;

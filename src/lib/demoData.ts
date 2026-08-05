@@ -1,4 +1,4 @@
-import { TEAM_IDS, type MatchRecord, type MatchResult, type Player, type TeamId } from '../types';
+import { TEAM_IDS, type MatchRecord, type Placements, type Player, type TeamId } from '../types';
 
 /**
  * 21 שחקני דוגמה (3 קבוצות של 7) לבדיקה מהירה של האפליקציה.
@@ -99,20 +99,17 @@ export function buildDemoHistory(players: Player[]): MatchRecord[] {
     const united = weekAgo % 4 !== 3;
     const pairTeam = united ? teamHolding(teams, players, POWER_PAIR) : null;
 
-    // כשהם יחד הקבוצה שלהם מנצחת לרוב; כשהם מופרדים התוצאה אקראית
-    let result: MatchResult;
-    if (pairTeam && rand() < 0.75) {
-      result = pairTeam;
-    } else {
-      const roll = rand();
-      result = roll < 0.3 ? 'white' : roll < 0.6 ? 'black' : roll < 0.9 ? 'colored' : 'draw';
-    }
+    // כשהם יחד הקבוצה שלהם מובילה לרוב; כשהם מופרדים התוצאה אקראית
+    const leader: TeamId =
+      pairTeam && rand() < 0.75
+        ? pairTeam
+        : TEAM_IDS[Math.min(2, Math.floor(rand() * 3))];
 
     records.push({
       id: `demo-week-${weekAgo}`,
       savedAt: new Date().toISOString(),
       date: isoWeeksAgo(weekAgo),
-      result,
+      placements: buildPlacements(leader, rand),
       teams: {
         white: teams.white.map(snapshot),
         black: teams.black.map(snapshot),
@@ -126,6 +123,34 @@ export function buildDemoHistory(players: Player[]): MatchRecord[] {
 }
 
 const snapshot = ({ id, name, rating }: Player) => ({ id, name, rating });
+
+/**
+ * מגוון תרחישי סיום, כדי שהדוגמה תראה את כל האפשרויות:
+ * קבוצה שניצחה הכל, שתיים למעלה ואחת למטה, ודירוג מלא 1-2-3.
+ */
+function buildPlacements(leader: TeamId, rand: () => number): Placements {
+  const others = TEAM_IDS.filter((t) => t !== leader);
+  const roll = rand();
+
+  if (roll < 0.4) {
+    // המובילה ניצחה הכל
+    return Object.fromEntries(
+      TEAM_IDS.map((t) => [t, t === leader ? 1 : 3]),
+    ) as Placements;
+  }
+  if (roll < 0.7) {
+    // שתיים למעלה ואחת נשארה מאחור
+    const loser = others[Math.floor(rand() * others.length)] ?? others[0];
+    return Object.fromEntries(
+      TEAM_IDS.map((t) => [t, t === loser ? 3 : 1]),
+    ) as Placements;
+  }
+  // דירוג מלא: ראשונה, אמצע, אחרונה
+  const second = others[Math.floor(rand() * others.length)] ?? others[0];
+  return Object.fromEntries(
+    TEAM_IDS.map((t) => [t, t === leader ? 1 : t === second ? 2 : 3]),
+  ) as Placements;
+}
 
 /** מחלק את הנוכחים לשלוש קבוצות, ומקפיד להשאיר את זוג הכוח יחד */
 function splitIntoTeams(available: Player[], rand: () => number): Record<TeamId, Player[]> {

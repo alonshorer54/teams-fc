@@ -11,7 +11,16 @@ import {
   Trophy,
   UserX,
 } from 'lucide-react';
-import { TEAM_IDS, TEAM_META, type MatchRecord, type MatchResult } from '../types';
+import {
+  PLACEMENT_META,
+  TEAM_IDS,
+  TEAM_META,
+  recordPlacements,
+  type MatchRecord,
+  type Placement,
+  type Placements,
+  type TeamId,
+} from '../types';
 import { buildWhatsAppText, copyToClipboard, formatHebrewDate } from '../lib/format';
 import { computeHistoryStats } from '../lib/stats';
 import { ConfirmDialog, EmptyState } from './ui';
@@ -25,7 +34,7 @@ export function HistoryView({
 }: {
   history: MatchRecord[];
   onDelete: (id: string) => void;
-  onSetResult: (id: string, result: MatchResult | null) => void;
+  onSetResult: (id: string, placements: Placements | null) => void;
   onRestore: (record: MatchRecord) => void;
   notify: (msg: string) => void;
 }) {
@@ -70,6 +79,8 @@ export function HistoryView({
         const isOpen = expanded === record.id;
         const total = TEAM_IDS.reduce((s, t) => s + record.teams[t].length, 0);
         const cancelled = record.cancelled ?? [];
+        const placements = recordPlacements(record);
+        const winners = placements ? TEAM_IDS.filter((t) => placements[t] === 1) : [];
 
         return (
           <article key={record.id} className="card overflow-hidden">
@@ -90,10 +101,14 @@ export function HistoryView({
                         · {cancelled.length === 1 ? 'ביטול אחד' : `${cancelled.length} ביטולים`}
                       </span>
                     )}
-                    {record.result ? (
+                    {placements ? (
                       <span className="inline-flex items-center gap-1 rounded bg-amber-500/15 px-1.5 py-0.5 font-semibold text-amber-300">
                         <Trophy size={9} />
-                        {record.result === 'draw' ? 'תיקו' : `ניצחה ${TEAM_META[record.result].name}`}
+                        {winners.length === 0
+                          ? 'כולן שוות'
+                          : winners.length === TEAM_IDS.length
+                            ? 'כולן ניצחו'
+                            : `${winners.map((t) => TEAM_META[t].name).join(' + ')} למעלה`}
                       </span>
                     ) : (
                       <span className="rounded bg-slate-700/60 px-1.5 py-0.5 font-semibold text-slate-300">
@@ -139,7 +154,7 @@ export function HistoryView({
             {isOpen && (
               <div className="space-y-4 border-t border-slate-800/70 p-4">
                 <ResultPicker
-                  value={record.result}
+                  value={placements}
                   onChange={(next) => {
                     onSetResult(record.id, next);
                     notify(next ? 'התוצאה עודכנה' : 'התוצאה נוקתה');
@@ -153,18 +168,18 @@ export function HistoryView({
                     const avg = members.length
                       ? members.reduce((s, p) => s + p.rating, 0) / members.length
                       : 0;
-                    const won = record.result === id;
+                    const place = placements?.[id];
 
                     return (
                       <div
                         key={id}
                         className={`overflow-hidden rounded-xl border ${
-                          won ? 'border-amber-400/70 ring-1 ring-amber-400/40' : meta.ring
+                          place === 1 ? 'border-amber-400/70 ring-1 ring-amber-400/40' : meta.ring
                         }`}
                       >
                         <div className={`flex items-center justify-between px-3 py-2 ${meta.header}`}>
                           <span className="flex items-center gap-1.5 text-sm font-extrabold">
-                            {won && <Trophy size={13} />}
+                            {place && <span title={PLACEMENT_META[place].label}>{PLACEMENT_META[place].emoji}</span>}
                             {meta.emoji} {meta.name}
                           </span>
                           <span dir="ltr" className="font-mono text-[11px] tabular-nums opacity-80">
@@ -237,42 +252,100 @@ export function HistoryView({
 
 /* --------------------------- בחירת המנצחת --------------------------- */
 
+const PLACEMENT_TONE: Record<Placement, string> = {
+  1: 'border-amber-400/60 bg-amber-500/20 text-amber-200',
+  2: 'border-sky-500/50 bg-sky-500/15 text-sky-200',
+  3: 'border-rose-500/50 bg-rose-500/15 text-rose-200',
+};
+
 function ResultPicker({
   value,
   onChange,
 }: {
-  value?: MatchResult;
-  onChange: (next: MatchResult | null) => void;
+  value: Placements | null;
+  onChange: (next: Placements | null) => void;
 }) {
-  const options: { id: MatchResult; label: string }[] = [
+  /** קיצורי דרך לתרחישים הנפוצים */
+  const presets: { label: string; build: () => Placements }[] = [
     ...TEAM_IDS.map((t) => ({
-      id: t as MatchResult,
-      label: `${TEAM_META[t].emoji} ${TEAM_META[t].name}`,
+      label: `${TEAM_META[t].emoji} ${TEAM_META[t].name} ניצחה הכל`,
+      build: () =>
+        Object.fromEntries(TEAM_IDS.map((x) => [x, x === t ? 1 : 3])) as Placements,
     })),
-    { id: 'draw', label: '🤝 תיקו' },
+    ...TEAM_IDS.map((t) => ({
+      label: `${TEAM_META[t].emoji} ${TEAM_META[t].name} הפסידה הכל`,
+      build: () =>
+        Object.fromEntries(TEAM_IDS.map((x) => [x, x === t ? 3 : 1])) as Placements,
+    })),
+    {
+      label: '🤝 כולן שוות',
+      build: () => ({ white: 2, black: 2, colored: 2 }),
+    },
   ];
+
+  const setPlace = (team: TeamId, place: Placement) => {
+    const base: Placements = value ?? { white: 2, black: 2, colored: 2 };
+    onChange({ ...base, [team]: place });
+  };
 
   return (
     <div className="rounded-xl border border-slate-800 bg-slate-950/40 p-3">
-      <p className="mb-2 flex items-center gap-1.5 text-[11px] font-bold text-slate-400">
+      <p className="mb-1 flex items-center gap-1.5 text-[11px] font-bold text-slate-400">
         <Trophy size={12} className="text-amber-400" />
-        מי ניצח? (עדכנו אחרי המשחק)
+        איך נגמר הערב? (עדכנו אחרי המשחק)
       </p>
-      <div className="flex flex-wrap gap-1.5">
-        {options.map((o) => (
+      <p className="mb-2.5 text-[10px] leading-relaxed text-slate-500">
+        דרגו כל קבוצה. אפשר לתת לשתי קבוצות את אותו מקום — למשל שתיים ניצחו ואחת הפסידה.
+      </p>
+
+      {/* קיצורי דרך */}
+      <div className="mb-3 flex flex-wrap gap-1.5">
+        {presets.map((p) => (
           <button
-            key={o.id}
-            onClick={() => onChange(value === o.id ? null : o.id)}
-            className={`cursor-pointer rounded-lg border px-3 py-1.5 text-[11px] font-bold transition ${
-              value === o.id
-                ? 'border-amber-400/60 bg-amber-500/20 text-amber-200'
-                : 'border-slate-700 bg-slate-800/50 text-slate-300 hover:border-slate-600 hover:text-white'
-            }`}
+            key={p.label}
+            onClick={() => onChange(p.build())}
+            className="cursor-pointer rounded-lg border border-slate-700 bg-slate-800/50 px-2 py-1 text-[10px] font-semibold text-slate-300 transition hover:border-amber-500/40 hover:text-amber-200"
           >
-            {o.label}
+            {p.label}
           </button>
         ))}
       </div>
+
+      {/* דירוג ידני לכל קבוצה */}
+      <ul className="space-y-1.5">
+        {TEAM_IDS.map((t) => (
+          <li key={t} className="flex items-center gap-2">
+            <span className="flex w-24 shrink-0 items-center gap-1.5 text-[11px] font-bold text-slate-200">
+              <span className={`size-2.5 rounded-full ${TEAM_META[t].dot}`} />
+              {TEAM_META[t].name}
+            </span>
+            <div className="flex flex-1 gap-1">
+              {([1, 2, 3] as Placement[]).map((place) => (
+                <button
+                  key={place}
+                  onClick={() => setPlace(t, place)}
+                  className={`flex-1 cursor-pointer rounded-lg border px-2 py-1.5 text-[10px] font-bold transition ${
+                    value?.[t] === place
+                      ? PLACEMENT_TONE[place]
+                      : 'border-slate-700 bg-slate-800/40 text-slate-400 hover:border-slate-600 hover:text-white'
+                  }`}
+                >
+                  {PLACEMENT_META[place].emoji} {PLACEMENT_META[place].label}
+                </button>
+              ))}
+            </div>
+          </li>
+        ))}
+      </ul>
+
+      {value && (
+        <button
+          className="mt-2 w-full rounded-lg py-1 text-[10px] font-semibold text-slate-500 transition hover:bg-slate-800/60 hover:text-slate-300"
+          onClick={() => onChange(null)}
+        >
+          ניקוי התוצאה
+        </button>
+      )}
     </div>
   );
 }
@@ -308,11 +381,12 @@ function StatsPanel({ stats }: { stats: ReturnType<typeof computeHistoryStats> }
             {last && last.winners.length > 0 && (
               <div className="rounded-xl border border-emerald-500/25 bg-emerald-500/5 p-3">
                 <p className="mb-2 text-[11px] font-bold text-emerald-300">
-                  הקבוצה המנצחת האחרונה ({formatHebrewDate(last.record.date)})
+                  מי היה למעלה בשבוע האחרון ({formatHebrewDate(last.record.date)})
                 </p>
                 <ul className="flex flex-wrap gap-1.5">
-                  {last.record.result !== 'draw' &&
-                    last.record.teams[last.record.result!].map((p) => (
+                  {TEAM_IDS.flatMap((t) => last.record.teams[t])
+                    .filter((p) => last.winners.includes(p.id))
+                    .map((p) => (
                       <li
                         key={p.id}
                         className="rounded-lg bg-emerald-500/15 px-2 py-1 text-[11px] font-semibold text-emerald-200"

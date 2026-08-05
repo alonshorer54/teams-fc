@@ -388,10 +388,9 @@ export function DrawView({
         </>
       )}
 
-      {lastChange && mode === 'admin' && (
+      {lastChange && (
         <ChangePopup
           diff={lastChange.diff}
-          changeId={lastChange.id}
           onClose={() => setLastChange(null)}
           onUndo={() => {
             setLineup(lastChange.previous);
