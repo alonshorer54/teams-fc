@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import {
   ArrowLeftRight,
   Eye,
@@ -29,12 +29,13 @@ import {
   type CriterionId,
   type CriterionSetting,
 } from '../lib/criteria';
-import { compareLineups } from '../lib/diff';
+import { compareLineups, type LineupDiff } from '../lib/diff';
 import type { Draft } from '../lib/storage';
 import { EmptyState } from './ui';
 import { RoundPanel } from './RoundPanel';
 import { PrioritiesPanel } from './PrioritiesPanel';
 import { ChangeReport } from './ChangeReport';
+import { ChangePopup } from './ChangePopup';
 import { TeamCard } from './TeamCard';
 import { ShareView } from './ShareView';
 import type { ShareTeams } from '../lib/format';
@@ -68,6 +69,13 @@ export function DrawView({
   const [mode, setMode] = useState<Mode>('admin');
   const [adminView, setAdminView] = useState(true);
   const [selectedPlayer, setSelectedPlayer] = useState<string | null>(null);
+  /** ההשפעה של הפעולה הידנית האחרונה, להודעה הקופצת */
+  const [lastChange, setLastChange] = useState<{
+    diff: LineupDiff;
+    previous: Lineup;
+    id: number;
+  } | null>(null);
+  const changeIdRef = useRef(0);
 
   const { selectedIds, cancelledIds, substitutions, lineup, baseline, matchDate } = draft;
 
@@ -130,6 +138,20 @@ export function DrawView({
 
   const setLineup = (l: Lineup | null) => setDraft((p) => ({ ...p, lineup: l }));
 
+  /**
+   * כל שינוי ידני עובר כאן: מחשבים מה הפעולה הזו בדיוק עשתה,
+   * מציגים הודעה קופצת, ושומרים את המצב הקודם כדי לאפשר ביטול.
+   */
+  const applyChange = (next: Lineup) => {
+    if (!lineup) return;
+    const immediate = compareLineups(lineup, next, pool, activeEffects, priorities);
+    setLineup(next);
+    setSelectedPlayer(null);
+    if (immediate.changed) {
+      setLastChange({ diff: immediate, previous: lineup, id: changeIdRef.current++ });
+    }
+  };
+
   const generate = () => {
     if (pool.length < 3) {
       notify('צריך לבחור לפחות 3 שחקנים');
@@ -143,6 +165,7 @@ export function DrawView({
     // ההגרלה הטרייה היא גם נקודת ההשוואה לעריכות שיבואו אחריה
     setDraft((p) => ({ ...p, lineup: next, baseline: next }));
     setSelectedPlayer(null);
+    setLastChange(null);
     notify('הכוחות הוגרלו! ⚽');
   };
 
@@ -160,8 +183,7 @@ export function DrawView({
       setSelectedPlayer(id); // אותה קבוצה — פשוט מעבירים את הבחירה
       return;
     }
-    setLineup(swapPlayers(lineup, selectedPlayer, id));
-    setSelectedPlayer(null);
+    applyChange(swapPlayers(lineup, selectedPlayer, id));
   };
 
   const selectedName = selectedPlayer ? nameById.get(selectedPlayer) : null;
@@ -315,6 +337,7 @@ export function DrawView({
               onRevert={() => {
                 setLineup(baseline);
                 setSelectedPlayer(null);
+                setLastChange(null);
                 notify('חזרנו להגרלה המקורית');
               }}
             />
@@ -353,14 +376,8 @@ export function DrawView({
                 adminView={adminView}
                 selectedId={selectedPlayer}
                 onSelect={handleSelect}
-                onMove={(playerId, to) => {
-                  setLineup(movePlayer(lineup, playerId, to));
-                  setSelectedPlayer(null);
-                }}
-                onSwap={(a, b) => {
-                  setLineup(swapPlayers(lineup, a, b));
-                  setSelectedPlayer(null);
-                }}
+                onMove={(playerId, to) => applyChange(movePlayer(lineup, playerId, to))}
+                onSwap={(a, b) => applyChange(swapPlayers(lineup, a, b))}
               />
             ))}
           </div>
@@ -369,6 +386,20 @@ export function DrawView({
             אפשר לגרור שחקנים בין הקבוצות, או ללחוץ על שניים כדי להחליף ביניהם — הממוצעים מתעדכנים מיד.
           </p>
         </>
+      )}
+
+      {lastChange && mode === 'admin' && (
+        <ChangePopup
+          diff={lastChange.diff}
+          changeId={lastChange.id}
+          onClose={() => setLastChange(null)}
+          onUndo={() => {
+            setLineup(lastChange.previous);
+            setSelectedPlayer(null);
+            setLastChange(null);
+            notify('השינוי בוטל');
+          }}
+        />
       )}
     </div>
   );
