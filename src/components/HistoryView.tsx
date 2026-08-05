@@ -104,11 +104,9 @@ export function HistoryView({
                     {placements ? (
                       <span className="inline-flex items-center gap-1 rounded bg-amber-500/15 px-1.5 py-0.5 font-semibold text-amber-300">
                         <Trophy size={9} />
-                        {winners.length === 0
-                          ? 'כולן שוות'
-                          : winners.length === TEAM_IDS.length
-                            ? 'כולן ניצחו'
-                            : `${winners.map((t) => TEAM_META[t].name).join(' + ')} למעלה`}
+                        {winners.length === 0 || winners.length === TEAM_IDS.length
+                          ? 'ערב שקול'
+                          : `${winners.map((t) => TEAM_META[t].name).join(' + ')} למעלה`}
                       </span>
                     ) : (
                       <span className="rounded bg-slate-700/60 px-1.5 py-0.5 font-semibold text-slate-300">
@@ -265,24 +263,6 @@ function ResultPicker({
   value: Placements | null;
   onChange: (next: Placements | null) => void;
 }) {
-  /** קיצורי דרך לתרחישים הנפוצים */
-  const presets: { label: string; build: () => Placements }[] = [
-    ...TEAM_IDS.map((t) => ({
-      label: `${TEAM_META[t].emoji} ${TEAM_META[t].name} ניצחה הכל`,
-      build: () =>
-        Object.fromEntries(TEAM_IDS.map((x) => [x, x === t ? 1 : 3])) as Placements,
-    })),
-    ...TEAM_IDS.map((t) => ({
-      label: `${TEAM_META[t].emoji} ${TEAM_META[t].name} הפסידה הכל`,
-      build: () =>
-        Object.fromEntries(TEAM_IDS.map((x) => [x, x === t ? 3 : 1])) as Placements,
-    })),
-    {
-      label: '🤝 כולן שוות',
-      build: () => ({ white: 2, black: 2, colored: 2 }),
-    },
-  ];
-
   const setPlace = (team: TeamId, place: Placement) => {
     const base: Placements = value ?? { white: 2, black: 2, colored: 2 };
     onChange({ ...base, [team]: place });
@@ -292,26 +272,14 @@ function ResultPicker({
     <div className="rounded-xl border border-slate-800 bg-slate-950/40 p-3">
       <p className="mb-1 flex items-center gap-1.5 text-[11px] font-bold text-slate-400">
         <Trophy size={12} className="text-amber-400" />
-        איך נגמר הערב? (עדכנו אחרי המשחק)
+        איפה כל קבוצה סיימה את הערב?
       </p>
       <p className="mb-2.5 text-[10px] leading-relaxed text-slate-500">
-        דרגו כל קבוצה. אפשר לתת לשתי קבוצות את אותו מקום — למשל שתיים ניצחו ואחת הפסידה.
+        זה דירוג יחסי, לא תוצאה מדויקת. אפשר לתת לשתי קבוצות את אותו מקום — למשל שתיים למעלה ואחת
+        למטה. השאירו את כולן "באמצע" אם הערב היה שקול.
       </p>
 
-      {/* קיצורי דרך */}
-      <div className="mb-3 flex flex-wrap gap-1.5">
-        {presets.map((p) => (
-          <button
-            key={p.label}
-            onClick={() => onChange(p.build())}
-            className="cursor-pointer rounded-lg border border-slate-700 bg-slate-800/50 px-2.5 py-2 text-[11px] font-semibold text-slate-300 transition hover:border-amber-500/40 hover:text-amber-200"
-          >
-            {p.label}
-          </button>
-        ))}
-      </div>
-
-      {/* דירוג ידני לכל קבוצה */}
+      {/* דירוג לכל קבוצה */}
       <ul className="space-y-1.5">
         {TEAM_IDS.map((t) => (
           <li key={t} className="flex items-center gap-2">
@@ -361,20 +329,22 @@ function StatsPanel({ stats }: { stats: ReturnType<typeof computeHistoryStats> }
       <div>
         <h2 className="mb-1 flex flex-wrap items-center gap-2 text-sm font-bold text-slate-100">
           <Trophy size={16} className="text-amber-400" />
-          מי מנצח ומי מפסיד
+          מי מסיים למעלה ומי למטה
           {stats.pending > 0 && (
             <span className="rounded-md bg-slate-700/70 px-1.5 py-0.5 text-[10px] font-semibold text-slate-300">
               {stats.pending} ממתינות לעדכון
             </span>
           )}
         </h2>
-        <p className="mb-3 text-[11px] text-slate-500">
-          לפי שחקנים ולא לפי צבע קבוצה — הצבעים מתחלפים כל שבוע.
+        <p className="mb-3 text-[11px] leading-relaxed text-slate-500">
+          לפי שחקנים ולא לפי צבע קבוצה — הצבעים מתחלפים כל שבוע. המדד הוא איפה הקבוצה של השחקן
+          סיימה, לא תוצאות מדויקות של משחקים.
         </p>
 
         {!hasResults ? (
           <p className="text-xs text-slate-400">
-            עדיין לא עודכנה אף תוצאה. פתחו הגרלה למטה וסמנו מי ניצח — כאן תראו מי בסדרת הפסדים.
+            עדיין לא עודכנה אף תוצאה. פתחו הגרלה למטה וסמנו איפה כל קבוצה סיימה — כאן תראו מי נתקע
+            למטה שבוע אחרי שבוע.
           </p>
         ) : (
           <div className="space-y-4">
@@ -402,7 +372,7 @@ function StatsPanel({ stats }: { stats: ReturnType<typeof computeHistoryStats> }
               <div className="rounded-xl border border-amber-500/30 bg-amber-500/5 p-3">
                 <p className="mb-2 flex items-center gap-1.5 text-[11px] font-bold text-amber-300">
                   <TrendingDown size={12} />
-                  בסדרת הפסדים — שווה לחזק אותם השבוע
+                  סיימו למטה כמה שבועות ברצף — שווה לחזק אותם
                 </p>
                 <ul className="flex flex-wrap gap-1.5">
                   {stats.coldStreak.map((p) => (
@@ -443,9 +413,13 @@ function PlayerTable({ players }: { players: ReturnType<typeof computeHistorySta
           <thead>
             <tr className="text-[10px] text-slate-500">
               <th className="px-2 py-1.5 text-right font-semibold">שחקן</th>
-              <th className="px-2 py-1.5 text-center font-semibold">משחקים</th>
-              <th className="px-2 py-1.5 text-center font-semibold">נצ׳</th>
-              <th className="px-2 py-1.5 text-center font-semibold">הפ׳</th>
+              <th className="px-2 py-1.5 text-center font-semibold">שבועות</th>
+              <th className="px-2 py-1.5 text-center font-semibold" title="כמה פעמים הקבוצה שלו סיימה למעלה">
+                למעלה
+              </th>
+              <th className="px-2 py-1.5 text-center font-semibold" title="כמה פעמים הקבוצה שלו סיימה למטה">
+                למטה
+              </th>
               <th className="px-2 py-1.5 text-center font-semibold">אחוז</th>
               <th className="px-2 py-1.5 text-center font-semibold">רצף</th>
             </tr>
@@ -495,7 +469,11 @@ export function StreakBadge({ streak }: { streak: number }) {
       className={`inline-flex items-center gap-0.5 rounded px-1.5 py-0.5 font-mono text-[10px] font-bold tabular-nums ${
         win ? 'bg-emerald-500/15 text-emerald-300' : 'bg-rose-500/15 text-rose-300'
       }`}
-      title={win ? `ניצח ${streak} שבועות ברצף` : `הפסיד ${Math.abs(streak)} שבועות ברצף`}
+      title={
+        win
+          ? `סיים למעלה ${streak} שבועות ברצף`
+          : `סיים למטה ${Math.abs(streak)} שבועות ברצף`
+      }
     >
       {win ? <TrendingUp size={9} /> : <TrendingDown size={9} />}
       {Math.abs(streak)}

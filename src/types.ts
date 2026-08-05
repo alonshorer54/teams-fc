@@ -14,9 +14,9 @@ export type Placements = Record<TeamId, Placement>;
 export const PLACEMENT_POINTS: Record<Placement, number> = { 1: 1, 2: 0.5, 3: 0 };
 
 export const PLACEMENT_META: Record<Placement, { label: string; emoji: string }> = {
-  1: { label: 'ניצחה', emoji: '🥇' },
+  1: { label: 'למעלה', emoji: '🥇' },
   2: { label: 'באמצע', emoji: '🥈' },
-  3: { label: 'הפסידה', emoji: '🥉' },
+  3: { label: 'למטה', emoji: '🥉' },
 };
 
 /**

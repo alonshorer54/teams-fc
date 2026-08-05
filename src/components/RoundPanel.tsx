@@ -388,7 +388,7 @@ function PlayerChip({
           {streak <= -2 && (
             <span
               className="inline-flex items-center gap-0.5 rounded bg-amber-500/20 px-1 font-mono text-[9px] font-bold text-amber-300"
-              title={`הפסיד ${Math.abs(streak)} שבועות ברצף`}
+              title={`סיים למטה ${Math.abs(streak)} שבועות ברצף — שווה לחזק אותו`}
             >
               <TrendingDown size={8} />
               {Math.abs(streak)}
@@ -397,7 +397,7 @@ function PlayerChip({
           {streak >= 2 && (
             <span
               className="inline-flex items-center gap-0.5 rounded bg-emerald-500/20 px-1 font-mono text-[9px] font-bold text-emerald-300"
-              title={`ניצח ${streak} שבועות ברצף`}
+              title={`סיים למעלה ${streak} שבועות ברצף`}
             >
               <TrendingUp size={8} />
               {streak}
