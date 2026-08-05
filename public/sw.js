@@ -2,7 +2,9 @@
  * Service worker מינימלי: מאפשר התקנה כאפליקציה, ומגיש את המעטפת מהמטמון
  * כשאין רשת. הנתונים עצמם ממילא מגיעים מ-localStorage ומ-Supabase.
  */
-const CACHE = 'teams-fc-v1';
+// __BUILD_ID__ מוחלף בזמן הבנייה. כך כל גרסה מקבלת מטמון משלה,
+// והמטמון של הגרסה הקודמת נמחק — בלי להתקין מחדש ובלי לצבור זבל.
+const CACHE = 'teams-fc-__BUILD_ID__';
 
 self.addEventListener('install', (event) => {
   self.skipWaiting();
