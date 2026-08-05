@@ -39,6 +39,8 @@ export interface MatchRecord {
   result?: MatchResult;
   /** מי אישר הגעה ואז ביטל באותו שבוע */
   cancelled?: HistoryPlayer[];
+  /** מי החליף את מי אחרי ביטול */
+  substitutions?: { out: HistoryPlayer; in: HistoryPlayer }[];
 }
 
 export const TEAM_META: Record<

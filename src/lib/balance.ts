@@ -46,9 +46,11 @@ export interface TeamStats {
   avg: number;
   /** מספר קשרי חברות שנשמרו בתוך הקבוצה */
   bondsKept: number;
-  /** הבונוס שהכימיה מוסיפה, בנקודות דירוג */
+  /** הבונוס שכימיית החברויות מוסיפה, בנקודות דירוג */
   chemistryBonus: number;
-  /** דירוג + בונוס כימיה — האומדן ה"אמיתי" לחוזק הקבוצה */
+  /** הבונוס שהכימיה המשחקית הנלמדת מוסיפה, בנקודות דירוג */
+  gameBonus: number;
+  /** דירוג + שני הבונוסים — האומדן ה"אמיתי" לחוזק הקבוצה */
   combined: number;
 }
 
@@ -57,6 +59,30 @@ export interface TeamStats {
  * לא מדע מדויק — אומדן שנועד לתת תחושה כמה הכימיה מוסיפה לקבוצה.
  */
 export const CHEMISTRY_BONUS_PER_BOND = 0.3;
+
+/**
+ * המרה בין "אפקט" של כימיה משחקית (הפרש באחוזי ניצחון) לנקודות דירוג.
+ * זוג עם אפקט של 25% שווה חצי נקודת דירוג לקבוצה שלו.
+ */
+export const GAME_CHEMISTRY_POINTS = 2;
+
+/** מפתח אחיד לזוג שחקנים, ללא תלות בסדר */
+export const pairKey = (a: string, b: string) => [a, b].sort().join('|');
+
+/**
+ * סכום האפקטים של הזוגות שנמצאים באותה קבוצה, בנקודות דירוג.
+ * זה מה שהופך "הם מנצחים יותר ביחד" למשהו שהמאזן יכול לקזז.
+ */
+export function gameChemistryBonus(members: string[], effects: Map<string, number>): number {
+  if (!effects.size) return 0;
+  let sum = 0;
+  for (let i = 0; i < members.length; i++) {
+    for (let j = i + 1; j < members.length; j++) {
+      sum += effects.get(pairKey(members[i], members[j])) ?? 0;
+    }
+  }
+  return sum * GAME_CHEMISTRY_POINTS;
+}
 
 export interface LineupStats {
   teams: Record<TeamId, TeamStats>;
@@ -106,7 +132,12 @@ export function teamSizes(total: number): Record<TeamId, number> {
 /*  סטטיסטיקות                                                         */
 /* ------------------------------------------------------------------ */
 
-export function computeStats(lineup: Lineup, pool: Player[]): LineupStats {
+export function computeStats(
+  lineup: Lineup,
+  pool: Player[],
+  /** אפקטים נלמדים לזוגות; ריק = הכימיה המשחקית כבויה */
+  pairEffects: Map<string, number> = new Map(),
+): LineupStats {
   const byId = new Map(pool.map((p) => [p.id, p]));
   const bonds = extractBonds(pool);
   const teamOf = new Map<string, TeamId>();
@@ -122,6 +153,7 @@ export function computeStats(lineup: Lineup, pool: Player[]): LineupStats {
       avg: members.length ? total / members.length : 0,
       bondsKept: 0,
       chemistryBonus: 0,
+      gameBonus: round1(gameChemistryBonus(members, pairEffects)),
       combined: round1(total),
     };
   }
@@ -138,7 +170,7 @@ export function computeStats(lineup: Lineup, pool: Player[]): LineupStats {
 
   for (const t of TEAM_IDS) {
     teams[t].chemistryBonus = round1(teams[t].bondsKept * CHEMISTRY_BONUS_PER_BOND);
-    teams[t].combined = round1(teams[t].total + teams[t].chemistryBonus);
+    teams[t].combined = round1(teams[t].total + teams[t].chemistryBonus + teams[t].gameBonus);
   }
 
   const active = TEAM_IDS.filter((t) => teams[t].count > 0);
@@ -196,6 +228,7 @@ function cost(
   bonds: Bond[],
   sizes: Record<TeamId, number>,
   chemistry: number,
+  pairEffects: Map<string, number>,
 ): number {
   const avgs: number[] = [];
   let sizePenalty = 0;
@@ -205,6 +238,8 @@ function cost(
     if (members.length) {
       let sum = 0;
       for (const id of members) sum += ratingOf.get(id) ?? 0;
+      // הכימיה המשחקית נספרת כחלק מחוזק הקבוצה, כך שהמאזן מקזז אותה
+      sum += gameChemistryBonus(members, pairEffects);
       avgs.push(sum / members.length);
     }
     sizePenalty += Math.abs(members.length - sizes[t]);
@@ -331,9 +366,10 @@ function localSearch(
   bonds: Bond[],
   sizes: Record<TeamId, number>,
   chemistry: number,
+  pairEffects: Map<string, number>,
 ): Lineup {
   const current: Lineup = { white: [...lineup.white], black: [...lineup.black], colored: [...lineup.colored] };
-  let best = cost(current, ratingOf, bonds, sizes, chemistry);
+  let best = cost(current, ratingOf, bonds, sizes, chemistry, pairEffects);
 
   for (let pass = 0; pass < 40; pass++) {
     let improved = false;
@@ -346,7 +382,7 @@ function localSearch(
         for (let a = 0; a < current[ta].length; a++) {
           for (let b = 0; b < current[tb].length; b++) {
             [current[ta][a], current[tb][b]] = [current[tb][b], current[ta][a]];
-            const next = cost(current, ratingOf, bonds, sizes, chemistry);
+            const next = cost(current, ratingOf, bonds, sizes, chemistry, pairEffects);
             if (next < best - 1e-9) {
               best = next;
               improved = true;
@@ -373,11 +409,14 @@ export interface GenerateOptions {
   restarts?: number;
   /** כמה משקל לתת לשמירת חברים יחד */
   chemistry?: ChemistryLevel;
+  /** אפקטים נלמדים לזוגות; ריק או חסר = הכימיה המשחקית לא משפיעה */
+  pairEffects?: Map<string, number>;
 }
 
 export function generateLineup(pool: Player[], options: GenerateOptions = {}): Lineup {
   const restarts = options.restarts ?? 60;
   const chemistry = CHEMISTRY_FACTOR[options.chemistry ?? 'light'];
+  const pairEffects = options.pairEffects ?? new Map<string, number>();
   if (pool.length === 0) return emptyLineup();
 
   const ratingOf = new Map(pool.map((p) => [p.id, p.rating]));
@@ -399,8 +438,9 @@ export function generateLineup(pool: Player[], options: GenerateOptions = {}): L
       bonds,
       sizes,
       chemistry,
+      pairEffects,
     );
-    const c = cost(candidate, ratingOf, bonds, sizes, chemistry);
+    const c = cost(candidate, ratingOf, bonds, sizes, chemistry, pairEffects);
     if (c < bestCost) {
       bestCost = c;
       best = candidate;

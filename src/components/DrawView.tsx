@@ -27,7 +27,7 @@ import {
 } from '../lib/balance';
 import type { Draft } from '../lib/storage';
 import { EmptyState } from './ui';
-import { PlayerPicker } from './PlayerPicker';
+import { RoundPanel } from './RoundPanel';
 import { TeamCard } from './TeamCard';
 import { ShareView } from './ShareView';
 import type { ShareTeams } from '../lib/format';
@@ -41,6 +41,7 @@ export function DrawView({
   draft,
   setDraft,
   streaks,
+  pairEffects,
   onSaveHistory,
   notify,
   isDemo,
@@ -49,6 +50,8 @@ export function DrawView({
   draft: Draft;
   setDraft: (updater: (prev: Draft) => Draft) => void;
   streaks: Map<string, number>;
+  /** אפקטים נלמדים לזוגות, מתוך ההיסטוריה */
+  pairEffects: Map<string, number>;
   onSaveHistory: (lineup: Lineup, date: string, cancelledIds: string[]) => void;
   notify: (msg: string) => void;
   isDemo: boolean;
@@ -57,14 +60,24 @@ export function DrawView({
   const [adminView, setAdminView] = useState(true);
   const [selectedPlayer, setSelectedPlayer] = useState<string | null>(null);
 
-  const { selectedIds, cancelledIds, lineup, matchDate, chemistry } = draft;
+  const { selectedIds, cancelledIds, substitutions, lineup, matchDate, chemistry, gameChemistry } =
+    draft;
 
   const pool = useMemo(() => {
     const set = new Set(selectedIds);
     return players.filter((p) => set.has(p.id));
   }, [players, selectedIds]);
 
-  const stats = useMemo(() => computeStats(lineup ?? emptyLineup(), pool), [lineup, pool]);
+  // האפקטים הנלמדים משפיעים רק כשהמתג דלוק
+  const activeEffects = useMemo(
+    () => (gameChemistry ? pairEffects : new Map<string, number>()),
+    [gameChemistry, pairEffects],
+  );
+
+  const stats = useMemo(
+    () => computeStats(lineup ?? emptyLineup(), pool, activeEffects),
+    [lineup, pool, activeEffects],
+  );
   const bonds = useMemo(() => describeBonds(lineup ?? emptyLineup(), pool), [lineup, pool]);
   const nameById = useMemo(() => new Map(players.map((p) => [p.id, p.name])), [players]);
 
@@ -84,7 +97,7 @@ export function DrawView({
       notify('צריך לבחור לפחות 3 שחקנים');
       return;
     }
-    setLineup(generateLineup(pool, { chemistry }));
+    setLineup(generateLineup(pool, { chemistry, pairEffects: activeEffects }));
     setSelectedPlayer(null);
     notify('הכוחות הוגרלו! ⚽');
   };
@@ -121,11 +134,16 @@ export function DrawView({
 
   return (
     <div className="space-y-4">
-      <PlayerPicker
+      <RoundPanel
         players={players}
+        matchDate={matchDate}
         selectedIds={selectedIds}
         cancelledIds={cancelledIds}
+        substitutions={substitutions}
         streaks={streaks}
+        onSetAll={(ids) =>
+          setDraft((p) => ({ ...p, selectedIds: ids, cancelledIds: [], substitutions: [] }))
+        }
         onToggle={(id) =>
           setDraft((p) => ({
             ...p,
@@ -134,19 +152,28 @@ export function DrawView({
               : [...p.selectedIds, id],
           }))
         }
-        onSetAll={(ids) => setDraft((p) => ({ ...p, selectedIds: ids }))}
-        onToggleCancelled={(id) =>
-          setDraft((p) => {
-            const isCancelled = p.cancelledIds.includes(id);
-            return {
-              ...p,
-              cancelledIds: isCancelled
-                ? p.cancelledIds.filter((x) => x !== id)
-                : [...p.cancelledIds, id],
-              // מי שביטל יורד אוטומטית מרשימת המשחקים
-              selectedIds: isCancelled ? p.selectedIds : p.selectedIds.filter((x) => x !== id),
-            };
-          })
+        onCancel={(id) =>
+          setDraft((p) => ({
+            ...p,
+            cancelledIds: p.cancelledIds.includes(id) ? p.cancelledIds : [...p.cancelledIds, id],
+            // מי שביטל יורד אוטומטית מרשימת המשחקים
+            selectedIds: p.selectedIds.filter((x) => x !== id),
+          }))
+        }
+        onUncancel={(id) =>
+          setDraft((p) => ({
+            ...p,
+            cancelledIds: p.cancelledIds.filter((x) => x !== id),
+            selectedIds: p.selectedIds.includes(id) ? p.selectedIds : [...p.selectedIds, id],
+            substitutions: p.substitutions.filter((s) => s.outId !== id),
+          }))
+        }
+        onSubstitute={(outId, inId) =>
+          setDraft((p) => ({
+            ...p,
+            selectedIds: p.selectedIds.includes(inId) ? p.selectedIds : [...p.selectedIds, inId],
+            substitutions: [...p.substitutions.filter((s) => s.outId !== outId), { outId, inId }],
+          }))
         }
       />
 
@@ -175,7 +202,13 @@ export function DrawView({
           onChange={(next) => setDraft((p) => ({ ...p, chemistry: next }))}
         />
 
-        <p className="max-w-md text-[11px] leading-relaxed text-slate-500">
+        <GameChemistryToggle
+          enabled={gameChemistry}
+          available={pairEffects.size}
+          onChange={(next) => setDraft((p) => ({ ...p, gameChemistry: next }))}
+        />
+
+        <p className="max-w-sm text-[11px] leading-relaxed text-slate-500">
           {CHEMISTRY_HELP[chemistry]}
         </p>
 
@@ -243,7 +276,7 @@ export function DrawView({
         <>
           {adminView && (
             <>
-              <BalanceBar stats={stats} chemistry={chemistry} />
+              <BalanceBar stats={stats} chemistry={chemistry} gameChemistry={gameChemistry} />
               {bonds.length > 0 && <BondsPanel bonds={bonds} />}
             </>
           )}
@@ -326,19 +359,65 @@ function ChemistryPicker({
   );
 }
 
+/* --------------------- מתג הכימיה המשחקית הנלמדת --------------------- */
+
+function GameChemistryToggle({
+  enabled,
+  available,
+  onChange,
+}: {
+  enabled: boolean;
+  /** כמה זוגות נלמדו מההיסטוריה */
+  available: number;
+  onChange: (next: boolean) => void;
+}) {
+  const usable = available > 0;
+
+  return (
+    <label
+      className={`flex items-center gap-2 text-xs font-semibold ${
+        usable ? 'cursor-pointer text-slate-300' : 'cursor-not-allowed text-slate-600'
+      }`}
+      title={
+        usable
+          ? `${available} זוגות נלמדו מההיסטוריה. כשדלוק, ההגרלה מתחשבת בהם בחישוב חוזק הקבוצה ומקזזת אותם.`
+          : 'צריך עוד היסטוריה עם תוצאות כדי ללמוד זוגות'
+      }
+    >
+      <input
+        type="checkbox"
+        className="size-4 accent-violet-500"
+        checked={enabled && usable}
+        disabled={!usable}
+        onChange={(e) => onChange(e.target.checked)}
+      />
+      <Sparkles size={13} className={enabled && usable ? 'text-violet-400' : undefined} />
+      כימיה משחקית
+      {usable && <span className="font-mono text-[10px] text-slate-500">({available})</span>}
+    </label>
+  );
+}
+
 /* --------------------------- פס איזון עליון --------------------------- */
 
 function BalanceBar({
   stats,
   chemistry,
+  gameChemistry,
 }: {
   stats: ReturnType<typeof computeStats>;
   chemistry: ChemistryLevel;
+  gameChemistry: boolean;
 }) {
+  // כשהקבוצות לא באותו גודל, השוואת סכומים תמיד תיראה גרועה — הקבוצה הקטנה
+  // תמיד תצבור פחות. במקרה כזה מודדים לפי הממוצע, שזה גם מה שהאלגוריתם ממטב.
+  const sizes = TEAM_IDS.map((id) => stats.teams[id].count).filter((c) => c > 0);
+  const equalSizes = new Set(sizes).size <= 1;
+
   const quality =
-    stats.totalSpread <= 0.6
+    stats.spread <= 0.1
       ? { label: 'איזון מצוין', tone: 'text-emerald-300 bg-emerald-500/15 border-emerald-500/30' }
-      : stats.totalSpread <= 1.5
+      : stats.spread <= 0.25
         ? { label: 'איזון טוב', tone: 'text-sky-300 bg-sky-500/15 border-sky-500/30' }
         : { label: 'איזון בינוני', tone: 'text-amber-300 bg-amber-500/15 border-amber-500/30' };
 
@@ -364,7 +443,13 @@ function BalanceBar({
                   </span>
                   <span className="text-[10px] opacity-70">דירוג</span>
                 </span>
-                <span className="flex items-baseline gap-1 opacity-90">
+                <span
+                  className="flex items-baseline gap-1 opacity-90"
+                  title={
+                    `דירוג ${t.total.toFixed(1)} + חברויות ${t.chemistryBonus.toFixed(1)}` +
+                    (gameChemistry ? ` + כימיה משחקית ${t.gameBonus.toFixed(1)}` : '')
+                  }
+                >
                   <span dir="ltr" className="font-mono text-sm font-bold tabular-nums">
                     {t.combined.toFixed(1)}
                   </span>
@@ -377,18 +462,44 @@ function BalanceBar({
       </div>
 
       <div className="flex flex-wrap items-center gap-2 text-xs">
-        <span className={`rounded-lg border px-2.5 py-1.5 font-semibold ${quality.tone}`}>
-          {quality.label} · פער בדירוג{' '}
-          <span dir="ltr" className="font-mono tabular-nums">
-            {stats.totalSpread.toFixed(1)}
-          </span>
+        <span
+          className={`rounded-lg border px-2.5 py-1.5 font-semibold ${quality.tone}`}
+          title={
+            equalSizes
+              ? 'ההפרש בסכום הדירוגים בין הקבוצה החזקה לחלשה'
+              : 'הקבוצות לא באותו גודל, לכן ההשוואה היא לפי דירוג ממוצע לשחקן'
+          }
+        >
+          {quality.label} ·{' '}
+          {equalSizes ? (
+            <>
+              פער בדירוג{' '}
+              <span dir="ltr" className="font-mono tabular-nums">
+                {stats.totalSpread.toFixed(1)}
+              </span>
+            </>
+          ) : (
+            <>
+              פער לשחקן{' '}
+              <span dir="ltr" className="font-mono tabular-nums">
+                {stats.spread.toFixed(2)}
+              </span>
+            </>
+          )}
         </span>
-        <span className="rounded-lg border border-slate-700 bg-slate-800/50 px-2.5 py-1.5 font-semibold text-slate-300">
-          פער עם כימיה{' '}
-          <span dir="ltr" className="font-mono tabular-nums">
-            {stats.combinedSpread.toFixed(1)}
+        {equalSizes && (
+          <span className="rounded-lg border border-slate-700 bg-slate-800/50 px-2.5 py-1.5 font-semibold text-slate-300">
+            פער עם כימיה{' '}
+            <span dir="ltr" className="font-mono tabular-nums">
+              {stats.combinedSpread.toFixed(1)}
+            </span>
           </span>
-        </span>
+        )}
+        {!equalSizes && (
+          <span className="rounded-lg border border-slate-700 bg-slate-800/50 px-2.5 py-1.5 font-semibold text-slate-400">
+            קבוצות בגדלים שונים ({sizes.join('/')}) — הסכומים אינם ברי-השוואה
+          </span>
+        )}
         {stats.totalBonds > 0 && (
           <span className="rounded-lg border border-slate-700 bg-slate-800/50 px-2.5 py-1.5 font-semibold text-slate-300">
             {CHEMISTRY_LABEL[chemistry]}: {stats.bondsKept}/{stats.totalBonds} קשרים
