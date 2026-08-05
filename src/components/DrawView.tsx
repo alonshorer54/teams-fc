@@ -29,10 +29,12 @@ import {
   type CriterionId,
   type CriterionSetting,
 } from '../lib/criteria';
+import { compareLineups } from '../lib/diff';
 import type { Draft } from '../lib/storage';
 import { EmptyState } from './ui';
 import { RoundPanel } from './RoundPanel';
 import { PrioritiesPanel } from './PrioritiesPanel';
+import { ChangeReport } from './ChangeReport';
 import { TeamCard } from './TeamCard';
 import { ShareView } from './ShareView';
 import type { ShareTeams } from '../lib/format';
@@ -67,7 +69,7 @@ export function DrawView({
   const [adminView, setAdminView] = useState(true);
   const [selectedPlayer, setSelectedPlayer] = useState<string | null>(null);
 
-  const { selectedIds, cancelledIds, substitutions, lineup, matchDate } = draft;
+  const { selectedIds, cancelledIds, substitutions, lineup, baseline, matchDate } = draft;
 
   const pool = useMemo(() => {
     const set = new Set(selectedIds);
@@ -94,6 +96,15 @@ export function DrawView({
         priorities,
       ),
     [lineup, pool, ratingOf, activeEffects, priorities],
+  );
+
+  // השוואה בין ההגרלה המקורית למצב אחרי העריכות הידניות
+  const diff = useMemo(
+    () =>
+      lineup && baseline
+        ? compareLineups(baseline, lineup, pool, activeEffects, priorities)
+        : null,
+    [lineup, baseline, pool, activeEffects, priorities],
   );
 
   const unavailable = useMemo(() => {
@@ -128,7 +139,9 @@ export function DrawView({
     const effective = priorities.map((p) =>
       unavailable[p.id] ? { ...p, enabled: false } : p,
     );
-    setLineup(generateLineup(pool, { priorities: effective, pairEffects: activeEffects }));
+    const next = generateLineup(pool, { priorities: effective, pairEffects: activeEffects });
+    // ההגרלה הטרייה היא גם נקודת ההשוואה לעריכות שיבואו אחריה
+    setDraft((p) => ({ ...p, lineup: next, baseline: next }));
     setSelectedPlayer(null);
     notify('הכוחות הוגרלו! ⚽');
   };
@@ -275,7 +288,7 @@ export function DrawView({
               className="btn-ghost !px-2.5 text-slate-400 hover:text-rose-300"
               title="ניקוי ההגרלה הנוכחית"
               onClick={() => {
-                setLineup(null);
+                setDraft((p) => ({ ...p, lineup: null, baseline: null }));
                 setSelectedPlayer(null);
               }}
             >
@@ -296,6 +309,17 @@ export function DrawView({
         <ShareView teams={shareTeams} date={matchDate} onCopied={notify} />
       ) : (
         <>
+          {diff?.changed && (
+            <ChangeReport
+              diff={diff}
+              onRevert={() => {
+                setLineup(baseline);
+                setSelectedPlayer(null);
+                notify('חזרנו להגרלה המקורית');
+              }}
+            />
+          )}
+
           {adminView && (
             <>
               <BalanceBar stats={stats} gameChemistry={!!gameChemistryOn} />
