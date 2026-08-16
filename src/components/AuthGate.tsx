@@ -13,6 +13,7 @@ import {
   UserPlus,
   Wallet,
 } from 'lucide-react';
+import { InstallButton } from './InstallButton';
 
 type Screen = 'intro' | 'signin' | 'signup' | 'forgot';
 
@@ -57,10 +58,12 @@ export function AuthGate({
   onSignIn,
   onSignUp,
   onForgotPassword,
+  notify,
 }: {
   onSignIn: (email: string, password: string) => Promise<string | null>;
   onSignUp: (email: string, password: string) => Promise<string | null>;
   onForgotPassword: (email: string) => Promise<string | null>;
+  notify: (msg: string) => void;
 }) {
   const [screen, setScreen] = useState<Screen>('intro');
   const [email, setEmail] = useState('');
@@ -135,6 +138,10 @@ export function AuthGate({
               <LogIn size={16} />
               כבר יש לי חשבון
             </button>
+          </div>
+
+          <div className="mt-4 flex justify-center">
+            <InstallButton notify={notify} />
           </div>
         </header>
 
