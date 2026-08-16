@@ -164,7 +164,7 @@ export function RoundPanel({
               <PlayerChip
                 key={p.id}
                 player={p}
-                friendName={p.friendOf ? byId.get(p.friendOf)?.name : undefined}
+                friendNames={p.friendIds.map((id) => byId.get(id)?.name).filter(Boolean).join(', ')}
                 streak={streaks.get(p.id) ?? 0}
                 tone="emerald"
                 action={{
@@ -241,7 +241,7 @@ export function RoundPanel({
               <PlayerChip
                 key={p.id}
                 player={p}
-                friendName={p.friendOf ? byId.get(p.friendOf)?.name : undefined}
+                friendNames={p.friendIds.map((id) => byId.get(id)?.name).filter(Boolean).join(', ')}
                 streak={streaks.get(p.id) ?? 0}
                 tone="slate"
                 action={{
@@ -369,7 +369,7 @@ function Group({
 
 function PlayerChip({
   player,
-  friendName,
+  friendNames,
   streak = 0,
   tone,
   strikethrough,
@@ -378,7 +378,7 @@ function PlayerChip({
   secondaryAction,
 }: {
   player: Player;
-  friendName?: string;
+  friendNames?: string;
   streak?: number;
   tone: keyof typeof TONES;
   strikethrough?: boolean;
@@ -402,7 +402,7 @@ function PlayerChip({
           {streak <= -2 && (
             <span
               className="inline-flex items-center gap-0.5 rounded bg-amber-500/20 px-1 font-mono text-[9px] font-bold text-amber-300"
-              title={`סיים למטה ${Math.abs(streak)} שבועות ברצף — שווה לחזק אותו`}
+              title={`הפסיד ${Math.abs(streak)} שבועות ברצף — שווה לחזק אותו`}
             >
               <TrendingDown size={8} />
               {Math.abs(streak)}
@@ -411,19 +411,19 @@ function PlayerChip({
           {streak >= 2 && (
             <span
               className="inline-flex items-center gap-0.5 rounded bg-emerald-500/20 px-1 font-mono text-[9px] font-bold text-emerald-300"
-              title={`סיים למעלה ${streak} שבועות ברצף`}
+              title={`ניצח ${streak} שבועות ברצף`}
             >
               <TrendingUp size={8} />
               {streak}
             </span>
           )}
         </span>
-        {(friendName || note) && (
-          <span className="flex items-center gap-1 text-[10px] text-slate-500">
-            {friendName && (
+        {(friendNames || note) && (
+          <span className="flex items-center gap-1 truncate text-[10px] text-slate-500">
+            {friendNames && (
               <>
-                <Link2 size={9} />
-                חבר של {friendName}
+                <Link2 size={9} className="shrink-0" />
+                <span className="truncate">חבר של {friendNames}</span>
               </>
             )}
             {note && <span className="text-sky-300">{note}</span>}

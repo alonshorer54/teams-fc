@@ -105,7 +105,7 @@ export function HistoryView({
                         <Trophy size={9} />
                         {winners.length === 0 || winners.length === TEAM_IDS.length
                           ? 'ערב שקול'
-                          : `${winners.map((t) => TEAM_META[t].name).join(' + ')} למעלה`}
+                          : `${winners.map((t) => TEAM_META[t].name).join(' + ')} ניצחו`}
                       </span>
                     ) : (
                       <span className="rounded bg-slate-700/60 px-1.5 py-0.5 font-semibold text-slate-300">
@@ -274,8 +274,8 @@ function ResultPicker({
         איפה כל קבוצה סיימה את הערב?
       </p>
       <p className="mb-2.5 text-[10px] leading-relaxed text-slate-500">
-        זה דירוג יחסי, לא תוצאה מדויקת. אפשר לתת לשתי קבוצות את אותו מקום — למשל שתיים למעלה ואחת
-        למטה. השאירו את כולן "באמצע" אם הערב היה שקול.
+        זה דירוג יחסי, לא תוצאה מדויקת. אפשר לתת לשתי קבוצות את אותו מקום — למשל שתיים שניצחו
+        הרבה ואחת שהפסידה. השאירו את כולן "באמצע" אם הערב היה שקול.
       </p>
 
       {/* דירוג לכל קבוצה */}
@@ -328,7 +328,7 @@ function StatsPanel({ stats }: { stats: ReturnType<typeof computeHistoryStats> }
       <div>
         <h2 className="mb-1 flex flex-wrap items-center gap-2 text-sm font-bold text-slate-100">
           <Trophy size={16} className="text-amber-400" />
-          מי מסיים למעלה ומי למטה
+          מי מנצח ומי מפסיד
           {stats.pending > 0 && (
             <span className="rounded-md bg-slate-700/70 px-1.5 py-0.5 text-[10px] font-semibold text-slate-300">
               {stats.pending} ממתינות לעדכון
@@ -342,15 +342,15 @@ function StatsPanel({ stats }: { stats: ReturnType<typeof computeHistoryStats> }
 
         {!hasResults ? (
           <p className="text-xs text-slate-400">
-            עדיין לא עודכנה אף תוצאה. פתחו הגרלה למטה וסמנו איפה כל קבוצה סיימה — כאן תראו מי נתקע
-            למטה שבוע אחרי שבוע.
+            עדיין לא עודכנה אף תוצאה. פתחו הגרלה למטה וסמנו איך כל קבוצה סיימה — כאן תראו מי
+            מפסיד שבוע אחרי שבוע.
           </p>
         ) : (
           <div className="space-y-4">
             {last && last.winners.length > 0 && (
               <div className="rounded-xl border border-emerald-500/25 bg-emerald-500/5 p-3">
                 <p className="mb-2 text-[11px] font-bold text-emerald-300">
-                  מי היה למעלה בשבוע האחרון ({formatHebrewDate(last.record.date)})
+                  מי ניצח בשבוע האחרון ({formatHebrewDate(last.record.date)})
                 </p>
                 <ul className="flex flex-wrap gap-1.5">
                   {TEAM_IDS.flatMap((t) => last.record.teams[t])
@@ -371,7 +371,7 @@ function StatsPanel({ stats }: { stats: ReturnType<typeof computeHistoryStats> }
               <div className="rounded-xl border border-amber-500/30 bg-amber-500/5 p-3">
                 <p className="mb-2 flex items-center gap-1.5 text-[11px] font-bold text-amber-300">
                   <TrendingDown size={12} />
-                  סיימו למטה כמה שבועות ברצף — שווה לחזק אותם
+                  מפסידים כמה שבועות ברצף — שווה לחזק אותם
                 </p>
                 <ul className="flex flex-wrap gap-1.5">
                   {stats.coldStreak.map((p) => (
@@ -413,11 +413,11 @@ function PlayerTable({ players }: { players: ReturnType<typeof computeHistorySta
             <tr className="text-[10px] text-slate-500">
               <th className="px-2 py-1.5 text-right font-semibold">שחקן</th>
               <th className="px-2 py-1.5 text-center font-semibold">שבועות</th>
-              <th className="px-2 py-1.5 text-center font-semibold" title="כמה פעמים הקבוצה שלו סיימה למעלה">
-                למעלה
+              <th className="px-2 py-1.5 text-center font-semibold" title="בכמה שבועות הקבוצה שלו ניצחה הרבה">
+                ניצח
               </th>
-              <th className="px-2 py-1.5 text-center font-semibold" title="כמה פעמים הקבוצה שלו סיימה למטה">
-                למטה
+              <th className="px-2 py-1.5 text-center font-semibold" title="בכמה שבועות הקבוצה שלו הפסידה הרבה">
+                הפסיד
               </th>
               <th className="px-2 py-1.5 text-center font-semibold">אחוז</th>
               <th className="px-2 py-1.5 text-center font-semibold">רצף</th>
@@ -470,8 +470,8 @@ export function StreakBadge({ streak }: { streak: number }) {
       }`}
       title={
         win
-          ? `סיים למעלה ${streak} שבועות ברצף`
-          : `סיים למטה ${Math.abs(streak)} שבועות ברצף`
+          ? `ניצח ${streak} שבועות ברצף`
+          : `הפסיד ${Math.abs(streak)} שבועות ברצף`
       }
     >
       {win ? <TrendingUp size={9} /> : <TrendingDown size={9} />}
