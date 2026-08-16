@@ -301,6 +301,7 @@ export default function App() {
         onSignIn={auth.signIn}
         onSignUp={auth.signUp}
         onForgotPassword={auth.requestPasswordReset}
+        notify={notify}
       />
     );
   }
