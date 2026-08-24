@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import {
+  ArrowLeftRight,
   ArrowRight,
   BarChart3,
   CloudOff,
@@ -11,6 +12,7 @@ import {
   Shuffle,
   Smartphone,
   UserPlus,
+  Users,
   Wallet,
 } from 'lucide-react';
 import { InstallButton } from './InstallButton';
@@ -21,12 +23,22 @@ const FEATURES = [
   {
     icon: Shuffle,
     title: 'כוחות מאוזנים בלחיצה',
-    text: 'מחלק את השחקנים לשלוש קבוצות שקולות לפי דירוג, חברויות והעדפות אישיות.',
+    text: 'מחלק את מי שהגיע ל-2 או 3 קבוצות שקולות, לפי דירוג, חברויות והעדפות אישיות.',
   },
   {
     icon: ListOrdered,
     title: 'אתם קובעים מה חשוב',
     text: 'סדר עדיפויות שאפשר לשנות: דירוג, חברויות, כימיה משחקית, העדפות אישיות ותגיות.',
+  },
+  {
+    icon: ArrowLeftRight,
+    title: 'עריכה ידנית עם בקרה',
+    text: 'אפשר להחליף שחקנים בין הקבוצות, והאפליקציה מסבירה מה זה שבר — עם ביטול בלחיצה.',
+  },
+  {
+    icon: Users,
+    title: 'חסר שחקן? יש פתרון',
+    text: 'הגיעו 20 במקום 21? מוסיפים שחקן משלים בדירוג שתבחרו, והקבוצות נשארות שוות.',
   },
   {
     icon: Share2,
@@ -125,7 +137,7 @@ export function AuthGate({
             Teams FC
           </h1>
           <p className="mx-auto mt-3 max-w-xl text-sm leading-relaxed text-slate-400 sm:text-base">
-            מחלקים כוחות לכדורגל השבועי בלי ויכוחים. בוחרים מי משחק, לוחצים על הגרלה, ומקבלים שלוש
+            מחלקים כוחות לכדורגל השבועי בלי ויכוחים. בוחרים מי משחק, לוחצים על הגרלה, ומקבלים
             קבוצות מאוזנות — מוכנות לשליחה לקבוצה.
           </p>
 
