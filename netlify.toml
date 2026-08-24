@@ -1,9 +1,0 @@
-[build]
-  command = "npm run build"
-  publish = "dist"
-
-# אפליקציית עמוד יחיד — כל נתיב מחזיר את index.html
-[[redirects]]
-  from = "/*"
-  to = "/index.html"
-  status = 200

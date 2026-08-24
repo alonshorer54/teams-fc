@@ -1,4 +1,5 @@
 import { useEffect, type ReactNode } from 'react';
+import { createPortal } from 'react-dom';
 import { X } from 'lucide-react';
 
 /* ---------------------------- מודאל בסיסי ---------------------------- */
@@ -31,9 +32,18 @@ export function Modal({
 
   if (!open) return null;
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-slate-950/75 p-4 backdrop-blur-sm sm:items-center">
-      <div className="absolute inset-0" onClick={onClose} aria-hidden />
+  /*
+   * המודאל נשלח ל-body דרך פורטל, ולא נשאר במקום שבו הוא נכתב.
+   *
+   * הסיבה: למחלקת `card` יש backdrop-filter, ואלמנט כזה הופך לבלוק המכיל של
+   * צאצאים עם position:fixed. מודאל שנפתח מתוך כרטיס היה נמדד ביחס לכרטיס
+   * במקום ביחס למסך — בטלפון הוא נחת מתחת לשוליים התחתונים, וכשה-body נעול
+   * לגלילה לא הייתה שום דרך להגיע אליו.
+   */
+  return createPortal(
+    <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto overscroll-contain bg-slate-950/75 p-4 backdrop-blur-sm sm:items-center">
+      {/* הרקע לסגירה — fixed ולא absolute, כדי שיכסה את המסך גם כשגוללים */}
+      <div className="fixed inset-0" onClick={onClose} aria-hidden />
       <div className={`card animate-pop relative my-auto w-full ${maxWidth} p-5 sm:p-6`}>
         <div className="mb-5 flex items-center justify-between gap-3">
           <h2 className="flex items-center gap-2 text-lg font-bold text-slate-100">
@@ -50,7 +60,8 @@ export function Modal({
         </div>
         {children}
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
 

@@ -1,4 +1,5 @@
 import { useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { AlertTriangle, ArrowLeft, CheckCircle2, Undo2, X } from 'lucide-react';
 import { TEAM_META } from '../types';
 import { CRITERION_META } from '../lib/criteria';
@@ -28,9 +29,11 @@ export function ChangePopup({
   const deltas = diff.criteria.filter((c) => Math.abs(c.delta) >= 1);
   const clean = warnings.length === 0;
 
-  return (
+  // דרך ה-body, מאותה סיבה כמו במודאל: כרטיס עם backdrop-filter הוא הבלוק
+  // המכיל של צאצאים fixed, וההודעה הייתה ננעלת בתוכו במקום על המסך
+  return createPortal(
     <div
-      className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-950/70 p-4 backdrop-blur-sm"
+      className="fixed inset-0 z-[70] flex items-center justify-center overflow-y-auto overscroll-contain bg-slate-950/70 p-4 backdrop-blur-sm"
       role="dialog"
       aria-modal="true"
     >
@@ -140,6 +143,7 @@ export function ChangePopup({
           </button>
         </footer>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }

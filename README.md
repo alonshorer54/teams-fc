@@ -1,121 +1,103 @@
 # ⚽ Teams FC
 
-**אתר חי: https://alonshorer54.github.io/teams-fc/**
+Web app for running a weekly football game: manage the squad, draw balanced
+teams, share them to WhatsApp, and track results over time.
 
-אפליקציית ווב לניהול סגל השחקנים הקבוע, הגרלת שלוש קבוצות מאוזנות
-(**לבן** / **שחור** / **צבעוני**), עריכה ידנית, ייצוא נקי לוואטסאפ ושמירת היסטוריה שבועית —
-עם סנכרון ענן בין המחשב לטלפון.
+**Live app: https://alonshorer54.github.io/teams-fc/**
 
-## פריסה
+Hebrew, right-to-left, installable as a mobile app, and synced between devices.
 
-דחיפה ל-`main` מפעילה את `.github/workflows/deploy.yml` שבונה ומעלה ל-GitHub Pages.
-מפתחות Supabase מוזרקים מ-repository secrets (`VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`).
+## What it does
 
-## הרצה
+- **Squad** — players with a 1–5 rating, friendships, "prefers with / without", and free-text tags.
+- **Draw** — splits the players who showed up into 2 or 3 balanced teams. Colours can be
+  swapped afterwards, and missing spots filled with one-off "filler" players.
+- **Manual edits** — swap or move any player; the app reports what the edit broke, with one-click undo.
+- **Share** — copy a clean text list, or generate an image, ready for WhatsApp.
+- **History and trends** — saved rounds, win/loss streaks, attendance, and which pairs
+  actually perform well together.
+- **Payments** — who paid for the week and who still owes.
+
+## Tech
+
+TypeScript · React 19 · Tailwind CSS 4 · Vite · Supabase · GitHub Pages
+
+No backend of its own: the app is static files that talk to Supabase directly.
+Access is enforced by Postgres row-level security, not by client code.
+
+## Running locally
 
 ```bash
 npm install
+```
+
+```bash
 npm run dev
 ```
 
-הדפדפן ייפתח בכתובת `http://localhost:5173`.
-לבנייה לפרודקשן: `npm run build` ואז `npm run preview`.
+Opens on `http://localhost:5173`. Without Supabase keys the app runs in local
+mode and stores everything in `localStorage` — no account needed.
 
-## שני מצבי עבודה
+Other scripts: `npm run build`, `npm run preview`, `npm run lint`.
 
-| מצב | מתי | איפה הנתונים |
-| --- | --- | --- |
-| **מקומי** | כשאין `.env.local` | `localStorage` — בדפדפן הזה בלבד, ללא סנכרון |
-| **ענן** | כשמוגדרים מפתחות Supabase | Supabase + מטמון מקומי — מסונכרן בין כל המכשירים בזמן אמת |
+## Enabling cloud sync
 
-האפליקציה עוברת בין המצבים אוטומטית; ללא הגדרות ענן היא פשוט עובדת מקומית כרגיל.
+Optional. Needed only to sync between phone and computer.
 
-## הפעלת סנכרון בין מחשב לטלפון
+1. Create a free project at [supabase.com](https://supabase.com).
+2. In the Supabase SQL Editor, run [`supabase-setup.sql`](./supabase-setup.sql).
+   It creates the table, enables row-level security, and turns on realtime.
+3. Copy `.env.example` to `.env.local` and fill in your project URL and anon key
+   (Project Settings → API).
+4. Restart `npm run dev`, then sign up once and use the same account on your phone.
 
-**1. יצירת פרויקט Supabase** — נכנסים ל־[supabase.com](https://supabase.com), פותחים חשבון חינמי
-ויוצרים פרויקט חדש (אזור מומלץ: `eu-central-1` / Frankfurt).
+The `anon` key is meant to be public — row-level security is what protects the
+data. Without a signed-in account, nothing can be read or written.
 
-**2. הקמת הטבלה** — ב־Supabase: `SQL Editor` ← `New query` ← מדביקים את כל התוכן של
-[`supabase-setup.sql`](./supabase-setup.sql) ← `Run`.
-הסקריפט יוצר את הטבלה, מפעיל Row Level Security (כל משתמש רואה רק את הנתונים שלו) ומפעיל Realtime.
+## Deployment
 
-**3. חיבור המפתחות** — ב־Supabase: `Project Settings` ← `API`. מעתיקים את `Project URL` ואת
-`anon public` ויוצרים קובץ `.env.local` בתיקיית הפרויקט:
+Pushing to `main` runs [`.github/workflows/deploy.yml`](.github/workflows/deploy.yml),
+which builds and publishes to GitHub Pages. Supabase keys are injected from
+repository secrets (`VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`).
 
-```
-VITE_SUPABASE_URL=https://xxxxxxxx.supabase.co
-VITE_SUPABASE_ANON_KEY=eyJhbGciOi...
-```
+## How the draw works
 
-מפעילים מחדש את `npm run dev`. יופיע מסך התחברות — נרשמים פעם אחת, ומתחברים לאותו חשבון גם בטלפון.
+Splitting players into balanced teams is a variant of the partition problem, so
+the app uses a heuristic rather than an exact solver: greedy construction with
+random noise, then hill-climbing over every pair swap, repeated 60 times with the
+best result kept. It reaches a 0.00 rating gap in well under a second.
 
-> מפתח ה־`anon` נועד להיות ציבורי ומוטמע בקוד הצד-לקוחי. מה שמגן על הנתונים הוא ה־RLS
-> שהוגדר בסקריפט: בלי התחברות לחשבון אי אפשר לקרוא או לכתוב כלום.
+Five criteria are scored, each normalised to 0..1 so the weights stay comparable:
 
-## העלאה לאינטרנט (כדי לפתוח מהטלפון בכל מקום)
-
-הדרך המהירה, ללא Git:
-
-```bash
-npm run build
-```
-
-נכנסים ל־[app.netlify.com/drop](https://app.netlify.com/drop) וגוררים לשם את תיקיית `dist`.
-מתקבלת כתובת קבועה שעובדת מכל מכשיר. שימו לב: מפתחות ה־`.env.local` נצרבים בזמן הבנייה,
-לכן צריך לבנות מחדש ולגרור שוב אחרי כל שינוי בקוד.
-
-לחלופין, חיבור ל־GitHub ב־Netlify או ב־Vercel נותן פריסה אוטומטית בכל דחיפה; במקרה כזה מגדירים את
-`VITE_SUPABASE_URL` ו־`VITE_SUPABASE_ANON_KEY` כמשתני סביבה בלוח הבקרה של השירות.
-
-## מבנה הפרויקט
-
-| קובץ | תפקיד |
+| Criterion | What it measures |
 | --- | --- |
-| `src/types.ts` | טיפוסי הליבה (`Player`, `Lineup`, `MatchRecord`) ומטא-דאטה של הקבוצות |
-| `src/lib/balance.ts` | אלגוריתם האיזון, חיפוש מקומי וסטטיסטיקות |
-| `src/lib/criteria.ts` | הקריטריונים של ההגרלה, הקנסות שלהם וסדר העדיפויות |
-| `src/lib/format.ts` | בניית טקסט הוואטסאפ, תאריכים עבריים והעתקה ללוח |
-| `src/lib/storage.ts` | מפתחות `localStorage`, ייצוא/ייבוא קובץ גיבוי |
-| `src/lib/supabase.ts` | חיבור לענן וזיהוי אוטומטי אם הוא מוגדר |
-| `src/hooks/useLocalStorage.ts` | `state` שנשמר אוטומטית לאחסון המקומי |
-| `src/hooks/useAuth.ts` | הרשמה, התחברות ומעקב אחר הסשן |
-| `src/hooks/useSyncedStore.ts` | לב הסנכרון: טעינה מהענן, שמירה מושהית והאזנה לשינויים |
-| `src/components/AuthGate.tsx` | מסך התחברות/הרשמה |
-| `src/components/BackupCard.tsx` | ייצוא וייבוא קובץ גיבוי |
-| `src/components/PlayersView.tsx` | ניהול המאגר (הוספה, עריכה, מחיקה, חיפוש, מיון) |
-| `src/components/DrawView.tsx` | מסך ההגרלה: בחירת משתתפים, הגרלה, עריכה ידנית, שיתוף |
-| `src/components/TeamCard.tsx` | כרטיס קבוצה עם גרירה, החלפה וסימוני כימיה |
-| `src/components/ShareView.tsx` | "מצב וואטסאפ" — שמות בלבד + כפתור העתקה |
-| `src/components/HistoryView.tsx` | ארכיון ההגרלות השמורות |
+| `rating` | Average rating gap between teams |
+| `friends` | How many friend pairs were split up |
+| `gameChemistry` | Spread of learned pair effects across teams |
+| `affinity` | How many "prefers with / without" requests were violated |
+| `tags` | How evenly players sharing a tag are distributed |
 
-## אלגוריתם ההגרלה
+You set the priority order in the UI. Each rank is worth about 6× the one below
+it — enough for the top criterion to decide, without making the lower ones
+meaningless. Criteria with no data are switched off automatically, and an
+oversized team is penalised above everything else so the split stays valid.
 
-ההגרלה ממזערת קנס משוקלל של חמישה קריטריונים. הסדר ניתן לשינוי מהממשק, וכל דרגה
-שווה בערך פי 6 מזו שמתחתיה — מספיק כדי שהעליונה תכריע, בלי להפוך את התחתונות לחסרות משמעות.
+## Project layout
 
-| קריטריון | מה נמדד |
+| Path | Role |
 | --- | --- |
-| `rating` | פער הדירוג הממוצע בין הקבוצות |
-| `friends` | כמה זוגות חברים פוצלו |
-| `gameChemistry` | פיזור האפקטים הנלמדים בין הקבוצות (מקזז, לא מקבץ) |
-| `affinity` | כמה העדפות אהבה/שנאה הופרו |
-| `tags` | עד כמה בעלי אותה תגית מפוזרים שווה |
+| `src/types.ts` | Core types (`Player`, `Lineup`, `MatchRecord`) and team metadata |
+| `src/lib/balance.ts` | The balancing algorithm and lineup statistics |
+| `src/lib/criteria.ts` | Draw criteria, their penalties, and priority weighting |
+| `src/lib/pairs.ts` | Learned chemistry between pairs of players |
+| `src/lib/diff.ts` | Explains what a manual edit changed |
+| `src/lib/storage.ts` | Local storage keys, backup export and import |
+| `src/hooks/useSyncedStore.ts` | Cloud sync: load, debounced save, realtime updates |
+| `src/components/DrawView.tsx` | The draw screen |
+| `src/components/PlayersView.tsx` | Squad management |
+| `src/components/HistoryView.tsx` | Saved rounds and results |
+| `src/components/AnalysisView.tsx` | Attendance and trends |
 
-כל קנס מנורמל ל-0..1 כדי שהמשקלים יהיו בני-השוואה. קריטריון בלי נתונים מכובה אוטומטית.
-מעל הכל יש קנס על גודל קבוצה חורג, כדי שהחלוקה תישאר חוקית.
+## License
 
-## מפתחות האחסון המקומי
-
-- `kohot.players.v1` — מאגר השחקנים
-- `kohot.history.v1` — ההגרלות שנשמרו
-- `kohot.draft.v1` — ההגרלה הנוכחית (שורדת רענון דף, ונשארת מקומית לכל מכשיר)
-
-## איך הסנכרון עובד
-
-הנתונים נשמרים כ"מסמך" אחד לכל משתמש (שורה בטבלה `kohot_data` עם `players` ו־`history` כ־JSONB).
-
-1. **בהתחברות** — נטענים הנתונים מהענן. אם זו הפעם הראשונה, מה שכבר קיים במכשיר נדחף לענן.
-2. **בכל שינוי** — שמירה אוטומטית לאחר 900ms של שקט (debounce), עם השוואת טביעת אצבע כדי לא לכתוב לחינם.
-3. **ממכשיר אחר** — ערוץ Realtime מעדכן את המסך מיידית; ההד של השמירה שלנו מסונן החוצה.
-
-מחוון המצב בראש הדף מציג: `מקומי` / `טוען...` / `שומר...` / `מסונכרן` / `שגיאת סנכרון`.
+Personal project, no license granted.

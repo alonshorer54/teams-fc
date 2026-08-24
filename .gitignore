@@ -12,13 +12,14 @@ dist
 dist-ssr
 *.local
 
-# מפתחות Supabase — לא להעלות ל-Git
+# Supabase keys — never commit
 .env
 .env.local
 
-# Editor directories and files
+# Editor and tooling directories
 .vscode/*
 !.vscode/extensions.json
+.claude
 .idea
 .DS_Store
 *.suo
@@ -26,3 +27,10 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Personal notes and documents — kept locally, not part of the app
+*.txt
+*.docx
+*.pdf
+PROJECT-SUMMARY.md
+netlify.toml
