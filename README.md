@@ -4,7 +4,6 @@ Web app for running a weekly football game: manage the squad, draw balanced
 teams, share them to WhatsApp, and track results over time.
 
 **Live app: https://teams-fc.netlify.app**
-(also mirrored at https://alonshorer54.github.io/teams-fc/)
 
 Hebrew, right-to-left, installable as a mobile app, and synced between devices.
 
@@ -57,21 +56,14 @@ data. Without a signed-in account, nothing can be read or written.
 
 ## Deployment
 
-Pushing to `main` deploys to both hosts, which serve the same app from the same
-Supabase project:
+Hosted on Netlify, configured by [`netlify.toml`](./netlify.toml): pushing to
+`main` builds and publishes automatically. The Supabase keys come from the
+site's environment variables, and `sw.js` is served with no-store so a phone
+cannot get stuck on a stale build.
 
-- **Netlify** — configured by [`netlify.toml`](./netlify.toml). Supabase keys come
-  from the site's environment variables.
-- **GitHub Pages** — via [`.github/workflows/deploy.yml`](.github/workflows/deploy.yml).
-  Supabase keys come from repository secrets.
-
-The two hosts serve from different paths, so the Vite `base` switches on the
-`GITHUB_ACTIONS` environment variable: `/teams-fc/` on Pages, `/` on Netlify.
-Auth redirects and the service worker scope are derived from the runtime origin,
-so nothing else needs to change per host.
-
-Both origins must be listed under Supabase → Authentication → URL Configuration,
-otherwise sign-up confirmation and password-reset links will be rejected.
+The site origin must be listed under Supabase → Authentication → URL
+Configuration, otherwise sign-up confirmation and password-reset links are
+rejected — those are the only two flows that depend on it.
 
 ## How the draw works
 
