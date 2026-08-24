@@ -3,7 +3,8 @@
 Web app for running a weekly football game: manage the squad, draw balanced
 teams, share them to WhatsApp, and track results over time.
 
-**Live app: https://alonshorer54.github.io/teams-fc/**
+**Live app: https://teams-fc.netlify.app**
+(also mirrored at https://alonshorer54.github.io/teams-fc/)
 
 Hebrew, right-to-left, installable as a mobile app, and synced between devices.
 
@@ -56,9 +57,21 @@ data. Without a signed-in account, nothing can be read or written.
 
 ## Deployment
 
-Pushing to `main` runs [`.github/workflows/deploy.yml`](.github/workflows/deploy.yml),
-which builds and publishes to GitHub Pages. Supabase keys are injected from
-repository secrets (`VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`).
+Pushing to `main` deploys to both hosts, which serve the same app from the same
+Supabase project:
+
+- **Netlify** — configured by [`netlify.toml`](./netlify.toml). Supabase keys come
+  from the site's environment variables.
+- **GitHub Pages** — via [`.github/workflows/deploy.yml`](.github/workflows/deploy.yml).
+  Supabase keys come from repository secrets.
+
+The two hosts serve from different paths, so the Vite `base` switches on the
+`GITHUB_ACTIONS` environment variable: `/teams-fc/` on Pages, `/` on Netlify.
+Auth redirects and the service worker scope are derived from the runtime origin,
+so nothing else needs to change per host.
+
+Both origins must be listed under Supabase → Authentication → URL Configuration,
+otherwise sign-up confirmation and password-reset links will be rejected.
 
 ## How the draw works
 
