@@ -1,4 +1,4 @@
-import { TEAM_IDS, type Lineup, type Player, type TeamId } from '../types';
+import { lineupTeams, membersOf, type Lineup, type Player, type TeamId } from '../types';
 
 /**
  * הקריטריונים שההגרלה מתחשבת בהם.
@@ -74,15 +74,19 @@ const pairKey = (a: string, b: string) => [a, b].sort().join('|');
 
 function teamMap(lineup: Lineup): Map<string, TeamId> {
   const map = new Map<string, TeamId>();
-  for (const t of TEAM_IDS) for (const id of lineup[t]) map.set(id, t);
+  for (const t of lineupTeams(lineup)) for (const id of membersOf(lineup, t)) map.set(id, t);
   return map;
 }
+
+/** רק הקבוצות שיש בהן שחקנים — קבוצה ריקה תעוות כל השוואה. */
+const activeTeams = (lineup: Lineup): TeamId[] =>
+  lineupTeams(lineup).filter((t) => membersOf(lineup, t).length > 0);
 
 /* ------------------------------ הקריטריונים ------------------------------ */
 
 function ratingPenalty({ lineup, ratingOf }: PenaltyInput): number {
-  const avgs = TEAM_IDS.filter((t) => lineup[t].length).map((t) => {
-    const members = lineup[t];
+  const avgs = activeTeams(lineup).map((t) => {
+    const members = membersOf(lineup, t);
     return members.reduce((s, id) => s + (ratingOf.get(id) ?? 0), 0) / members.length;
   });
   // פער של נקודת דירוג שלמה בממוצע נחשב קנס מלא
@@ -110,8 +114,8 @@ function friendsPenalty({ lineup, pool }: PenaltyInput): number {
 function gameChemistryPenalty({ lineup, pairEffects }: PenaltyInput): number {
   if (!pairEffects.size) return 0;
 
-  const bonuses = TEAM_IDS.filter((t) => lineup[t].length).map((t) => {
-    const members = lineup[t];
+  const bonuses = activeTeams(lineup).map((t) => {
+    const members = membersOf(lineup, t);
     let sum = 0;
     for (let i = 0; i < members.length; i++) {
       for (let j = i + 1; j < members.length; j++) {
@@ -152,13 +156,13 @@ function tagsPenalty({ lineup, pool }: PenaltyInput): number {
   const tags = [...new Set(pool.flatMap((p) => p.tags))];
   if (!tags.length) return 0;
 
-  const activeTeams = TEAM_IDS.filter((t) => lineup[t].length);
-  if (activeTeams.length < 2) return 0;
+  const active = activeTeams(lineup);
+  if (active.length < 2) return 0;
 
   let sum = 0;
   for (const tag of tags) {
-    const counts = activeTeams.map(
-      (t) => lineup[t].filter((id) => byId.get(id)?.tags.includes(tag)).length,
+    const counts = active.map(
+      (t) => membersOf(lineup, t).filter((id) => byId.get(id)?.tags.includes(tag)).length,
     );
     const holders = counts.reduce((s, c) => s + c, 0);
     if (!holders) continue;

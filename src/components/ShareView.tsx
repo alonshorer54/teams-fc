@@ -1,8 +1,9 @@
 import { useMemo, useState } from 'react';
 import { CalendarDays, Copy, Image as ImageIcon, Share2 } from 'lucide-react';
-import { TEAM_IDS, TEAM_META } from '../types';
+import { TEAM_META, teamGridClass, teamsIn } from '../types';
 import { buildWhatsAppText, copyToClipboard, formatHebrewDate, type ShareTeams } from '../lib/format';
 import { canShareImage, downloadImage, renderTeamsImage, shareImage } from '../lib/shareImage';
+
 
 /**
  * "מצב וואטסאפ" — תצוגה נקייה לחלוטין: שמות קבוצות ושמות שחקנים בלבד.
@@ -18,6 +19,7 @@ export function ShareView({
   onCopied: (msg: string) => void;
 }) {
   const [includeDate, setIncludeDate] = useState(false);
+  const ids = useMemo(() => teamsIn(teams), [teams]);
 
   const text = useMemo(
     () => buildWhatsAppText(teams, { includeDate, date }),
@@ -78,9 +80,10 @@ export function ShareView({
         </div>
       </div>
 
-      <div className="grid gap-4 lg:grid-cols-3">
-        {TEAM_IDS.map((id) => {
+      <div className={teamGridClass(ids.length)}>
+        {ids.map((id) => {
           const meta = TEAM_META[id];
+          const names = teams[id] ?? [];
           return (
             <section key={id} className={`card overflow-hidden border-2 ${meta.ring}`}>
               <header className={`px-4 py-3 text-center ${meta.header}`}>
@@ -89,12 +92,15 @@ export function ShareView({
                 </h3>
               </header>
               <ul className={`divide-y divide-slate-800/60 ${meta.softBg}`}>
-                {teams[id].map((name) => (
-                  <li key={name} className="px-4 py-2.5 text-center text-[15px] font-semibold text-slate-100">
+                {names.map((name, i) => (
+                  <li
+                    key={`${name}-${i}`}
+                    className="px-4 py-2.5 text-center text-[15px] font-semibold text-slate-100"
+                  >
                     {name}
                   </li>
                 ))}
-                {teams[id].length === 0 && (
+                {names.length === 0 && (
                   <li className="px-4 py-8 text-center text-xs text-slate-500">אין שחקנים</li>
                 )}
               </ul>

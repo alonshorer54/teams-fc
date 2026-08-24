@@ -1,7 +1,8 @@
 import {
-  PLACEMENT_POINTS,
-  TEAM_IDS,
+  isFillerId,
+  placementPoints,
   recordPlacements,
+  teamsIn,
   type MatchRecord,
   type Placements,
 } from '../types';
@@ -77,12 +78,16 @@ export function computePairChemistry(history: MatchRecord[]): PairReport {
   const pairs = new Map<string, { a: string; b: string; games: number; wins: number; draws: number }>();
 
   for (const { record, placements } of resolved) {
-    for (const team of TEAM_IDS) {
-      const members = record.teams[team];
-      const place = placements[team];
-      const points = PLACEMENT_POINTS[place];
-      const won = place === 1;
-      const drew = place === 2;
+    const teams = teamsIn(record.teams);
+
+    for (const team of teams) {
+      // משלימים הם שחקני דמה של ערב אחד — זוג איתם לא מלמד כלום
+      const members = (record.teams[team] ?? []).filter((p) => !isFillerId(p.id));
+      const place = placements[team] ?? teams.length;
+      const points = placementPoints(place, teams.length);
+      const won = place <= 1;
+      // "אמצע" — לא ניצחון ולא הפסד; עם 2 קבוצות אין מצב כזה
+      const drew = place > 1 && place < teams.length;
 
       for (const p of members) {
         const entry = solo.get(p.id) ?? { games: 0, points: 0, name: p.name };

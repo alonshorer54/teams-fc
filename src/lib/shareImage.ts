@@ -1,39 +1,32 @@
-import { TEAM_IDS, TEAM_META, type TeamId } from '../types';
+import { TEAM_META, teamsIn } from '../types';
 import type { ShareTeams } from './format';
 import { formatHebrewDate } from './format';
 
-/** צבעי הכותרות בתמונה — מקבילים לצבעי הקבוצות באפליקציה */
-const HEADER: Record<TeamId, string[]> = {
-  white: ['#e2e8f0'],
-  black: ['#1e293b'],
-  colored: ['#2563eb', '#facc15', '#dc2626'],
-};
-
-const HEADER_TEXT: Record<TeamId, string> = {
-  white: '#0f172a',
-  black: '#f1f5f9',
-  colored: '#ffffff',
-};
-
 /**
- * מצייר את שלוש הקבוצות על קנבס ומחזיר PNG.
+ * מצייר את הקבוצות על קנבס ומחזיר PNG.
  * נועד לשיתוף ישיר בוואטסאפ, בלי לצלם מסך.
+ *
+ * הרוחב קבוע והעמודות מתחלקות בו שווה בשווה, כך שהתמונה נראית מיושרת
+ * גם בשתי קבוצות וגם בשלוש.
  */
 export async function renderTeamsImage(
   teams: ShareTeams,
   date: string,
   options: { includeDate?: boolean } = {},
 ): Promise<Blob | null> {
+  const ids = teamsIn(teams);
+  if (!ids.length) return null;
+
   const scale = 2; // כדי שייצא חד גם במסכי רטינה
   const W = 1080;
   const pad = 40;
   const colGap = 24;
-  const colW = (W - pad * 2 - colGap * 2) / 3;
+  const colW = (W - pad * 2 - colGap * (ids.length - 1)) / ids.length;
   const headerH = 74;
   const rowH = 62;
   const titleH = options.includeDate ? 116 : 72;
 
-  const maxRows = Math.max(...TEAM_IDS.map((t) => teams[t].length), 1);
+  const maxRows = Math.max(...ids.map((t) => (teams[t] ?? []).length), 1);
   const H = titleH + headerH + maxRows * rowH + pad * 2;
 
   const canvas = document.createElement('canvas');
@@ -73,10 +66,10 @@ export async function renderTeamsImage(
   };
 
   // עמודה לכל קבוצה — מימין לשמאל, כמו באפליקציה
-  TEAM_IDS.forEach((teamId, index) => {
+  ids.forEach((teamId, index) => {
     const x = W - pad - colW - index * (colW + colGap);
     const y = titleH + pad / 2;
-    const names = teams[teamId];
+    const names = teams[teamId] ?? [];
     const bodyH = Math.max(names.length, 1) * rowH;
 
     // גוף הכרטיס
@@ -88,7 +81,7 @@ export async function renderTeamsImage(
     ctx.save();
     roundRect(x, y, colW, headerH + bodyH, 18);
     ctx.clip();
-    const colors = HEADER[teamId];
+    const colors = TEAM_META[teamId].hex;
     const bandW = colW / colors.length;
     colors.forEach((c, i) => {
       ctx.fillStyle = c;
@@ -96,7 +89,7 @@ export async function renderTeamsImage(
     });
     ctx.restore();
 
-    ctx.fillStyle = HEADER_TEXT[teamId];
+    ctx.fillStyle = TEAM_META[teamId].hexText;
     ctx.font = font(34);
     ctx.textAlign = 'center';
     ctx.fillText(TEAM_META[teamId].name, x + colW / 2, y + headerH / 2 + 12);

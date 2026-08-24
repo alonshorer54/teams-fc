@@ -1,4 +1,15 @@
-import { TEAM_IDS, type MatchRecord, type Placements, type Player, type TeamId } from '../types';
+import {
+  DEFAULT_TEAM_COUNT,
+  defaultTeamIds,
+  type MatchRecord,
+  type Placements,
+  type Player,
+  type TeamId,
+  type TeamMap,
+} from '../types';
+
+/** הדוגמה נשארת על שלוש הקבוצות הקלאסיות — זה התרחיש שהיא מספרת */
+const DEMO_TEAM_IDS = defaultTeamIds(DEFAULT_TEAM_COUNT);
 
 /**
  * 21 שחקני דוגמה (3 קבוצות של 7) לבדיקה מהירה של האפליקציה.
@@ -103,18 +114,16 @@ export function buildDemoHistory(players: Player[]): MatchRecord[] {
     const leader: TeamId =
       pairTeam && rand() < 0.75
         ? pairTeam
-        : TEAM_IDS[Math.min(2, Math.floor(rand() * 3))];
+        : DEMO_TEAM_IDS[Math.min(DEMO_TEAM_IDS.length - 1, Math.floor(rand() * DEMO_TEAM_IDS.length))];
 
     records.push({
       id: `demo-week-${weekAgo}`,
       savedAt: new Date().toISOString(),
       date: isoWeeksAgo(weekAgo),
       placements: buildPlacements(leader, rand),
-      teams: {
-        white: teams.white.map(snapshot),
-        black: teams.black.map(snapshot),
-        colored: teams.colored.map(snapshot),
-      },
+      teams: Object.fromEntries(
+        DEMO_TEAM_IDS.map((t) => [t, (teams[t] ?? []).map(snapshot)]),
+      ),
       cancelled: cancelled.map(snapshot),
     });
   }
@@ -129,66 +138,68 @@ const snapshot = ({ id, name, rating }: Player) => ({ id, name, rating });
  * קבוצה שניצחה הכל, שתיים למעלה ואחת למטה, ודירוג מלא 1-2-3.
  */
 function buildPlacements(leader: TeamId, rand: () => number): Placements {
-  const others = TEAM_IDS.filter((t) => t !== leader);
+  const last = DEMO_TEAM_IDS.length;
+  const others = DEMO_TEAM_IDS.filter((t) => t !== leader);
   const roll = rand();
 
   if (roll < 0.4) {
     // המובילה ניצחה הכל
     return Object.fromEntries(
-      TEAM_IDS.map((t) => [t, t === leader ? 1 : 3]),
+      DEMO_TEAM_IDS.map((t) => [t, t === leader ? 1 : last]),
     ) as Placements;
   }
   if (roll < 0.7) {
     // שתיים למעלה ואחת נשארה מאחור
     const loser = others[Math.floor(rand() * others.length)] ?? others[0];
     return Object.fromEntries(
-      TEAM_IDS.map((t) => [t, t === loser ? 3 : 1]),
+      DEMO_TEAM_IDS.map((t) => [t, t === loser ? last : 1]),
     ) as Placements;
   }
   // דירוג מלא: ראשונה, אמצע, אחרונה
   const second = others[Math.floor(rand() * others.length)] ?? others[0];
   return Object.fromEntries(
-    TEAM_IDS.map((t) => [t, t === leader ? 1 : t === second ? 2 : 3]),
+    DEMO_TEAM_IDS.map((t) => [t, t === leader ? 1 : t === second ? 2 : last]),
   ) as Placements;
 }
 
-/** מחלק את הנוכחים לשלוש קבוצות, ומקפיד להשאיר את זוג הכוח יחד */
-function splitIntoTeams(available: Player[], rand: () => number): Record<TeamId, Player[]> {
+/** מחלק את הנוכחים לקבוצות, ומקפיד להשאיר את זוג הכוח יחד */
+function splitIntoTeams(available: Player[], rand: () => number): TeamMap<Player[]> {
   const shuffled = [...available];
   for (let i = shuffled.length - 1; i > 0; i--) {
     const j = Math.floor(rand() * (i + 1));
     [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
   }
 
-  const teams: Record<TeamId, Player[]> = { white: [], black: [], colored: [] };
+  const teams: TeamMap<Player[]> = Object.fromEntries(DEMO_TEAM_IDS.map((t) => [t, []]));
   shuffled.forEach((player, index) => {
-    teams[TEAM_IDS[index % 3]].push(player);
+    teams[DEMO_TEAM_IDS[index % DEMO_TEAM_IDS.length]]!.push(player);
   });
   return teams;
 }
 
 /** מוצא את הקבוצה שבה נמצא זוג הכוח, ואם הם פוצלו — מאחד אותם אליה */
 function teamHolding(
-  teams: Record<TeamId, Player[]>,
+  teams: TeamMap<Player[]>,
   players: Player[],
   pair: [number, number],
 ): TeamId | null {
   const [aId, bId] = [players[pair[0]]?.id, players[pair[1]]?.id];
   if (!aId || !bId) return null;
 
-  const teamOf = (id: string) => TEAM_IDS.find((t) => teams[t].some((p) => p.id === id)) ?? null;
+  const teamOf = (id: string) =>
+    DEMO_TEAM_IDS.find((t) => (teams[t] ?? []).some((p) => p.id === id)) ?? null;
   const teamA = teamOf(aId);
   const teamB = teamOf(bId);
   if (!teamA || !teamB) return null;
   if (teamA === teamB) return teamA;
 
   // מחליפים את השני עם מישהו מהקבוצה של הראשון, כדי שישחקו יחד
-  const target = teams[teamA];
+  const target = teams[teamA]!;
   const swapIndex = target.findIndex((p) => p.id !== aId);
   if (swapIndex === -1) return teamA;
 
   const moving = target[swapIndex];
   target[swapIndex] = players.find((p) => p.id === bId)!;
-  teams[teamB] = teams[teamB].map((p) => (p.id === bId ? moving : p));
+  teams[teamB] = (teams[teamB] ?? []).map((p) => (p.id === bId ? moving : p));
   return teamA;
 }

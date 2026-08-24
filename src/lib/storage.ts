@@ -1,4 +1,12 @@
-import type { Lineup, MatchRecord, Player } from '../types';
+import {
+  DEFAULT_TEAM_COUNT,
+  MAX_TEAMS,
+  MIN_TEAMS,
+  type Filler,
+  type Lineup,
+  type MatchRecord,
+  type Player,
+} from '../types';
 import { DEFAULT_PRIORITIES, type CriterionSetting } from './criteria';
 
 // המפתחות נשמרו בשמם המקורי כדי שנתונים קיימים אצל משתמשים לא יאבדו בשינוי השם
@@ -74,6 +82,10 @@ export interface Draft {
   /** מי אישר הגעה ואז ביטל השבוע */
   cancelledIds: string[];
   substitutions: Substitution[];
+  /** לכמה קבוצות מחלקים — 2 או 3. הגדלים נגזרים מכמות השחקנים. */
+  teamCount: number;
+  /** שחקני דמה שממלאים מקומות חסרים בהגרלה הזו בלבד */
+  fillers: Filler[];
 }
 
 export const emptyDraft = (matchDate: string): Draft => ({
@@ -83,14 +95,29 @@ export const emptyDraft = (matchDate: string): Draft => ({
   matchDate,
   cancelledIds: [],
   substitutions: [],
+  teamCount: DEFAULT_TEAM_COUNT,
+  fillers: [],
 });
 
-/** משלים שדות שנוספו בגרסאות מאוחרות, כדי שטיוטות ישנות לא יישברו. */
+/** מגביל את מספר הקבוצות לטווח שהפלטה תומכת בו. */
+export const clampTeamCount = (n: number): number =>
+  Math.max(MIN_TEAMS, Math.min(MAX_TEAMS, Math.round(n) || DEFAULT_TEAM_COUNT));
+
+/**
+ * משלים שדות שנוספו בגרסאות מאוחרות, כדי שטיוטות ישנות לא יישברו.
+ * בונה את האובייקט משדות מפורשים בלבד: שדות שבוטלו לא ממשיכים להיגרר
+ * לענן בכל שמירה רק מפני שהם יושבים בטיוטה ישנה.
+ */
 export const normalizeDraft = (draft: Partial<Draft>, matchDate: string): Draft => ({
-  ...emptyDraft(matchDate),
-  ...draft,
+  selectedIds: draft.selectedIds ?? [],
+  lineup: draft.lineup ?? null,
+  baseline: draft.baseline ?? null,
+  matchDate: draft.matchDate || matchDate,
   cancelledIds: draft.cancelledIds ?? [],
   substitutions: draft.substitutions ?? [],
+  // טיוטות מלפני התכונה נשמרו בלי השדות האלה — ברירת המחדל היא ההתנהגות הישנה
+  teamCount: clampTeamCount(draft.teamCount ?? DEFAULT_TEAM_COUNT),
+  fillers: draft.fillers ?? [],
 });
 
 export function loadJSON<T>(key: string, fallback: T): T {

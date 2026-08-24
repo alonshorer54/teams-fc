@@ -1,4 +1,11 @@
-import { TEAM_IDS, recordPlacements, type MatchRecord, type Placement, type TeamId } from '../types';
+import {
+  isFillerId,
+  recordPlacements,
+  teamsIn,
+  type MatchRecord,
+  type Placement,
+  type TeamId,
+} from '../types';
 
 export interface CancellerStats {
   id: string;
@@ -44,13 +51,18 @@ export interface HistoryStats {
 }
 
 const teamOfPlayer = (record: MatchRecord, playerId: string): TeamId | null => {
-  for (const t of TEAM_IDS) if (record.teams[t].some((p) => p.id === playerId)) return t;
+  for (const t of teamsIn(record.teams))
+    if ((record.teams[t] ?? []).some((p) => p.id === playerId)) return t;
   return null;
 };
 
-/** מקום ראשון = ניצחון, שלישי = הפסד, שני = באמצע */
-const outcomeOf = (place: Placement): 'win' | 'loss' | 'draw' =>
-  place === 1 ? 'win' : place === 3 ? 'loss' : 'draw';
+/** מקום ראשון = ניצחון, אחרון = הפסד, וכל השאר באמצע */
+const outcomeOf = (place: Placement, teamCount: number): 'win' | 'loss' | 'draw' =>
+  place <= 1 ? 'win' : place >= teamCount ? 'loss' : 'draw';
+
+/** שחקני הקבוצות של הגרלה, בלי משלימים — הם לא חלק מהמאגר ולא נספרים. */
+const realMembers = (record: MatchRecord, team: TeamId) =>
+  (record.teams[team] ?? []).filter((p) => !isFillerId(p.id));
 
 export function computeHistoryStats(history: MatchRecord[]): HistoryStats {
   // ההיסטוריה מגיעה מהחדש לישן; לחישוב רצפים זה בדיוק הסדר שאנחנו רוצים
@@ -62,14 +74,20 @@ export function computeHistoryStats(history: MatchRecord[]): HistoryStats {
   let pending = 0;
   let lastResolved: HistoryStats['lastResolved'] = null;
   const lastWeekIds = new Set(
-    history[0] ? TEAM_IDS.flatMap((t) => history[0].teams[t].map((p) => p.id)) : [],
+    history[0]
+      ? teamsIn(history[0].teams).flatMap((t) => realMembers(history[0], t).map((p) => p.id))
+      : [],
   );
 
   for (const record of history) {
+    const teams = teamsIn(record.teams);
     const placements = recordPlacements(record);
     if (!placements) pending++;
 
-    const listed = [...TEAM_IDS.flatMap((t) => record.teams[t]), ...(record.cancelled ?? [])];
+    const listed = [
+      ...teams.flatMap((t) => realMembers(record, t)),
+      ...(record.cancelled ?? []).filter((p) => !isFillerId(p.id)),
+    ];
 
     // ספירת ביטולים
     for (const p of listed) {
@@ -84,21 +102,23 @@ export function computeHistoryStats(history: MatchRecord[]): HistoryStats {
       entry.appearances++;
       cancelMap.set(p.id, entry);
     }
-    for (const p of record.cancelled ?? []) cancelMap.get(p.id)!.cancellations++;
+    for (const p of record.cancelled ?? []) {
+      if (!isFillerId(p.id)) cancelMap.get(p.id)!.cancellations++;
+    }
 
     if (!placements) continue;
 
     if (!lastResolved) {
-      const teamsAt = (place: Placement) => TEAM_IDS.filter((t) => placements[t] === place);
+      const teamsAt = (place: Placement) => teams.filter((t) => placements[t] === place);
       lastResolved = {
         record,
-        winners: teamsAt(1).flatMap((t) => record.teams[t].map((p) => p.id)),
-        losers: teamsAt(3).flatMap((t) => record.teams[t].map((p) => p.id)),
+        winners: teamsAt(1).flatMap((t) => realMembers(record, t).map((p) => p.id)),
+        losers: teamsAt(teams.length).flatMap((t) => realMembers(record, t).map((p) => p.id)),
       };
     }
 
-    for (const t of TEAM_IDS) {
-      for (const p of record.teams[t]) {
+    for (const t of teams) {
+      for (const p of realMembers(record, t)) {
         const entry = players.get(p.id) ?? {
           id: p.id,
           name: p.name,
@@ -115,7 +135,7 @@ export function computeHistoryStats(history: MatchRecord[]): HistoryStats {
         entry.played++;
 
         const team = teamOfPlayer(record, p.id) ?? t;
-        const outcome = outcomeOf(placements[team]);
+        const outcome = outcomeOf(placements[team] ?? teams.length, teams.length);
 
         if (outcome === 'win') entry.wins++;
         else if (outcome === 'loss') entry.losses++;

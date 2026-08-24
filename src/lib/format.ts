@@ -1,10 +1,7 @@
-import { TEAM_IDS, TEAM_META, type TeamId } from '../types';
+import { TEAM_META, teamsIn, type TeamId, type TeamMap } from '../types';
 
-export interface ShareTeams {
-  white: string[];
-  black: string[];
-  colored: string[];
-}
+/** שמות השחקנים לכל קבוצה משתתפת — הקלט של כל מסלולי השיתוף. */
+export type ShareTeams = TeamMap<string[]>;
 
 export interface ShareOptions {
   /** האם לצרף שורת תאריך בראש ההודעה (ברירת מחדל: לא — טקסט נקי לגמרי) */
@@ -23,9 +20,9 @@ export function buildWhatsAppText(teams: ShareTeams, options: ShareOptions = {})
     blocks.push(`⚽ כוחות ${formatHebrewDate(options.date)}`);
   }
 
-  for (const id of TEAM_IDS) {
+  for (const id of teamsIn(teams)) {
     const meta = TEAM_META[id];
-    const names = teams[id];
+    const names = teams[id] ?? [];
     if (!names.length) continue;
     blocks.push([`${meta.emoji} *${meta.name}*`, ...names.map((n) => `• ${n}`)].join('\n'));
   }

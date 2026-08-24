@@ -12,10 +12,12 @@ import {
   UserX,
 } from 'lucide-react';
 import {
-  PLACEMENT_META,
-  TEAM_IDS,
   TEAM_META,
+  isFillerId,
+  placementMeta,
   recordPlacements,
+  teamGridTight,
+  teamsIn,
   type MatchRecord,
   type Placement,
   type Placements,
@@ -55,11 +57,9 @@ export function HistoryView({
 
   const copyRecord = async (record: MatchRecord) => {
     const text = buildWhatsAppText(
-      {
-        white: record.teams.white.map((p) => p.name),
-        black: record.teams.black.map((p) => p.name),
-        colored: record.teams.colored.map((p) => p.name),
-      },
+      Object.fromEntries(
+        teamsIn(record.teams).map((t) => [t, (record.teams[t] ?? []).map((p) => p.name)]),
+      ),
       { includeDate: true, date: record.date },
     );
     const ok = await copyToClipboard(text);
@@ -76,10 +76,15 @@ export function HistoryView({
 
       {history.map((record) => {
         const isOpen = expanded === record.id;
-        const total = TEAM_IDS.reduce((s, t) => s + record.teams[t].length, 0);
+        const teams = teamsIn(record.teams);
+        const total = teams.reduce((s, t) => s + (record.teams[t] ?? []).length, 0);
+        const fillerCount = teams.reduce(
+          (s, t) => s + (record.teams[t] ?? []).filter((p) => isFillerId(p.id)).length,
+          0,
+        );
         const cancelled = record.cancelled ?? [];
         const placements = recordPlacements(record);
-        const winners = placements ? TEAM_IDS.filter((t) => placements[t] === 1) : [];
+        const winners = placements ? teams.filter((t) => placements[t] === 1) : [];
 
         return (
           <article key={record.id} className="card overflow-hidden">
@@ -94,7 +99,14 @@ export function HistoryView({
                     {formatHebrewDate(record.date)}
                   </p>
                   <p className="flex flex-wrap items-center gap-1.5 text-[11px] text-slate-500">
-                    <span>{total} שחקנים</span>
+                    <span>
+                      {total} שחקנים · {teams.length} קבוצות
+                    </span>
+                    {fillerCount > 0 && (
+                      <span className="text-violet-400/80">
+                        · {fillerCount === 1 ? 'משלים אחד' : `${fillerCount} משלימים`}
+                      </span>
+                    )}
                     {cancelled.length > 0 && (
                       <span className="text-rose-400/80">
                         · {cancelled.length === 1 ? 'ביטול אחד' : `${cancelled.length} ביטולים`}
@@ -103,7 +115,7 @@ export function HistoryView({
                     {placements ? (
                       <span className="inline-flex items-center gap-1 rounded bg-amber-500/15 px-1.5 py-0.5 font-semibold text-amber-300">
                         <Trophy size={9} />
-                        {winners.length === 0 || winners.length === TEAM_IDS.length
+                        {winners.length === 0 || winners.length === teams.length
                           ? 'ערב שקול'
                           : `${winners.map((t) => TEAM_META[t].name).join(' + ')} ניצחו`}
                       </span>
@@ -151,6 +163,7 @@ export function HistoryView({
             {isOpen && (
               <div className="space-y-4 border-t border-slate-800/70 p-4">
                 <ResultPicker
+                  teams={teams}
                   value={placements}
                   onChange={(next) => {
                     onSetResult(record.id, next);
@@ -158,10 +171,10 @@ export function HistoryView({
                   }}
                 />
 
-                <div className="grid gap-3 sm:grid-cols-3">
-                  {TEAM_IDS.map((id) => {
+                <div className={teamGridTight(teams.length)}>
+                  {teams.map((id) => {
                     const meta = TEAM_META[id];
-                    const members = record.teams[id];
+                    const members = record.teams[id] ?? [];
                     const avg = members.length
                       ? members.reduce((s, p) => s + p.rating, 0) / members.length
                       : 0;
@@ -176,7 +189,11 @@ export function HistoryView({
                       >
                         <div className={`flex items-center justify-between px-3 py-2 ${meta.header}`}>
                           <span className="flex items-center gap-1.5 text-sm font-extrabold">
-                            {place && <span title={PLACEMENT_META[place].label}>{PLACEMENT_META[place].emoji}</span>}
+                            {place && (
+                              <span title={placementMeta(place, teams.length).label}>
+                                {placementMeta(place, teams.length).emoji}
+                              </span>
+                            )}
                             {meta.emoji} {meta.name}
                           </span>
                           <span dir="ltr" className="font-mono text-[11px] tabular-nums opacity-80">
@@ -189,7 +206,17 @@ export function HistoryView({
                               key={p.id}
                               className="flex items-center justify-between gap-2 px-3 py-1.5 text-[13px] text-slate-200"
                             >
-                              <span className="truncate">{p.name}</span>
+                              <span className="truncate">
+                                {p.name}
+                                {isFillerId(p.id) && (
+                                  <span
+                                    className="mr-1.5 rounded bg-violet-500/20 px-1 text-[9px] font-bold text-violet-300"
+                                    title="שחקן משלים — לא נספר בסטטיסטיקות"
+                                  >
+                                    משלים
+                                  </span>
+                                )}
+                              </span>
                               <span
                                 dir="ltr"
                                 className="font-mono text-[11px] text-slate-500 tabular-nums"
@@ -249,21 +276,31 @@ export function HistoryView({
 
 /* --------------------------- בחירת המנצחת --------------------------- */
 
-const PLACEMENT_TONE: Record<Placement, string> = {
-  1: 'border-amber-400/60 bg-amber-500/20 text-amber-200',
-  2: 'border-sky-500/50 bg-sky-500/15 text-sky-200',
-  3: 'border-rose-500/50 bg-rose-500/15 text-rose-200',
-};
+/** ראשון = זהב, אחרון = אדום, וכל השאר כחול */
+const placementTone = (place: Placement, count: number): string =>
+  place <= 1
+    ? 'border-amber-400/60 bg-amber-500/20 text-amber-200'
+    : place >= count
+      ? 'border-rose-500/50 bg-rose-500/15 text-rose-200'
+      : 'border-sky-500/50 bg-sky-500/15 text-sky-200';
 
 function ResultPicker({
+  teams,
   value,
   onChange,
 }: {
+  teams: TeamId[];
   value: Placements | null;
   onChange: (next: Placements | null) => void;
 }) {
+  const count = teams.length;
+  const places = Array.from({ length: count }, (_, i) => i + 1);
+  /** "כולן באמצע" — נקודת הפתיחה כשעוד לא נקבעה תוצאה */
+  const middle = Math.max(1, Math.ceil(count / 2));
+
   const setPlace = (team: TeamId, place: Placement) => {
-    const base: Placements = value ?? { white: 2, black: 2, colored: 2 };
+    const base: Placements =
+      value ?? (Object.fromEntries(teams.map((t) => [t, middle])) as Placements);
     onChange({ ...base, [team]: place });
   };
 
@@ -280,26 +317,30 @@ function ResultPicker({
 
       {/* דירוג לכל קבוצה */}
       <ul className="space-y-1.5">
-        {TEAM_IDS.map((t) => (
+        {teams.map((t) => (
           <li key={t} className="flex items-center gap-2">
             <span className="flex w-24 shrink-0 items-center gap-1.5 text-[11px] font-bold text-slate-200">
-              <span className={`size-2.5 rounded-full ${TEAM_META[t].dot}`} />
-              {TEAM_META[t].name}
+              <span className={`size-2.5 shrink-0 rounded-full ${TEAM_META[t].dot}`} />
+              <span className="truncate">{TEAM_META[t].name}</span>
             </span>
-            <div className="flex flex-1 gap-1">
-              {([1, 2, 3] as Placement[]).map((place) => (
-                <button
-                  key={place}
-                  onClick={() => setPlace(t, place)}
-                  className={`flex-1 cursor-pointer rounded-lg border px-2 py-1.5 text-[10px] font-bold transition ${
-                    value?.[t] === place
-                      ? PLACEMENT_TONE[place]
-                      : 'border-slate-700 bg-slate-800/40 text-slate-400 hover:border-slate-600 hover:text-white'
-                  }`}
-                >
-                  {PLACEMENT_META[place].emoji} {PLACEMENT_META[place].label}
-                </button>
-              ))}
+            <div className="flex flex-1 flex-wrap gap-1">
+              {places.map((place) => {
+                const meta = placementMeta(place, count);
+                return (
+                  <button
+                    key={place}
+                    onClick={() => setPlace(t, place)}
+                    title={`${TEAM_META[t].name} — ${meta.label}`}
+                    className={`min-w-16 flex-1 cursor-pointer rounded-lg border px-2 py-1.5 text-[10px] font-bold transition ${
+                      value?.[t] === place
+                        ? placementTone(place, count)
+                        : 'border-slate-700 bg-slate-800/40 text-slate-400 hover:border-slate-600 hover:text-white'
+                    }`}
+                  >
+                    {meta.emoji} {meta.label}
+                  </button>
+                );
+              })}
             </div>
           </li>
         ))}
@@ -353,7 +394,8 @@ function StatsPanel({ stats }: { stats: ReturnType<typeof computeHistoryStats> }
                   מי ניצח בשבוע האחרון ({formatHebrewDate(last.record.date)})
                 </p>
                 <ul className="flex flex-wrap gap-1.5">
-                  {TEAM_IDS.flatMap((t) => last.record.teams[t])
+                  {teamsIn(last.record.teams)
+                    .flatMap((t) => last.record.teams[t] ?? [])
                     .filter((p) => last.winners.includes(p.id))
                     .map((p) => (
                       <li

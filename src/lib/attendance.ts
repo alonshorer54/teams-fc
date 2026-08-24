@@ -1,4 +1,4 @@
-import { TEAM_IDS, type MatchRecord, type Player } from '../types';
+import { teamsIn, type MatchRecord, type Player } from '../types';
 
 /** מה קרה לשחקן בשבוע מסוים */
 export type WeekStatus = 'played' | 'cancelled' | 'absent';
@@ -49,7 +49,9 @@ export function computeAttendance(players: Player[], history: MatchRecord[]): At
 
   const rows: PlayerAttendance[] = players.map((player) => {
     const weeks: WeekStatus[] = history.map((record) => {
-      const played = TEAM_IDS.some((t) => record.teams[t].some((p) => p.id === player.id));
+      const played = teamsIn(record.teams).some((t) =>
+        (record.teams[t] ?? []).some((p) => p.id === player.id),
+      );
       if (played) return 'played';
       return (record.cancelled ?? []).some((p) => p.id === player.id) ? 'cancelled' : 'absent';
     });

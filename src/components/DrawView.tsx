@@ -14,7 +14,20 @@ import {
   Trash2,
   Users,
 } from 'lucide-react';
-import { TEAM_IDS, TEAM_META, emptyLineup, type Lineup, type Player } from '../types';
+import {
+  TEAM_META,
+  defaultTeamIds,
+  emptyLineup,
+  fillerAsPlayer,
+  lineupTeams,
+  membersOf,
+  recolorTeam,
+  teamGridClass,
+  teamStatsGridClass,
+  type Lineup,
+  type Player,
+  type TeamId,
+} from '../types';
 import {
   CHEMISTRY_BONUS_PER_BOND,
   computeStats,
@@ -23,6 +36,7 @@ import {
   generateLineup,
   movePlayer,
   swapPlayers,
+  teamSizeList,
 } from '../lib/balance';
 import {
   CRITERION_META,
@@ -34,6 +48,7 @@ import { compareLineups, type LineupDiff } from '../lib/diff';
 import type { Draft } from '../lib/storage';
 import { EmptyState } from './ui';
 import { RoundPanel } from './RoundPanel';
+import { FormatPanel } from './FormatPanel';
 import { PrioritiesPanel } from './PrioritiesPanel';
 import { ChangeReport } from './ChangeReport';
 import { ChangePopup } from './ChangePopup';
@@ -78,12 +93,32 @@ export function DrawView({
   } | null>(null);
   const changeIdRef = useRef(0);
 
-  const { selectedIds, cancelledIds, substitutions, lineup, baseline, matchDate } = draft;
+  const {
+    selectedIds,
+    cancelledIds,
+    substitutions,
+    lineup,
+    baseline,
+    matchDate,
+    teamCount,
+    fillers,
+  } = draft;
 
+  /**
+   * הבריכה = מי שנבחר מהמאגר, ואחריו המשלימים.
+   * המשלימים לובשים צורת שחקן רגיל, וכך כל האלגוריתם והתצוגה עובדים עליהם
+   * בלי אף תנאי מיוחד.
+   */
   const pool = useMemo(() => {
     const set = new Set(selectedIds);
-    return players.filter((p) => set.has(p.id));
-  }, [players, selectedIds]);
+    return [...players.filter((p) => set.has(p.id)), ...fillers.map(fillerAsPlayer)];
+  }, [players, selectedIds, fillers]);
+
+  /** הצבעים שההגרלה תשתמש בהם — מההרכב הקיים, או מהגדרת המחזור */
+  const teamIds = useMemo(
+    () => (lineup ? lineupTeams(lineup) : defaultTeamIds(teamCount)),
+    [lineup, teamCount],
+  );
 
   // הכימיה המשחקית נכנסת לחישוב רק אם הקריטריון דלוק בסדר העדיפויות
   const gameChemistryOn = priorities.find((p) => p.id === 'gameChemistry')?.enabled;
@@ -93,18 +128,18 @@ export function DrawView({
   );
 
   const stats = useMemo(
-    () => computeStats(lineup ?? emptyLineup(), pool, activeEffects),
-    [lineup, pool, activeEffects],
+    () => computeStats(lineup ?? emptyLineup(teamIds), pool, activeEffects),
+    [lineup, teamIds, pool, activeEffects],
   );
 
   const ratingOf = useMemo(() => new Map(pool.map((p) => [p.id, p.rating])), [pool]);
   const breakdown = useMemo(
     () =>
       penaltyBreakdown(
-        { lineup: lineup ?? emptyLineup(), pool, ratingOf, pairEffects: activeEffects },
+        { lineup: lineup ?? emptyLineup(teamIds), pool, ratingOf, pairEffects: activeEffects },
         priorities,
       ),
-    [lineup, pool, ratingOf, activeEffects, priorities],
+    [lineup, teamIds, pool, ratingOf, activeEffects, priorities],
   );
 
   // השוואה בין ההגרלה המקורית למצב אחרי העריכות הידניות
@@ -125,17 +160,23 @@ export function DrawView({
     if (!players.some((p) => p.friendIds.length)) map.friends = 'עוד לא הוגדרו חברויות';
     return map;
   }, [pairEffects, players]);
-  const bonds = useMemo(() => describeBonds(lineup ?? emptyLineup(), pool), [lineup, pool]);
-  const nameById = useMemo(() => new Map(players.map((p) => [p.id, p.name])), [players]);
+  const bonds = useMemo(
+    () => describeBonds(lineup ?? emptyLineup(teamIds), pool),
+    [lineup, teamIds, pool],
+  );
+
+  // המשלימים נכללים כאן כדי שהשם שלהם יופיע בשיתוף ובכרטיסים
+  const nameById = useMemo(
+    () => new Map(pool.map((p) => [p.id, p.name])),
+    [pool],
+  );
 
   const shareTeams: ShareTeams = useMemo(() => {
-    const l = lineup ?? emptyLineup();
-    return {
-      white: l.white.map((id) => nameById.get(id) ?? ''),
-      black: l.black.map((id) => nameById.get(id) ?? ''),
-      colored: l.colored.map((id) => nameById.get(id) ?? ''),
-    };
-  }, [lineup, nameById]);
+    const l = lineup ?? emptyLineup(teamIds);
+    return Object.fromEntries(
+      lineupTeams(l).map((t) => [t, membersOf(l, t).map((id) => nameById.get(id) ?? '')]),
+    );
+  }, [lineup, teamIds, nameById]);
 
   const setLineup = (l: Lineup | null) => setDraft((p) => ({ ...p, lineup: l }));
 
@@ -154,20 +195,44 @@ export function DrawView({
   };
 
   const generate = () => {
-    if (pool.length < 3) {
-      notify('צריך לבחור לפחות 3 שחקנים');
+    if (pool.length < teamCount) {
+      notify(`צריך לפחות ${teamCount} שחקנים כדי לחלק ל-${teamCount} קבוצות`);
       return;
     }
+    // הגרלה חדשה תמיד יוצאת מהצבעים של הגדרת המחזור, לא מהצבעים הקודמים
+    const colors = defaultTeamIds(teamCount);
     // קריטריונים בלי נתונים מכובים כדי שלא יבזבזו משקל
     const effective = priorities.map((p) =>
       unavailable[p.id] ? { ...p, enabled: false } : p,
     );
-    const next = generateLineup(pool, { priorities: effective, pairEffects: activeEffects });
+    const next = generateLineup(pool, {
+      priorities: effective,
+      pairEffects: activeEffects,
+      teamIds: colors,
+    });
     // ההגרלה הטרייה היא גם נקודת ההשוואה לעריכות שיבואו אחריה
     setDraft((p) => ({ ...p, lineup: next, baseline: next }));
     setSelectedPlayer(null);
     setLastChange(null);
     notify('הכוחות הוגרלו! ⚽');
+  };
+
+  /**
+   * שינוי צבע של קבוצה. אותה החלפה מוחלת גם על ההגרלה המקורית, אחרת דוח
+   * השינויים היה מדווח שכל השחקנים "עברו קבוצה" — בעוד שבפועל רק הצבע התחלף.
+   */
+  const handleRecolor = (from: TeamId, to: TeamId) => {
+    if (!lineup) return;
+    setDraft((p) => ({
+      ...p,
+      lineup: recolorTeam(lineup, from, to),
+      baseline: p.baseline ? recolorTeam(p.baseline, from, to) : p.baseline,
+    }));
+    notify(
+      to in lineup
+        ? `${TEAM_META[from].name} ו${TEAM_META[to].name} החליפו צבעים`
+        : `הקבוצה משחקת עכשיו ב${TEAM_META[to].name}`,
+    );
   };
 
   const handleSelect = (id: string) => {
@@ -209,6 +274,8 @@ export function DrawView({
         substitutions={substitutions}
         streaks={streaks}
         hasLineup={!!lineup}
+        teamCount={teamCount}
+        fillerCount={fillers.length}
         onSetAll={(ids) =>
           setDraft((p) => ({ ...p, selectedIds: ids, cancelledIds: [], substitutions: [] }))
         }
@@ -245,6 +312,31 @@ export function DrawView({
         }
       />
 
+      <FormatPanel
+        teamCount={teamCount}
+        fillers={fillers}
+        playerCount={selectedIds.length}
+        onChangeTeamCount={(next) =>
+          setDraft((p) => ({
+            ...p,
+            teamCount: next,
+            // ההרכב הקיים בנוי על מספר קבוצות אחר — מגרילים מחדש
+            lineup: null,
+            baseline: null,
+          }))
+        }
+        onSetFillers={(next) =>
+          setDraft((p) => ({
+            ...p,
+            fillers: next,
+            // ההרכב הקיים כבר לא מתאר את מי שמשחק — מגרילים מחדש
+            lineup: null,
+            baseline: null,
+          }))
+        }
+        notify={notify}
+      />
+
       <PrioritiesPanel
         priorities={priorities}
         onChange={setPriorities}
@@ -253,7 +345,11 @@ export function DrawView({
 
       {/* סרגל הגרלה */}
       <div className="card flex flex-col gap-3 p-4 xl:flex-row xl:items-center">
-        <button className="btn-primary xl:w-44" onClick={generate} disabled={pool.length < 3}>
+        <button
+          className="btn-primary xl:w-44"
+          onClick={generate}
+          disabled={pool.length < teamCount}
+        >
           <Shuffle size={17} />
           {lineup ? 'הגרלה מחדש' : 'הגרלת כוחות'}
         </button>
@@ -329,7 +425,7 @@ export function DrawView({
         <EmptyState
           icon={<Shuffle size={28} />}
           title="עוד לא בוצעה הגרלה"
-          hint={`נבחרו ${pool.length} שחקנים. לחצו על "הגרלת כוחות" כדי לחלק אותם לשלוש קבוצות מאוזנות.`}
+          hint={`נבחרו ${pool.length} שחקנים. לחצו על "הגרלת כוחות" כדי לחלק אותם ל-${teamCount} קבוצות מאוזנות של ${teamSizeList(pool.length, teamCount).join(' / ')}.`}
         />
       ) : mode === 'share' ? (
         <ShareView teams={shareTeams} date={matchDate} onCopied={notify} />
@@ -349,7 +445,7 @@ export function DrawView({
 
           {adminView && (
             <>
-              <BalanceBar stats={stats} gameChemistry={!!gameChemistryOn} />
+              <BalanceBar stats={stats} teamIds={teamIds} gameChemistry={!!gameChemistryOn} />
               <CriteriaScores breakdown={breakdown} unavailable={unavailable} />
               {bonds.length > 0 && <BondsPanel bonds={bonds} />}
             </>
@@ -368,20 +464,21 @@ export function DrawView({
             </div>
           )}
 
-          <div className="grid gap-4 lg:grid-cols-3">
-            {TEAM_IDS.map((id) => (
+          <div className={teamGridClass(teamIds.length)}>
+            {teamIds.map((id) => (
               <TeamCard
                 key={id}
                 teamId={id}
-                playerIds={lineup[id]}
+                playerIds={membersOf(lineup, id)}
                 pool={pool}
                 lineup={lineup}
-                stats={stats.teams[id]}
+                stats={stats.teams[id]!}
                 adminView={adminView}
                 selectedId={selectedPlayer}
                 onSelect={handleSelect}
                 onMove={(playerId, to) => applyChange(movePlayer(lineup, playerId, to))}
                 onSwap={(a, b) => applyChange(swapPlayers(lineup, a, b))}
+                onRecolor={(to) => handleRecolor(id, to)}
               />
             ))}
           </div>
@@ -455,14 +552,16 @@ function CriteriaScores({
 
 function BalanceBar({
   stats,
+  teamIds,
   gameChemistry,
 }: {
   stats: ReturnType<typeof computeStats>;
+  teamIds: TeamId[];
   gameChemistry: boolean;
 }) {
   // כשהקבוצות לא באותו גודל, השוואת סכומים תמיד תיראה גרועה — הקבוצה הקטנה
   // תמיד תצבור פחות. במקרה כזה מודדים לפי הממוצע, שזה גם מה שהאלגוריתם ממטב.
-  const sizes = TEAM_IDS.map((id) => stats.teams[id].count).filter((c) => c > 0);
+  const sizes = teamIds.map((id) => stats.teams[id]?.count ?? 0).filter((c) => c > 0);
   const equalSizes = new Set(sizes).size <= 1;
 
   const quality =
@@ -474,9 +573,10 @@ function BalanceBar({
 
   return (
     <div className="card space-y-3 p-4">
-      <div className="grid grid-cols-3 gap-2">
-        {TEAM_IDS.map((id) => {
+      <div className={teamStatsGridClass(teamIds.length)}>
+        {teamIds.map((id) => {
           const t = stats.teams[id];
+          if (!t) return null;
           return (
             <div
               key={id}

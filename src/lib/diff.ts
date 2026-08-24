@@ -1,4 +1,11 @@
-import { TEAM_IDS, TEAM_META, type Lineup, type Player, type TeamId } from '../types';
+import {
+  TEAM_META,
+  lineupTeams,
+  membersOf,
+  type Lineup,
+  type Player,
+  type TeamId,
+} from '../types';
 import { describeBonds } from './balance';
 import { penaltyBreakdown, type CriterionSetting, type CriterionId } from './criteria';
 
@@ -32,7 +39,7 @@ export interface LineupDiff {
 }
 
 const teamOf = (lineup: Lineup, id: string): TeamId | null =>
-  TEAM_IDS.find((t) => lineup[t].includes(id)) ?? null;
+  lineupTeams(lineup).find((t) => membersOf(lineup, t).includes(id)) ?? null;
 
 const bondKey = (kind: string, a: string, b: string) => `${kind}:${[a, b].sort().join('|')}`;
 
@@ -122,10 +129,10 @@ export function compareLineups(
 
   /* איזון הדירוג */
   const spreadOf = (lineup: Lineup) => {
-    const avgs = TEAM_IDS.filter((t) => lineup[t].length).map((t) => {
-      const members = lineup[t];
-      return members.reduce((s, id) => s + (ratingOf.get(id) ?? 0), 0) / members.length;
-    });
+    const avgs = lineupTeams(lineup)
+      .map((t) => membersOf(lineup, t))
+      .filter((members) => members.length)
+      .map((members) => members.reduce((s, id) => s + (ratingOf.get(id) ?? 0), 0) / members.length);
     return avgs.length ? Math.max(...avgs) - Math.min(...avgs) : 0;
   };
   const spreadBefore = spreadOf(baseline);
@@ -144,8 +151,8 @@ export function compareLineups(
   }
 
   /* גדלי קבוצות */
-  const sizes = TEAM_IDS.map((t) => current[t].length);
-  const sizesBefore = TEAM_IDS.map((t) => baseline[t].length);
+  const sizes = lineupTeams(current).map((t) => membersOf(current, t).length);
+  const sizesBefore = lineupTeams(baseline).map((t) => membersOf(baseline, t).length);
   const uneven = Math.max(...sizes) - Math.min(...sizes) > 1;
   const wasUneven = Math.max(...sizesBefore) - Math.min(...sizesBefore) > 1;
   if (uneven && !wasUneven) {
@@ -159,14 +166,14 @@ export function compareLineups(
   const tags = [...new Set(pool.flatMap((p) => p.tags))];
   for (const tag of tags) {
     const countIn = (lineup: Lineup, t: TeamId) =>
-      lineup[t].filter((id) => byId.get(id)?.tags.includes(tag)).length;
+      membersOf(lineup, t).filter((id) => byId.get(id)?.tags.includes(tag)).length;
     const holders = pool.filter((p) => p.tags.includes(tag)).length;
     if (holders < 3) continue; // פחות מזה אין באמת מה לפזר
 
-    const worstNow = Math.max(...TEAM_IDS.map((t) => countIn(current, t)));
-    const worstBefore = Math.max(...TEAM_IDS.map((t) => countIn(baseline, t)));
+    const worstNow = Math.max(...lineupTeams(current).map((t) => countIn(current, t)), 0);
+    const worstBefore = Math.max(...lineupTeams(baseline).map((t) => countIn(baseline, t)), 0);
     if (worstNow > worstBefore) {
-      const team = TEAM_IDS.find((t) => countIn(current, t) === worstNow)!;
+      const team = lineupTeams(current).find((t) => countIn(current, t) === worstNow)!;
       issues.push({
         kind: 'warn',
         text: `${worstNow} שחקנים עם "${tag}" נמצאים עכשיו ב${TEAM_META[team].name}`,

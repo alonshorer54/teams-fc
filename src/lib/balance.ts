@@ -1,4 +1,14 @@
-import { TEAM_IDS, emptyLineup, type Lineup, type Player, type TeamId } from '../types';
+import {
+  DEFAULT_TEAM_COUNT,
+  cloneLineup,
+  defaultTeamIds,
+  emptyLineup,
+  lineupTeams,
+  membersOf,
+  type Lineup,
+  type Player,
+  type TeamId,
+} from '../types';
 import {
   weightedPenalty,
   type CriterionSetting,
@@ -38,7 +48,7 @@ export const GAME_CHEMISTRY_POINTS = 2;
 export const pairKey = (a: string, b: string) => [a, b].sort().join('|');
 
 export interface LineupStats {
-  teams: Record<TeamId, TeamStats>;
+  teams: Partial<Record<TeamId, TeamStats>>;
   /** הפרש בין הממוצע הגבוה לממוצע הנמוך */
   spread: number;
   /** הפרש בין סכום הדירוגים הגבוה לנמוך */
@@ -84,15 +94,30 @@ export function gameChemistryBonus(members: string[], effects: Map<string, numbe
 }
 
 /** גדלי הקבוצות: מחלק את השחקנים שווה בשווה, והשארית הולכת לקבוצות הראשונות. */
-export function teamSizes(total: number): Record<TeamId, number> {
-  const base = Math.floor(total / 3);
-  const rest = total % 3;
-  return {
-    white: base + (rest > 0 ? 1 : 0),
-    black: base + (rest > 1 ? 1 : 0),
-    colored: base,
-  };
+export function teamSizes(total: number, teamIds: readonly TeamId[]): Record<string, number> {
+  const count = teamIds.length;
+  if (!count) return {};
+
+  const base = Math.floor(total / count);
+  const rest = total % count;
+  return Object.fromEntries(teamIds.map((t, i) => [t, base + (i < rest ? 1 : 0)]));
 }
+
+/** רשימת הגדלים בלבד, לטקסטים כמו "7 / 7 / 6". */
+export const teamSizeList = (total: number, teamCount: number): number[] => {
+  const base = Math.floor(total / teamCount);
+  const rest = total % teamCount;
+  return Array.from({ length: teamCount }, (_, i) => base + (i < rest ? 1 : 0));
+};
+
+/**
+ * כמה שחקנים חסרים כדי שכל הקבוצות יצאו בדיוק באותו גודל.
+ * 20 שחקנים ב-3 קבוצות => חסר אחד, כי 21 מתחלק ל-7/7/7.
+ */
+export const missingForEvenTeams = (total: number, teamCount: number): number => {
+  const rest = total % teamCount;
+  return rest === 0 ? 0 : teamCount - rest;
+};
 
 /* ------------------------------------------------------------------ */
 /*  סטטיסטיקות                                                         */
@@ -106,12 +131,13 @@ export function computeStats(
 ): LineupStats {
   const byId = new Map(pool.map((p) => [p.id, p]));
   const bonds = extractBonds(pool);
+  const present = lineupTeams(lineup);
   const teamOf = new Map<string, TeamId>();
-  for (const t of TEAM_IDS) for (const id of lineup[t]) teamOf.set(id, t);
+  for (const t of present) for (const id of membersOf(lineup, t)) teamOf.set(id, t);
 
-  const teams = {} as Record<TeamId, TeamStats>;
-  for (const t of TEAM_IDS) {
-    const members = lineup[t];
+  const teams: Partial<Record<TeamId, TeamStats>> = {};
+  for (const t of present) {
+    const members = membersOf(lineup, t);
     const total = members.reduce((s, id) => s + (byId.get(id)?.rating ?? 0), 0);
 
     const tagCounts: Record<string, number> = {};
@@ -139,27 +165,28 @@ export function computeStats(
     const tb = teamOf.get(b);
     if (ta && tb && ta === tb) {
       bondsKept++;
-      teams[ta].bondsKept++;
+      teams[ta]!.bondsKept++;
     }
   }
 
-  for (const t of TEAM_IDS) {
-    teams[t].chemistryBonus = round1(teams[t].bondsKept * CHEMISTRY_BONUS_PER_BOND);
-    teams[t].combined = round1(teams[t].total + teams[t].chemistryBonus + teams[t].gameBonus);
+  for (const t of present) {
+    const stats = teams[t]!;
+    stats.chemistryBonus = round1(stats.bondsKept * CHEMISTRY_BONUS_PER_BOND);
+    stats.combined = round1(stats.total + stats.chemistryBonus + stats.gameBonus);
   }
 
-  const active = TEAM_IDS.filter((t) => teams[t].count > 0);
-  const spreadOf = (pick: (t: TeamId) => number) => {
+  const active = present.filter((t) => teams[t]!.count > 0);
+  const spreadOf = (pick: (t: TeamStats) => number) => {
     if (!active.length) return 0;
-    const values = active.map(pick);
+    const values = active.map((t) => pick(teams[t]!));
     return Math.max(...values) - Math.min(...values);
   };
 
   return {
     teams,
-    spread: spreadOf((t) => teams[t].avg),
-    totalSpread: spreadOf((t) => teams[t].total),
-    combinedSpread: spreadOf((t) => teams[t].combined),
+    spread: spreadOf((t) => t.avg),
+    totalSpread: spreadOf((t) => t.total),
+    combinedSpread: spreadOf((t) => t.combined),
     bondsKept,
     bondsBroken: bonds.length - bondsKept,
     totalBonds: bonds.length,
@@ -174,7 +201,7 @@ export function bondStatus(
 ): { hasBond: boolean; together: boolean; partnerNames: string[] } {
   const byId = new Map(pool.map((p) => [p.id, p]));
   const teamOf = new Map<string, TeamId>();
-  for (const t of TEAM_IDS) for (const id of lineup[t]) teamOf.set(id, t);
+  for (const t of lineupTeams(lineup)) for (const id of membersOf(lineup, t)) teamOf.set(id, t);
 
   const partners = (byId.get(playerId)?.friendIds ?? []).filter((id) => byId.has(id));
   if (!partners.length) return { hasBond: false, together: false, partnerNames: [] };
@@ -236,11 +263,12 @@ function buildClusters(pool: Player[], bonds: Bond[], maxSize: number): string[]
 function cost(
   lineup: Lineup,
   input: Omit<PenaltyInput, 'lineup'>,
-  sizes: Record<TeamId, number>,
+  sizes: Record<string, number>,
+  teamIds: readonly TeamId[],
   priorities: CriterionSetting[],
 ): number {
   let sizePenalty = 0;
-  for (const t of TEAM_IDS) sizePenalty += Math.abs(lineup[t].length - sizes[t]);
+  for (const t of teamIds) sizePenalty += Math.abs(membersOf(lineup, t).length - (sizes[t] ?? 0));
 
   return weightedPenalty({ ...input, lineup }, priorities) + sizePenalty * W_SIZE;
 }
@@ -261,7 +289,8 @@ function shuffle<T>(arr: T[]): T[] {
 function greedyBuild(
   clusters: string[][],
   ratingOf: Map<string, number>,
-  sizes: Record<TeamId, number>,
+  sizes: Record<string, number>,
+  teamIds: readonly TeamId[],
 ): Lineup {
   const sumOf = (ids: string[]) => ids.reduce((s, id) => s + (ratingOf.get(id) ?? 0), 0);
 
@@ -272,22 +301,24 @@ function greedyBuild(
     return sumOf(b) - sumOf(a) + (Math.random() - 0.5) * 0.6;
   });
 
-  const lineup = emptyLineup();
-  const totals: Record<TeamId, number> = { white: 0, black: 0, colored: 0 };
+  const lineup = emptyLineup(teamIds);
+  const totals: Record<string, number> = Object.fromEntries(teamIds.map((t) => [t, 0]));
 
   for (const cluster of ordered) {
-    const feasible = TEAM_IDS.filter((t) => lineup[t].length + cluster.length <= sizes[t]);
-    const candidates = feasible.length ? feasible : [...TEAM_IDS];
+    const feasible = teamIds.filter(
+      (t) => lineup[t]!.length + cluster.length <= (sizes[t] ?? 0),
+    );
+    const candidates = feasible.length ? feasible : [...teamIds];
 
     const ranked = [...candidates].sort((a, b) => {
-      const pa = (totals[a] + sumOf(cluster)) / Math.max(1, lineup[a].length + cluster.length);
-      const pb = (totals[b] + sumOf(cluster)) / Math.max(1, lineup[b].length + cluster.length);
+      const pa = (totals[a] + sumOf(cluster)) / Math.max(1, lineup[a]!.length + cluster.length);
+      const pb = (totals[b] + sumOf(cluster)) / Math.max(1, lineup[b]!.length + cluster.length);
       return pa - pb;
     });
 
     // ב-25% מהמקרים נבחר את האפשרות השנייה הטובה — מקור הגיוון בין הגרלות
     const pick = ranked.length > 1 && Math.random() < 0.25 ? ranked[1] : ranked[0];
-    lineup[pick].push(...cluster);
+    lineup[pick]!.push(...cluster);
     totals[pick] += sumOf(cluster);
   }
 
@@ -301,33 +332,31 @@ function greedyBuild(
 function localSearch(
   lineup: Lineup,
   input: Omit<PenaltyInput, 'lineup'>,
-  sizes: Record<TeamId, number>,
+  sizes: Record<string, number>,
+  teamIds: readonly TeamId[],
   priorities: CriterionSetting[],
 ): Lineup {
-  const current: Lineup = {
-    white: [...lineup.white],
-    black: [...lineup.black],
-    colored: [...lineup.colored],
-  };
-  let best = cost(current, input, sizes, priorities);
+  const current = cloneLineup(lineup);
+  let best = cost(current, input, sizes, teamIds, priorities);
 
   for (let pass = 0; pass < 40; pass++) {
     let improved = false;
 
-    for (let i = 0; i < TEAM_IDS.length; i++) {
-      for (let j = i + 1; j < TEAM_IDS.length; j++) {
-        const ta = TEAM_IDS[i];
-        const tb = TEAM_IDS[j];
+    for (let i = 0; i < teamIds.length; i++) {
+      for (let j = i + 1; j < teamIds.length; j++) {
+        const ta = current[teamIds[i]];
+        const tb = current[teamIds[j]];
+        if (!ta || !tb) continue;
 
-        for (let a = 0; a < current[ta].length; a++) {
-          for (let b = 0; b < current[tb].length; b++) {
-            [current[ta][a], current[tb][b]] = [current[tb][b], current[ta][a]];
-            const next = cost(current, input, sizes, priorities);
+        for (let a = 0; a < ta.length; a++) {
+          for (let b = 0; b < tb.length; b++) {
+            [ta[a], tb[b]] = [tb[b], ta[a]];
+            const next = cost(current, input, sizes, teamIds, priorities);
             if (next < best - 1e-9) {
               best = next;
               improved = true;
             } else {
-              [current[ta][a], current[tb][b]] = [current[tb][b], current[ta][a]];
+              [ta[a], tb[b]] = [tb[b], ta[a]];
             }
           }
         }
@@ -351,18 +380,24 @@ export interface GenerateOptions {
   priorities: CriterionSetting[];
   /** אפקטים נלמדים לזוגות */
   pairEffects?: Map<string, number>;
+  /** הצבעים שישתתפו בהגרלה. ברירת מחדל: שלוש הקבוצות הקלאסיות. */
+  teamIds?: readonly TeamId[];
 }
 
 export function generateLineup(pool: Player[], options: GenerateOptions): Lineup {
   const restarts = options.restarts ?? 60;
   const { priorities } = options;
   const pairEffects = options.pairEffects ?? new Map<string, number>();
-  if (pool.length === 0) return emptyLineup();
+  const teamIds = options.teamIds?.length
+    ? options.teamIds
+    : defaultTeamIds(DEFAULT_TEAM_COUNT);
+
+  if (pool.length === 0) return emptyLineup(teamIds);
 
   const ratingOf = new Map(pool.map((p) => [p.id, p.rating]));
   const bonds = extractBonds(pool);
-  const sizes = teamSizes(pool.length);
-  const maxSize = Math.max(sizes.white, sizes.black, sizes.colored);
+  const sizes = teamSizes(pool.length, teamIds);
+  const maxSize = Math.max(...teamIds.map((t) => sizes[t] ?? 0), 1);
 
   // אשכולות החברויות משמשים כנקודת פתיחה רק כשהחברויות בכלל נלקחות בחשבון
   const friendsOn = priorities.find((p) => p.id === 'friends')?.enabled;
@@ -375,12 +410,13 @@ export function generateLineup(pool: Player[], options: GenerateOptions): Lineup
 
   for (let i = 0; i < restarts; i++) {
     const candidate = localSearch(
-      greedyBuild(clusters, ratingOf, sizes),
+      greedyBuild(clusters, ratingOf, sizes, teamIds),
       input,
       sizes,
+      teamIds,
       priorities,
     );
-    const c = cost(candidate, input, sizes, priorities);
+    const c = cost(candidate, input, sizes, teamIds, priorities);
     if (c < bestCost) {
       bestCost = c;
       best = candidate;
@@ -388,7 +424,7 @@ export function generateLineup(pool: Player[], options: GenerateOptions): Lineup
     if (bestCost < 1e-9) break; // חלוקה מושלמת — אין טעם להמשיך
   }
 
-  return best ?? emptyLineup();
+  return best ?? emptyLineup(teamIds);
 }
 
 /* ------------------------------------------------------------------ */
@@ -409,7 +445,7 @@ export interface BondView {
 export function describeBonds(lineup: Lineup, pool: Player[]): BondView[] {
   const byId = new Map(pool.map((p) => [p.id, p]));
   const teamOf = new Map<string, TeamId>();
-  for (const t of TEAM_IDS) for (const id of lineup[t]) teamOf.set(id, t);
+  for (const t of lineupTeams(lineup)) for (const id of membersOf(lineup, t)) teamOf.set(id, t);
 
   const views: BondView[] = [];
   const seen = new Set<string>();
@@ -451,7 +487,7 @@ export function describeBonds(lineup: Lineup, pool: Player[]): BondView[] {
 /* ------------------------------------------------------------------ */
 
 export function findTeamOf(lineup: Lineup, playerId: string): TeamId | null {
-  for (const t of TEAM_IDS) if (lineup[t].includes(playerId)) return t;
+  for (const t of lineupTeams(lineup)) if (membersOf(lineup, t).includes(playerId)) return t;
   return null;
 }
 
@@ -461,28 +497,29 @@ export function swapPlayers(lineup: Lineup, aId: string, bId: string): Lineup {
   const tb = findTeamOf(lineup, bId);
   if (!ta || !tb || ta === tb) return lineup;
 
-  const next: Lineup = {
-    white: [...lineup.white],
-    black: [...lineup.black],
-    colored: [...lineup.colored],
-  };
-  next[ta][next[ta].indexOf(aId)] = bId;
-  next[tb][next[tb].indexOf(bId)] = aId;
+  const next = cloneLineup(lineup);
+  next[ta]![next[ta]!.indexOf(aId)] = bId;
+  next[tb]![next[tb]!.indexOf(bId)] = aId;
   return next;
 }
 
 /** מעביר שחקן לקבוצה אחרת (גדלי הקבוצות עשויים להשתנות). */
 export function movePlayer(lineup: Lineup, playerId: string, to: TeamId): Lineup {
   const from = findTeamOf(lineup, playerId);
-  if (!from || from === to) return lineup;
+  if (!from || from === to || !(to in lineup)) return lineup;
 
-  const next: Lineup = {
-    white: [...lineup.white],
-    black: [...lineup.black],
-    colored: [...lineup.colored],
-  };
-  next[from] = next[from].filter((id) => id !== playerId);
-  next[to] = [...next[to], playerId];
+  const next = cloneLineup(lineup);
+  next[from] = next[from]!.filter((id) => id !== playerId);
+  next[to] = [...next[to]!, playerId];
+  return next;
+}
+
+/** מסיר שחקן מכל הקבוצות — למשל כשהוא נמחק מהמאגר. */
+export function removeFromLineup(lineup: Lineup, playerId: string): Lineup {
+  const next = cloneLineup(lineup);
+  for (const t of lineupTeams(next)) {
+    next[t] = next[t]!.filter((id) => id !== playerId);
+  }
   return next;
 }
 

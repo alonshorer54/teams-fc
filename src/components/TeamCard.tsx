@@ -1,6 +1,6 @@
 import { useState } from 'react';
-import { GripVertical, Link2, Unlink, Users } from 'lucide-react';
-import { TEAM_META, type Lineup, type Player, type TeamId } from '../types';
+import { GripVertical, Link2, Palette, Unlink, Users } from 'lucide-react';
+import { ALL_TEAM_IDS, TEAM_META, type Lineup, type Player, type TeamId } from '../types';
 import { CHEMISTRY_BONUS_PER_BOND, bondStatus, type TeamStats } from '../lib/balance';
 import { RatingBadge } from './ui';
 
@@ -15,6 +15,7 @@ export function TeamCard({
   onSelect,
   onMove,
   onSwap,
+  onRecolor,
 }: {
   teamId: TeamId;
   playerIds: string[];
@@ -26,10 +27,13 @@ export function TeamCard({
   onSelect: (id: string) => void;
   onMove: (playerId: string, to: TeamId) => void;
   onSwap: (aId: string, bId: string) => void;
+  /** החלפת הצבע של הקבוצה. אם היעד תפוס — שתי הקבוצות מתחלפות. */
+  onRecolor?: (to: TeamId) => void;
 }) {
   const meta = TEAM_META[teamId];
   const byId = new Map(pool.map((p) => [p.id, p]));
   const [dropTarget, setDropTarget] = useState(false);
+  const [paletteOpen, setPaletteOpen] = useState(false);
 
   const handleDrop = (e: React.DragEvent, overPlayerId?: string) => {
     e.preventDefault();
@@ -54,30 +58,57 @@ export function TeamCard({
       onDrop={(e) => handleDrop(e)}
     >
       {/* כותרת הקבוצה */}
-      <header
-        className={`flex items-center justify-between gap-3 px-4 py-3 ${meta.header} cursor-pointer`}
-        onClick={() => selectedId && onMove(selectedId, teamId)}
-        title={selectedId ? 'לחצו כדי להעביר לכאן את השחקן שנבחר' : undefined}
-      >
-        <div className="flex items-center gap-2">
-          <span className="text-lg leading-none">{meta.emoji}</span>
-          <h3 className="text-lg font-extrabold">{meta.name}</h3>
-        </div>
-        <div className="flex items-center gap-2 text-sm font-bold">
-          <span className="inline-flex items-center gap-1 rounded-lg bg-black/15 px-2 py-1 text-xs">
-            <Users size={12} />
-            <span className="font-mono tabular-nums">{stats.count}</span>
-          </span>
-          {adminView && (
-            <span
-              dir="ltr"
-              className="rounded-lg bg-black/20 px-2 py-1 font-mono text-sm tabular-nums"
-              title="סך כל הדירוגים בקבוצה"
-            >
-              {stats.total.toFixed(1)}
+      <header className={`relative ${meta.header}`}>
+        <div
+          className="flex cursor-pointer items-center justify-between gap-3 px-4 py-3"
+          onClick={() => selectedId && onMove(selectedId, teamId)}
+          title={selectedId ? 'לחצו כדי להעביר לכאן את השחקן שנבחר' : undefined}
+        >
+          <div className="flex items-center gap-2">
+            <span className="text-lg leading-none">{meta.emoji}</span>
+            <h3 className="text-lg font-extrabold">{meta.name}</h3>
+          </div>
+          <div className="flex items-center gap-2 text-sm font-bold">
+            {onRecolor && (
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setPaletteOpen((v) => !v);
+                }}
+                title="שינוי הצבע של הקבוצה, או החלפה עם קבוצה אחרת"
+                aria-label="שינוי צבע הקבוצה"
+                className="rounded-lg bg-black/15 p-1.5 transition hover:bg-black/30"
+              >
+                <Palette size={13} />
+              </button>
+            )}
+            <span className="inline-flex items-center gap-1 rounded-lg bg-black/15 px-2 py-1 text-xs">
+              <Users size={12} />
+              <span className="font-mono tabular-nums">{stats.count}</span>
             </span>
-          )}
+            {adminView && (
+              <span
+                dir="ltr"
+                className="rounded-lg bg-black/20 px-2 py-1 font-mono text-sm tabular-nums"
+                title="סך כל הדירוגים בקבוצה"
+              >
+                {stats.total.toFixed(1)}
+              </span>
+            )}
+          </div>
         </div>
+
+        {paletteOpen && onRecolor && (
+          <ColorPicker
+            current={teamId}
+            lineup={lineup}
+            onPick={(to) => {
+              onRecolor(to);
+              setPaletteOpen(false);
+            }}
+            onClose={() => setPaletteOpen(false)}
+          />
+        )}
       </header>
 
       {/* רשימת השחקנים */}
@@ -169,5 +200,56 @@ export function TeamCard({
         </footer>
       )}
     </section>
+  );
+}
+
+/* -------------------------- בורר צבע לקבוצה -------------------------- */
+
+/**
+ * בחירת צבע חדש לקבוצה. צבע שכבר שייך לקבוצה אחרת אינו חסום —
+ * בחירה בו מחליפה בין השתיים, וזו הדרך הטבעית לומר "שהם ישחקו בשחור".
+ */
+function ColorPicker({
+  current,
+  lineup,
+  onPick,
+  onClose,
+}: {
+  current: TeamId;
+  lineup: Lineup;
+  onPick: (to: TeamId) => void;
+  onClose: () => void;
+}) {
+  return (
+    <>
+      <div className="fixed inset-0 z-20" onClick={onClose} aria-hidden />
+      <div className="absolute top-full left-3 z-30 mt-1 w-56 rounded-xl border border-slate-700 bg-slate-900 p-2 shadow-2xl shadow-black/60">
+        <p className="px-1 pb-1.5 text-[10px] font-bold text-slate-400">
+          צבע הקבוצה
+        </p>
+        <ul className="grid grid-cols-2 gap-1">
+          {ALL_TEAM_IDS.filter((t) => t !== current).map((t) => {
+            const taken = t in lineup;
+            return (
+              <li key={t}>
+                <button
+                  onClick={() => onPick(t)}
+                  className="flex w-full items-center gap-1.5 rounded-lg px-2 py-1.5 text-right text-[11px] font-semibold text-slate-200 transition hover:bg-slate-800"
+                  title={
+                    taken
+                      ? `החלפת הצבעים בין ${TEAM_META[current].name} ל${TEAM_META[t].name}`
+                      : `שינוי ל${TEAM_META[t].name}`
+                  }
+                >
+                  <span className={`size-3 shrink-0 rounded-full ${TEAM_META[t].dot}`} />
+                  <span className="truncate">{TEAM_META[t].name}</span>
+                  {taken && <span className="mr-auto text-[9px] text-slate-500">החלפה</span>}
+                </button>
+              </li>
+            );
+          })}
+        </ul>
+      </div>
+    </>
   );
 }

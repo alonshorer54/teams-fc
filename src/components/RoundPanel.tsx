@@ -15,10 +15,9 @@ import {
 import type { Player } from '../types';
 import type { Substitution } from '../lib/storage';
 import { formatHebrewDate } from '../lib/format';
+import { teamSizeList } from '../lib/balance';
 import { RatingBadge } from './ui';
 import { PasteListModal } from './PasteListModal';
-
-const IDEAL_SIZE = 21; // 3 קבוצות × 7 שחקנים
 
 /**
  * "המחזור הקרוב" — הרשימה של מי משחק השבוע.
@@ -32,6 +31,8 @@ export function RoundPanel({
   substitutions,
   streaks,
   hasLineup,
+  teamCount,
+  fillerCount,
   onSetAll,
   onToggle,
   onCancel,
@@ -46,6 +47,10 @@ export function RoundPanel({
   streaks: Map<string, number>;
   /** האם כבר בוצעה הגרלה — משפיע על פתיחת הרשימה כברירת מחדל */
   hasLineup: boolean;
+  /** לכמה קבוצות מחלקים — נקבע ב"מבנה החלוקה" */
+  teamCount: number;
+  /** כמה משלימים כבר נוספו, כדי שהמניין יהיה זהה לזה שההגרלה תראה */
+  fillerCount: number;
   onSetAll: (ids: string[]) => void;
   onToggle: (id: string) => void;
   onCancel: (id: string) => void;
@@ -84,13 +89,20 @@ export function RoundPanel({
     [players, selected, cancelled],
   );
 
-  const count = playing.length;
+  // המשלימים לא ברשימה הזו, אבל הם כן משתתפים בחלוקה
+  const count = playing.length + fillerCount;
+  const sizes = teamSizeList(count, teamCount);
+  const even = new Set(sizes).size === 1;
+
   const status =
-    count === IDEAL_SIZE
-      ? { text: `${count} שחקנים — 3 קבוצות של 7 ✅`, tone: 'text-emerald-300' }
-      : count < 3
-        ? { text: `${count} שחקנים — צריך לפחות 3`, tone: 'text-rose-300' }
-        : { text: `${count} שחקנים — חלוקה ל-${sizesText(count)}`, tone: 'text-amber-300' };
+    count < teamCount
+      ? { text: `${count} שחקנים — צריך לפחות ${teamCount}`, tone: 'text-rose-300' }
+      : even
+        ? {
+            text: `${count} שחקנים — ${teamCount} קבוצות של ${sizes[0]} ✅`,
+            tone: 'text-emerald-300',
+          }
+        : { text: `${count} שחקנים — חלוקה ל-${sizes.join(' / ')}`, tone: 'text-amber-300' };
 
   return (
     <section className="card overflow-hidden">
@@ -104,6 +116,12 @@ export function RoundPanel({
           </h2>
           <p className={`mt-0.5 text-xs font-semibold ${status.tone}`}>
             {status.text}
+            {fillerCount > 0 && (
+              <span className="text-violet-300">
+                {' '}
+                · כולל {fillerCount === 1 ? 'משלים אחד' : `${fillerCount} משלימים`}
+              </span>
+            )}
             {cancelledPlayers.length > 0 && (
               <span className="text-rose-300">
                 {' '}
@@ -455,10 +473,4 @@ function PlayerChip({
       )}
     </span>
   );
-}
-
-function sizesText(total: number): string {
-  const base = Math.floor(total / 3);
-  const rest = total % 3;
-  return [base + (rest > 0 ? 1 : 0), base + (rest > 1 ? 1 : 0), base].join(' / ');
 }

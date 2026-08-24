@@ -10,14 +10,19 @@ import {
   X,
 } from 'lucide-react';
 import {
-  TEAM_IDS,
+  allInLineup,
+  isFillerId,
+  lineupTeams,
+  membersOf,
   normalizePlayers,
+  teamsIn,
+  type Filler,
   type Lineup,
   type MatchRecord,
   type Placements,
   type Player,
-  type TeamId,
 } from './types';
+import { removeFromLineup } from './lib/balance';
 import {
   STORAGE_KEYS,
   emptyDraft,
@@ -197,7 +202,7 @@ export default function App() {
       ...prev,
       selectedIds: prev.selectedIds.filter((x) => x !== id),
       cancelledIds: prev.cancelledIds.filter((x) => x !== id),
-      lineup: prev.lineup ? stripFromLineup(prev.lineup, id) : null,
+      lineup: prev.lineup ? removeFromLineup(prev.lineup, id) : null,
     }));
     notify('השחקן נמחק');
   };
@@ -222,7 +227,11 @@ export default function App() {
   /* ------------------------------ היסטוריה ---------------------------- */
 
   const saveToHistory = (lineup: Lineup, date: string, cancelledIds: string[]) => {
-    const byId = new Map(players.map((p) => [p.id, p]));
+    // המשלימים לא נמצאים במאגר, אבל הם כן חלק מהכוחות של הערב הזה
+    const byId = new Map<string, { id: string; name: string; rating: number }>([
+      ...players.map((p) => [p.id, p] as const),
+      ...draft.fillers.map((g) => [g.id, g] as const),
+    ]);
     const one = (id: string) => {
       const p = byId.get(id);
       return p ? { id: p.id, name: p.name, rating: p.rating } : null;
@@ -234,11 +243,9 @@ export default function App() {
       id: newId(),
       savedAt: new Date().toISOString(),
       date,
-      teams: {
-        white: snapshot(lineup.white),
-        black: snapshot(lineup.black),
-        colored: snapshot(lineup.colored),
-      },
+      teams: Object.fromEntries(
+        lineupTeams(lineup).map((t) => [t, snapshot(membersOf(lineup, t))]),
+      ),
       cancelled: snapshot(cancelledIds),
       substitutions: draft.substitutions
         .map((s) => ({ out: one(s.outId), in: one(s.inId) }))
@@ -265,16 +272,29 @@ export default function App() {
 
   const restoreRecord = (record: MatchRecord) => {
     const existing = new Set(players.map((p) => p.id));
-    const pick = (t: TeamId) => record.teams[t].map((p) => p.id).filter((id) => existing.has(id));
-    const lineup: Lineup = { white: pick('white'), black: pick('black'), colored: pick('colored') };
+    // משלים נשמר בתוך ההגרלה עצמה, ולכן הוא משוחזר ממנה — לא מהמאגר
+    const keep = (id: string) => existing.has(id) || isFillerId(id);
+
+    const teams = teamsIn(record.teams);
+    const lineup: Lineup = Object.fromEntries(
+      teams.map((t) => [t, (record.teams[t] ?? []).map((p) => p.id).filter(keep)]),
+    );
+
+    const fillers: Filler[] = teams
+      .flatMap((t) => record.teams[t] ?? [])
+      .filter((p) => isFillerId(p.id))
+      .map((p) => ({ id: p.id, name: p.name, rating: p.rating }));
+
     setDraft((prev) => ({
       ...prev,
-      selectedIds: TEAM_IDS.flatMap((t) => lineup[t]),
+      selectedIds: allInLineup(lineup).filter((id) => !isFillerId(id)),
       cancelledIds: (record.cancelled ?? []).map((p) => p.id).filter((id) => existing.has(id)),
       lineup,
       // ההגרלה ששוחזרה היא נקודת ההשוואה לעריכות שיבואו אחריה
       baseline: lineup,
       matchDate: record.date,
+      teamCount: teams.length || prev.teamCount,
+      fillers,
     }));
     setTab('draw');
   };
@@ -448,12 +468,4 @@ export default function App() {
       <Toast message={toast} />
     </div>
   );
-}
-
-function stripFromLineup(lineup: Lineup, playerId: string): Lineup {
-  return {
-    white: lineup.white.filter((id) => id !== playerId),
-    black: lineup.black.filter((id) => id !== playerId),
-    colored: lineup.colored.filter((id) => id !== playerId),
-  };
 }
