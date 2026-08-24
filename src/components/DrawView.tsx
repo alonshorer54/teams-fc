@@ -214,7 +214,7 @@ export function DrawView({
     setDraft((p) => ({ ...p, lineup: next, baseline: next }));
     setSelectedPlayer(null);
     setLastChange(null);
-    notify('הכוחות הוגרלו! ⚽');
+    notify('הקבוצות הוגרלו! ⚽');
   };
 
   /**
@@ -351,7 +351,7 @@ export function DrawView({
           disabled={pool.length < teamCount}
         >
           <Shuffle size={17} />
-          {lineup ? 'הגרלה מחדש' : 'הגרלת כוחות'}
+          {lineup ? 'הגרלה מחדש' : 'הגרלת קבוצות'}
         </button>
 
         <div className="flex items-center gap-2">
@@ -397,11 +397,11 @@ export function DrawView({
               className="btn-ghost"
               onClick={() => {
                 onSaveHistory(lineup, matchDate, cancelledIds);
-                notify(isDemo ? 'נוסף להיסטוריית הדוגמה (זמני)' : 'הכוחות נשמרו בהיסטוריה ✔');
+                notify(isDemo ? 'נוסף להיסטוריית הדוגמה (זמני)' : 'הקבוצות נשמרו בהיסטוריה ✔');
               }}
             >
               <Save size={16} />
-              שמירת הכוחות
+              שמירת הקבוצות
             </button>
 
             <button
@@ -425,7 +425,7 @@ export function DrawView({
         <EmptyState
           icon={<Shuffle size={28} />}
           title="עוד לא בוצעה הגרלה"
-          hint={`נבחרו ${pool.length} שחקנים. לחצו על "הגרלת כוחות" כדי לחלק אותם ל-${teamCount} קבוצות מאוזנות של ${teamSizeList(pool.length, teamCount).join(' / ')}.`}
+          hint={`נבחרו ${pool.length} שחקנים. לחצו על "הגרלת קבוצות" כדי לחלק אותם ל-${teamCount} קבוצות מאוזנות של ${teamSizeList(pool.length, teamCount).join(' / ')}.`}
         />
       ) : mode === 'share' ? (
         <ShareView teams={shareTeams} date={matchDate} onCopied={notify} />

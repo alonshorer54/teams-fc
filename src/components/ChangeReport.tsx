@@ -4,7 +4,7 @@ import { CRITERION_META } from '../lib/criteria';
 import type { LineupDiff } from '../lib/diff';
 
 /**
- * מוצג אחרי עריכה ידנית של הכוחות: מה זזה, מה נשבר ומה השתפר
+ * מוצג אחרי עריכה ידנית של הקבוצות: מה זזה, מה נשבר ומה השתפר
  * ביחס להגרלה המקורית.
  */
 export function ChangeReport({ diff, onRevert }: { diff: LineupDiff; onRevert: () => void }) {

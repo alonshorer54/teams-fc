@@ -6,7 +6,7 @@ import { CRITERION_META } from '../lib/criteria';
 import type { LineupDiff } from '../lib/diff';
 
 /**
- * נפתחת אחרי כל שינוי ידני בכוחות ומסבירה מה הפעולה הזו עשתה.
+ * נפתחת אחרי כל שינוי ידני בקבוצות ומסבירה מה הפעולה הזו עשתה.
  * נשארת על המסך עד שסוגרים אותה — בכוונה, כדי שלא תתפספס.
  */
 export function ChangePopup({

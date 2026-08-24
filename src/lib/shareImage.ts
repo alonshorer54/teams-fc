@@ -48,7 +48,7 @@ export async function renderTeamsImage(
   ctx.textAlign = 'center';
   ctx.fillStyle = '#f8fafc';
   ctx.font = font(40);
-  ctx.fillText('⚽ כוחות למשחק', W / 2, pad + 34);
+  ctx.fillText('⚽ קבוצות למשחק', W / 2, pad + 34);
   if (options.includeDate) {
     ctx.fillStyle = '#94a3b8';
     ctx.font = font(26, '500');

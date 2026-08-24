@@ -1,7 +1,7 @@
 {
-  "name": "Teams FC — חלוקת כוחות",
+  "name": "Teams FC — חלוקת קבוצות",
   "short_name": "Teams FC",
-  "description": "חלוקת כוחות מאוזנת לכדורגל השבועי",
+  "description": "חלוקת קבוצות מאוזנת לכדורגל השבועי",
   "lang": "he",
   "dir": "rtl",
   "start_url": "./",

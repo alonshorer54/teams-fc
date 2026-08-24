@@ -49,7 +49,7 @@ export const emptyPayments = (matchDate: string): PaymentRound => ({
 export interface AppSettings {
   priorities: CriterionSetting[];
   payments: PaymentRound;
-  /** המחזור הנוכחי — מסונכרן כדי שהטלפון והמחשב יראו את אותם כוחות */
+  /** המחזור הנוכחי — מסונכרן כדי שהטלפון והמחשב יראו את אותן קבוצות */
   round: Draft;
 }
 

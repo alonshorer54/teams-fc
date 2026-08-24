@@ -55,7 +55,7 @@ type Tab = 'players' | 'draw' | 'payments' | 'history' | 'analysis';
 
 const TABS: { id: Tab; label: string; icon: typeof Users }[] = [
   { id: 'players', label: 'שחקנים', icon: Users },
-  { id: 'draw', label: 'כוחות', icon: Shuffle },
+  { id: 'draw', label: 'קבוצות', icon: Shuffle },
   { id: 'payments', label: 'תשלומים', icon: Wallet },
   { id: 'history', label: 'היסטוריה', icon: History },
   { id: 'analysis', label: 'מגמות', icon: BarChart3 },
@@ -227,7 +227,7 @@ export default function App() {
   /* ------------------------------ היסטוריה ---------------------------- */
 
   const saveToHistory = (lineup: Lineup, date: string, cancelledIds: string[]) => {
-    // המשלימים לא נמצאים במאגר, אבל הם כן חלק מהכוחות של הערב הזה
+    // המשלימים לא נמצאים במאגר, אבל הם כן חלק מהקבוצות של הערב הזה
     const byId = new Map<string, { id: string; name: string; rating: number }>([
       ...players.map((p) => [p.id, p] as const),
       ...draft.fillers.map((g) => [g.id, g] as const),
@@ -333,7 +333,7 @@ export default function App() {
           <div className="rounded-2xl bg-emerald-500/15 p-2.5 text-2xl leading-none">⚽</div>
           <div>
             <h1 className="text-2xl font-extrabold tracking-tight text-slate-50">Teams FC</h1>
-            <p className="text-xs text-slate-400">חלוקת כוחות לכדורגל השבועי</p>
+            <p className="text-xs text-slate-400">חלוקת קבוצות לכדורגל השבועי</p>
           </div>
         </div>
 

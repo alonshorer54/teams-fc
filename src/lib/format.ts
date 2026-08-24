@@ -17,7 +17,7 @@ export function buildWhatsAppText(teams: ShareTeams, options: ShareOptions = {})
   const blocks: string[] = [];
 
   if (options.includeDate && options.date) {
-    blocks.push(`⚽ כוחות ${formatHebrewDate(options.date)}`);
+    blocks.push(`⚽ קבוצות ${formatHebrewDate(options.date)}`);
   }
 
   for (const id of teamsIn(teams)) {

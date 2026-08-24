@@ -42,7 +42,7 @@ export function ShareView({
         return;
       }
       const filename = `teams-${date}.png`;
-      if (await shareImage(blob, filename, 'כוחות למשחק')) return;
+      if (await shareImage(blob, filename, 'קבוצות למשחק')) return;
       // אין תפריט שיתוף (בעיקר במחשב) — מורידים את הקובץ במקום
       downloadImage(blob, filename);
       onCopied('התמונה ירדה — אפשר לצרף אותה לוואטסאפ');

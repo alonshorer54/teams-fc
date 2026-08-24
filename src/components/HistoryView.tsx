@@ -50,7 +50,7 @@ export function HistoryView({
       <EmptyState
         icon={<History size={28} />}
         title="אין עדיין הגרלות שמורות"
-        hint='אחרי שתסיימו לסדר את הכוחות, לחצו על "שמירת הכוחות" והם יופיעו כאן.'
+        hint='אחרי שתסיימו לסדר את הקבוצות, לחצו על "שמירת הקבוצות" והן יופיעו כאן.'
       />
     );
   }
@@ -145,7 +145,7 @@ export function HistoryView({
                   title="טעינה חזרה למסך ההגרלה"
                   onClick={() => {
                     onRestore(record);
-                    notify('ההגרלה נטענה למסך הכוחות');
+                    notify('ההגרלה נטענה למסך הקבוצות');
                   }}
                 >
                   <RotateCcw size={15} />
