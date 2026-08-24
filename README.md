@@ -1,76 +1,34 @@
 # ⚽ Teams FC
 
-Web app for running a weekly football game: manage the squad, draw balanced
-teams, share them to WhatsApp, and track results over time.
+Every week, the same argument: who plays with whom, why that team is obviously
+stronger, and who still hasn't paid for the pitch. This app settles it — pick
+who showed up, press draw, and send the teams to the group chat.
 
 **Live app: https://teams-fc.netlify.app**
 
-Hebrew, right-to-left, installable as a mobile app, and synced between devices.
+Hebrew, right-to-left, installable on a phone, and synced between devices.
 
 ## What it does
 
 - **Squad** — players with a 1–5 rating, friendships, "prefers with / without", and free-text tags.
-- **Draw** — splits the players who showed up into 2 or 3 balanced teams. Colours can be
-  swapped afterwards, and missing spots filled with one-off "filler" players.
-- **Manual edits** — swap or move any player; the app reports what the edit broke, with one-click undo.
-- **Share** — copy a clean text list, or generate an image, ready for WhatsApp.
-- **History and trends** — saved rounds, win/loss streaks, attendance, and which pairs
-  actually perform well together.
+- **Draw** — splits whoever showed up into 2 or 3 balanced teams. Team colours can be
+  swapped after the draw, and an incomplete squad can be topped up with one-off
+  "filler" players so the teams still come out even.
+- **Manual edits** — swap or move any player; the app explains what the edit broke —
+  friends separated, balance worsened, tags clumped — with one-click undo.
+- **Share** — a clean text list or a generated image, ready to paste into WhatsApp.
+  A list pasted back from the group chat is matched against the squad automatically.
+- **History and trends** — saved rounds, win/loss streaks, attendance over time, and
+  which pairs actually perform better together than apart.
 - **Payments** — who paid for the week and who still owes.
-
-## Tech
-
-TypeScript · React 19 · Tailwind CSS 4 · Vite · Supabase · GitHub Pages
-
-No backend of its own: the app is static files that talk to Supabase directly.
-Access is enforced by Postgres row-level security, not by client code.
-
-## Running locally
-
-```bash
-npm install
-```
-
-```bash
-npm run dev
-```
-
-Opens on `http://localhost:5173`. Without Supabase keys the app runs in local
-mode and stores everything in `localStorage` — no account needed.
-
-Other scripts: `npm run build`, `npm run preview`, `npm run lint`.
-
-## Enabling cloud sync
-
-Optional. Needed only to sync between phone and computer.
-
-1. Create a free project at [supabase.com](https://supabase.com).
-2. In the Supabase SQL Editor, run [`supabase-setup.sql`](./supabase-setup.sql).
-   It creates the table, enables row-level security, and turns on realtime.
-3. Copy `.env.example` to `.env.local` and fill in your project URL and anon key
-   (Project Settings → API).
-4. Restart `npm run dev`, then sign up once and use the same account on your phone.
-
-The `anon` key is meant to be public — row-level security is what protects the
-data. Without a signed-in account, nothing can be read or written.
-
-## Deployment
-
-Hosted on Netlify, configured by [`netlify.toml`](./netlify.toml): pushing to
-`main` builds and publishes automatically. The Supabase keys come from the
-site's environment variables, and `sw.js` is served with no-store so a phone
-cannot get stuck on a stale build.
-
-The site origin must be listed under Supabase → Authentication → URL
-Configuration, otherwise sign-up confirmation and password-reset links are
-rejected — those are the only two flows that depend on it.
 
 ## How the draw works
 
 Splitting players into balanced teams is a variant of the partition problem, so
 the app uses a heuristic rather than an exact solver: greedy construction with
 random noise, then hill-climbing over every pair swap, repeated 60 times with the
-best result kept. It reaches a 0.00 rating gap in well under a second.
+best result kept. It reaches a 0.00 rating gap in well under a second, and the
+noise is what makes every draw come out differently.
 
 Five criteria are scored, each normalised to 0..1 so the weights stay comparable:
 
@@ -87,6 +45,30 @@ it — enough for the top criterion to decide, without making the lower ones
 meaningless. Criteria with no data are switched off automatically, and an
 oversized team is penalised above everything else so the split stays valid.
 
+**Learned chemistry** is the one criterion the app derives rather than being told:
+it compares how often a pair wins together against how each of them performs
+individually. Pairs that beat that expectation are treated as extra strength and
+spread *apart* — the goal is balance, so clustering them would achieve the opposite.
+
+## Architecture
+
+TypeScript · React 19 · Tailwind CSS 4 · Vite · Supabase · Netlify
+
+**No backend of its own.** The app is static files that talk to Supabase directly.
+Access is enforced by Postgres row-level security, so the rule lives in the
+database rather than in client code that anyone can read. The `anon` key is public
+by design; without a signed-in account it cannot read or write anything.
+
+**One document per user.** All of a user's data sits in a single row as JSONB, which
+is why tags, per-player preferences and the round format could all be added later
+without a single schema migration. The trade-off is that cross-user queries are
+impossible — irrelevant here, since a user only ever loads their own data.
+
+**Sync** works in three parts: load on sign-in, save 900 ms after the last change,
+and a realtime channel for updates from another device. Saves carry a fingerprint
+of the data so the app can recognise the echo of its own write and ignore it,
+instead of looping forever.
+
 ## Project layout
 
 | Path | Role |
@@ -96,12 +78,47 @@ oversized team is penalised above everything else so the split stays valid.
 | `src/lib/criteria.ts` | Draw criteria, their penalties, and priority weighting |
 | `src/lib/pairs.ts` | Learned chemistry between pairs of players |
 | `src/lib/diff.ts` | Explains what a manual edit changed |
+| `src/lib/parseNames.ts` | Matches a pasted WhatsApp list against the squad |
 | `src/lib/storage.ts` | Local storage keys, backup export and import |
 | `src/hooks/useSyncedStore.ts` | Cloud sync: load, debounced save, realtime updates |
 | `src/components/DrawView.tsx` | The draw screen |
 | `src/components/PlayersView.tsx` | Squad management |
 | `src/components/HistoryView.tsx` | Saved rounds and results |
 | `src/components/AnalysisView.tsx` | Attendance and trends |
+
+## Running it locally
+
+```bash
+npm install && npm run dev
+```
+
+Opens on `http://localhost:5173`. With no Supabase keys configured the app runs
+in local mode and keeps everything in `localStorage` — no account required, which
+is enough to try the whole draw flow.
+
+Scripts: `npm run dev`, `npm run build`, `npm run preview`, `npm run lint`.
+
+<details>
+<summary>Connecting your own Supabase project (only needed for cross-device sync)</summary>
+
+1. Create a free project at [supabase.com](https://supabase.com).
+2. Run [`supabase-setup.sql`](./supabase-setup.sql) in the SQL Editor — it creates
+   the table, enables row-level security and turns on realtime.
+3. Copy `.env.example` to `.env.local` and fill in the project URL and anon key
+   from Project Settings → API.
+4. Restart the dev server, sign up once, and use the same account on your phone.
+
+</details>
+
+## Deployment
+
+Hosted on Netlify and configured by [`netlify.toml`](./netlify.toml): pushing to
+`main` builds and publishes automatically. Supabase keys come from the site's
+environment variables, and `sw.js` is served with `no-store` so a phone can't get
+stuck on a stale build.
+
+The site origin has to be listed under Supabase → Authentication → URL
+Configuration, or sign-up confirmation and password-reset links get rejected.
 
 ## License
 
