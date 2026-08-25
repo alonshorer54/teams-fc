@@ -3,6 +3,7 @@ import {
   ArrowRight,
   BarChart3,
   CloudOff,
+  FlaskConical,
   KeyRound,
   ListOrdered,
   LogIn,
@@ -58,11 +59,14 @@ export function AuthGate({
   onSignIn,
   onSignUp,
   onForgotPassword,
+  onTryDemo,
   notify,
 }: {
   onSignIn: (email: string, password: string) => Promise<string | null>;
   onSignUp: (email: string, password: string) => Promise<string | null>;
   onForgotPassword: (email: string) => Promise<string | null>;
+  /** נכנסים לאפליקציה עם נתוני דוגמה, בלי חשבון ובלי לשמור כלום */
+  onTryDemo: () => void;
   notify: (msg: string) => void;
 }) {
   const [screen, setScreen] = useState<Screen>('intro');
@@ -130,7 +134,11 @@ export function AuthGate({
           </p>
 
           <div className="mt-7 flex flex-wrap justify-center gap-2">
-            <button className="btn-primary px-6" onClick={() => reset('signup')}>
+            <button className="btn-primary px-6" onClick={onTryDemo}>
+              <FlaskConical size={16} />
+              רוצה רק לנסות
+            </button>
+            <button className="btn-ghost px-6" onClick={() => reset('signup')}>
               <UserPlus size={16} />
               יצירת חשבון
             </button>
@@ -139,6 +147,11 @@ export function AuthGate({
               כבר יש לי חשבון
             </button>
           </div>
+
+          <p className="mx-auto mt-3 max-w-md text-[12px] leading-relaxed text-slate-400">
+            הכניסה לניסיון היא בלי הרשמה ובלי אימייל — נכנסים עם 21 שחקני דוגמה, מגרילים
+            קבוצות ורואים איך זה עובד. שום דבר לא נשמר.
+          </p>
 
           <div className="mt-4 flex justify-center">
             <InstallButton notify={notify} />

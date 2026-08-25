@@ -5,6 +5,7 @@ import {
   FlaskConical,
   History,
   Shuffle,
+  UserPlus,
   Users,
   Wallet,
   X,
@@ -96,6 +97,8 @@ export default function App() {
   const [demoHistory, setDemoHistory] = useState<MatchRecord[]>([]);
   const [demoDraft, setDemoDraft] = useState<Draft>(() => emptyDraft(todayISO()));
   const isDemo = demoPlayers !== null;
+  /** נכנס בלי חשבון — מצב דוגמה בלבד, אין מה לסנכרן ואין מה לשמור */
+  const isGuest = isCloudConfigured && !auth.userId;
 
   // טיוטה ישנה שנשמרה מקומית — משמשת רק להעברה חד-פעמית לענן
   const [legacyDraft, setLegacyDraft] = useLocalStorage<Draft | null>(STORAGE_KEYS.draft, null);
@@ -221,7 +224,8 @@ export default function App() {
     setDemoHistory([]);
     setDemoDraft(emptyDraft(todayISO()));
     setTab('players');
-    notify('חזרת למאגר האמיתי');
+    // אורח חוזר אוטומטית למסך הפתיחה, כי התנאי שמעליו מתקיים שוב
+    notify(isGuest ? 'יצאת ממצב דוגמה' : 'חזרת למאגר האמיתי');
   };
 
   /* ------------------------------ היסטוריה ---------------------------- */
@@ -315,12 +319,15 @@ export default function App() {
     return <PasswordRecovery onSubmit={auth.setNewPassword} onCancel={auth.signOut} />;
   }
 
-  if (isCloudConfigured && !auth.userId) {
+  // מצב דוגמה חי כולו בזיכרון ולא נוגע בענן, ולכן הוא לא דורש חשבון.
+  // מי שלא נרשם רואה את מסך הפתיחה עד שהוא בוחר להיכנס לניסיון.
+  if (isCloudConfigured && !auth.userId && !isDemo) {
     return (
       <AuthGate
         onSignIn={auth.signIn}
         onSignUp={auth.signUp}
         onForgotPassword={auth.requestPasswordReset}
+        onTryDemo={enterDemo}
         notify={notify}
       />
     );
@@ -345,13 +352,20 @@ export default function App() {
               מצב דוגמה
             </button>
           )}
-          <SyncBadge
-            status={store.status}
-            email={auth.email}
-            lastSyncedAt={store.lastSyncedAt}
-            error={store.error}
-            onSignOut={auth.signOut}
-          />
+          {isGuest ? (
+            <button className="btn-primary text-xs" onClick={exitDemo}>
+              <UserPlus size={14} />
+              יצירת חשבון
+            </button>
+          ) : (
+            <SyncBadge
+              status={store.status}
+              email={auth.email}
+              lastSyncedAt={store.lastSyncedAt}
+              error={store.error}
+              onSignOut={auth.signOut}
+            />
+          )}
         </div>
       </header>
 
@@ -372,12 +386,21 @@ export default function App() {
         <div className="mb-4 flex flex-wrap items-center gap-2.5 rounded-xl border border-violet-500/40 bg-violet-500/10 px-4 py-3 text-xs text-violet-200">
           <FlaskConical size={15} className="shrink-0" />
           <span>
-            <b>מצב דוגמה:</b> 21 שחקנים מומצאים למשחק ולהתנסות. שום דבר כאן לא נשמר ולא נוגע במאגר
-            האמיתי שלך.
+            {isGuest ? (
+              <>
+                <b>מצב דוגמה:</b> 21 שחקנים מומצאים, בלי חשבון. אפשר להגריל, לערוך ולשתף — אבל
+                שום דבר לא נשמר, וברענון הכול מתאפס. חשבון שומר את המאגר שלך ומסנכרן בין מכשירים.
+              </>
+            ) : (
+              <>
+                <b>מצב דוגמה:</b> 21 שחקנים מומצאים למשחק ולהתנסות. שום דבר כאן לא נשמר ולא נוגע
+                במאגר האמיתי שלך.
+              </>
+            )}
           </span>
           <button className="btn-ghost mr-auto !py-1.5 text-xs" onClick={exitDemo}>
             <X size={13} />
-            יציאה ממצב דוגמה
+            {isGuest ? 'חזרה למסך הפתיחה' : 'יציאה ממצב דוגמה'}
           </button>
         </div>
       )}
