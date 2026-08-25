@@ -346,12 +346,6 @@ export default function App() {
 
         <div className="flex flex-wrap items-center gap-2">
           <InstallButton notify={notify} />
-          {!isDemo && (
-            <button className="btn-ghost text-xs" onClick={enterDemo}>
-              <FlaskConical size={14} />
-              מצב דוגמה
-            </button>
-          )}
           {isGuest ? (
             <button className="btn-primary text-xs" onClick={exitDemo}>
               <UserPlus size={14} />

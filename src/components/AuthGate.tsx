@@ -136,7 +136,7 @@ export function AuthGate({
           <div className="mt-7 flex flex-wrap justify-center gap-2">
             <button className="btn-primary px-6" onClick={onTryDemo}>
               <FlaskConical size={16} />
-              רוצה רק לנסות
+              מצב דוגמה
             </button>
             <button className="btn-ghost px-6" onClick={() => reset('signup')}>
               <UserPlus size={16} />
@@ -149,8 +149,8 @@ export function AuthGate({
           </div>
 
           <p className="mx-auto mt-3 max-w-md text-[12px] leading-relaxed text-slate-400">
-            הכניסה לניסיון היא בלי הרשמה ובלי אימייל — נכנסים עם 21 שחקני דוגמה, מגרילים
-            קבוצות ורואים איך זה עובד. שום דבר לא נשמר.
+            מצב דוגמה נכנס בלי הרשמה ובלי אימייל — 21 שחקני דוגמה, הגרלה אמיתית, וכל שאר
+            המסכים. שום דבר לא נשמר.
           </p>
 
           <div className="mt-4 flex justify-center">
@@ -175,7 +175,8 @@ export function AuthGate({
         </ul>
 
         <p className="mt-8 text-center text-[11px] leading-relaxed text-slate-500">
-          הנתונים שלכם פרטיים לחשבון שלכם בלבד ומסתנכרנים בין המכשירים.
+          מצב דוגמה לא שומר כלום ולא דורש חשבון. עם חשבון — הנתונים פרטיים לכם בלבד
+          ומסתנכרנים בין המכשירים.
         </p>
       </div>
     );
