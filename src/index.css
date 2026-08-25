@@ -42,6 +42,18 @@
 }
 
 @layer components {
+  /*
+   * פריט ב-CSS Grid מקבל min-width: auto, ולכן עמודה לא מתכווצת מתחת לרוחב
+   * ה-min-content של התוכן שבה. טקסט ארוך בלי נקודת שבירה — למשל רשימת
+   * חברים של שחקן — היה מרחיב את העמודה, ואיתה את כל הדף, מעבר לרוחב המסך:
+   * בטלפון זה נראה כמו מסך "זז" עם תוכן חתוך בקצה.
+   *
+   * הכלל הזה מחזיר לפריטים את היכולת להתכווץ, וכך `truncate` באמת עובד.
+   */
+  .grid > * {
+    min-width: 0;
+  }
+
   .card {
     @apply rounded-2xl border border-slate-800/80 bg-slate-900/60 shadow-lg shadow-black/20 backdrop-blur-sm;
   }
