@@ -5,7 +5,6 @@ import {
   FlaskConical,
   History,
   Shuffle,
-  UserPlus,
   Users,
   Wallet,
   X,
@@ -346,12 +345,7 @@ export default function App() {
 
         <div className="flex flex-wrap items-center gap-2">
           <InstallButton notify={notify} />
-          {isGuest ? (
-            <button className="btn-primary text-xs" onClick={exitDemo}>
-              <UserPlus size={14} />
-              יצירת חשבון
-            </button>
-          ) : (
+          {!isGuest && (
             <SyncBadge
               status={store.status}
               email={auth.email}
