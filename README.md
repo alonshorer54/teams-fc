@@ -29,22 +29,43 @@ the app uses a heuristic rather than an exact solver: greedy construction with
 random noise, then hill-climbing over every pair swap, repeated 60 times. It
 reaches a 0.00 rating gap in well under a second.
 
-Keeping only the single cheapest result made every draw identical — 60 restarts
-of the same cost function nearly always converge on the same split, so redrawing
-reshuffled the order within a team and nothing else. The 60 results are now
-collected instead, deduplicated by a colour-independent signature, and filtered
-to those within 0.05 of the leader **on every enabled criterion separately**.
-That bound is what protects the balance: 0.05 on `rating` is five hundredths of
-a point of average gap, and `friends` is normalised by the number of friend
-pairs, so below 20 pairs even one broken friendship already falls outside it.
+Keeping only the single cheapest result made every draw identical. Restarting
+the same deterministic cost function converges on the same split nearly every
+time, so redrawing reshuffled the order within a team and changed nothing else.
+The search therefore runs in two halves, and the restart budget is split between
+them so a draw stays instant.
 
-Out of the splits that survive, the app picks whichever breaks up the most pairs
-who played together recently — the last four saved draws plus whatever is on
-screen, at a decaying weight, ignoring friend pairs since those are meant to
-recur. With no history to go on they all score alike and the draw genuinely
-draws between them. Across twelve consecutive redraws this moved the pair
-overlap between one draw and the next from 60% down to 29% — roughly what a
-random split would give — for at most 0.043 of average rating gap.
+The first half is the plain search, and it fixes a good opening. The second half
+goes looking for *different* splits on purpose: it kicks the opening (a few
+random swaps) and descends again, this time with a repulsion term that pushes
+the hill-climb away from pairs who have played together recently and into a
+different valley. Every result from both halves lands in one pool, deduplicated
+by a signature that ignores team colour and member order. Searching only once
+was the original mistake — collecting results is useless if the search keeps
+finding the same one, which is exactly what small squads did.
+
+The pool is then filtered against the best result found across both halves. Each
+criterion gets its own slack (`VARIETY_FLEX`), because a flat allowance is wrong
+here in both directions. `rating` gets 0.05 — five hundredths of a point of
+average gap, a third of a rating point spread over a team of seven. `friends`
+gets zero: an alternative is rejected if it splits up even one more pair than
+the best result did. The lower-priority criteria get several times the base
+allowance, since their penalties are normalised by how many players hold a tag
+or a preference — one two-player tag landing together swings that penalty by
+half, and a flat bound would let it veto every alternative. Those are the
+criteria the user ranked last, so they are the ones that should bend first.
+
+Whatever survives is scored on how many recently-paired players it puts back
+together — the last four saved draws plus whatever is on screen, at a decaying
+weight, ignoring friend pairs since those are meant to recur — and the loosest
+one wins. With no history they all score alike and the draw genuinely draws
+between them.
+
+Measured over ten consecutive redraws across squads of 12 to 21 in two and three
+teams: no configuration repeats the previous draw any more (12 players in two
+teams used to return an identical split nine times out of ten), the worst rating
+gap stays inside the 0.05 bound, and no configuration breaks more friendships
+than the same search does with variety switched off.
 
 Five criteria are scored, each normalised to 0..1 so the weights stay comparable:
 

@@ -10,6 +10,7 @@ import {
   type TeamId,
 } from '../types';
 import {
+  VARIETY_FLEX,
   criterionPenalties,
   weightedPenalty,
   type CriterionSetting,
@@ -336,9 +337,13 @@ function localSearch(
   sizes: Record<string, number>,
   teamIds: readonly TeamId[],
   priorities: CriterionSetting[],
+  /** תוספת לעלות שמושכת את החיפוש הצידה — משמשת לחיפוש חלוקות חלופיות */
+  bias?: (lineup: Lineup) => number,
 ): Lineup {
   const current = cloneLineup(lineup);
-  let best = cost(current, input, sizes, teamIds, priorities);
+  const total = (l: Lineup) =>
+    cost(l, input, sizes, teamIds, priorities) + (bias ? bias(l) : 0);
+  let best = total(current);
 
   for (let pass = 0; pass < 40; pass++) {
     let improved = false;
@@ -352,7 +357,7 @@ function localSearch(
         for (let a = 0; a < ta.length; a++) {
           for (let b = 0; b < tb.length; b++) {
             [ta[a], tb[b]] = [tb[b], ta[a]];
-            const next = cost(current, input, sizes, teamIds, priorities);
+            const next = total(current);
             if (next < best - 1e-9) {
               best = next;
               improved = true;
@@ -375,14 +380,12 @@ function localSearch(
 /* ------------------------------------------------------------------ */
 
 /**
- * כמה מותר לחלוקה שנבחרת להיות פחות טובה מהטובה ביותר — בכל קריטריון בנפרד.
+ * סובלנות הבסיס: כמה מותר לחלוקה שנבחרת להיות פחות טובה מהטובה ביותר.
+ * כל קריטריון מכפיל אותה ב-`VARIETY_FLEX` שלו, כי לא כולם שווים כאן.
  *
- * הקנסות מנורמלים ל-0..1, כך ש-0.05 בקריטריון הדירוג הוא חמש מאיות של נקודה
- * בפער הממוצעים בין הקבוצות (בקבוצה של 7 — שליש נקודת דירוג בסך הכל). זה לא
- * מורגש על המגרש, אבל מספיק כדי לפתוח כמה חלוקות חלופיות לבחירה.
- *
- * בחברויות הנרמול הוא לפי מספר הקשרים, ולכן כל עוד יש פחות מ-20 קשרי חברות
- * אפילו קשר אחד שנשבר כבר חורג מהסובלנות — כלומר החברים נשארים יחד.
+ * בדירוג המכפיל הוא 1, כלומר חמש מאיות של נקודה בפער הממוצעים בין הקבוצות —
+ * בקבוצה של 7 זה שליש נקודת דירוג בסך הכל, לא מורגש על המגרש. בחברויות
+ * המכפיל הוא 0: חלופה לא נבחרת אם היא שוברת אפילו חברות אחת יותר מהמובילה.
  */
 export const VARIETY_TOLERANCE = 0.05;
 
@@ -391,6 +394,13 @@ export const VARIETY_MEMORY = 4;
 
 /** דעיכת המשקל לכל הגרלה נוספת אחורה: האחרונה 1, שלפניה 0.6, וכן הלאה */
 const MEMORY_DECAY = 0.6;
+
+/**
+ * כמה חזק לדחוף את חיפוש האלטרנטיבות הצידה, בעלות.
+ * גדול מספיק כדי להוציא את החיפוש מהעמק שבו הוא נתקע, וקטן מספיק שמה שייצא
+ * עדיין יעבור את מסנן האיכות — שהוא ממילא זה שמגן על האיזון.
+ */
+const W_REPEAT = 300;
 
 /**
  * חתימה קנונית של חלוקה: לא תלויה בצבע שקיבלה כל קבוצה ולא בסדר בתוך הקבוצה.
@@ -458,6 +468,69 @@ function repeatScore(lineup: Lineup, recent: Map<string, number>, bonded: Set<st
     }
   }
   return sum;
+}
+
+/** סך המשקל שאפשר לצבור מהצירופים הישנים — המכנה שמנרמל את קנס החזרתיות. */
+const totalWeight = (recent: Map<string, number>): number => {
+  let sum = 0;
+  for (const w of recent.values()) sum += w;
+  return sum;
+};
+
+/**
+ * טבלת דחייה מספרית: משקל לכל זוג שחקנים, לפי מיקומם בבריכה.
+ *
+ * הפונקציה הזו נקראת מתוך הלולאה הפנימית של החיפוש, מיליוני פעמים בהגרלה
+ * אחת. `pairKey` בונה שם מערך ומחרוזת בכל קריאה, וזה לבדו הכפיל את זמן
+ * ההגרלה — לכן כאן הכול נפרש מראש למערך שטוח שנקרא באינדקס.
+ */
+function repulsionTable(
+  pool: Player[],
+  repulsion: Map<string, number>,
+  bonded: Set<string>,
+): { indexOf: Map<string, number>; weights: Float64Array; size: number } {
+  const indexOf = new Map(pool.map((p, i) => [p.id, i]));
+  const size = pool.length;
+  const weights = new Float64Array(size * size);
+
+  for (const [key, weight] of repulsion) {
+    // זוגות חברים אמורים לחזור יחד — אין להם משקל דחייה
+    if (bonded.has(key)) continue;
+    const [a, b] = key.split('|');
+    const ia = indexOf.get(a);
+    const ib = indexOf.get(b);
+    if (ia === undefined || ib === undefined) continue;
+    weights[ia * size + ib] = weight;
+    weights[ib * size + ia] = weight;
+  }
+  return { indexOf, weights, size };
+}
+
+/**
+ * כמה שחקנים להזיז ב"בעיטה" לפני ירידה מחדש.
+ * מעט מדי וחוזרים בדיוק לאותו מקום; הרבה מדי וזו כבר הגרלה מאפס.
+ */
+const KICK_SWAPS = 3;
+
+/** מחליף כמה זוגות אקראיים בין קבוצות — נקודת פתיחה חדשה בסביבת החלוקה הטובה. */
+function kick(lineup: Lineup, teamIds: readonly TeamId[]): Lineup {
+  const next = cloneLineup(lineup);
+  if (teamIds.length < 2) return next;
+
+  for (let k = 0; k < KICK_SWAPS; k++) {
+    const i = Math.floor(Math.random() * teamIds.length);
+    let j = Math.floor(Math.random() * (teamIds.length - 1));
+    if (j >= i) j++;
+
+    const ta = next[teamIds[i]];
+    const tb = next[teamIds[j]];
+    if (!ta?.length || !tb?.length) continue;
+
+    const a = Math.floor(Math.random() * ta.length);
+    const b = Math.floor(Math.random() * tb.length);
+    [ta[a], tb[b]] = [tb[b], ta[a]];
+  }
+  return next;
 }
 
 /**
@@ -535,45 +608,111 @@ export function generateLineup(pool: Player[], options: GenerateOptions): Lineup
   const found = new Map<string, Candidate>();
   let best: Candidate | null = null;
 
-  for (let i = 0; i < restarts; i++) {
-    const lineup = localSearch(
-      greedyBuild(clusters, ratingOf, sizes, teamIds),
-      input,
-      sizes,
-      teamIds,
-      priorities,
-    );
-
+  const consider = (lineup: Lineup): Candidate => {
     const key = lineupKey(lineup);
-    if (!found.has(key)) {
-      const candidate: Candidate = {
-        lineup,
-        cost: cost(lineup, input, sizes, teamIds, priorities),
-        penalties: criterionPenalties({ ...input, lineup }, priorities),
-        sizeOff: sizeOffOf(lineup),
-      };
-      found.set(key, candidate);
-      if (!best || candidate.cost < best.cost) best = candidate;
-    }
+    const known = found.get(key);
+    if (known) return known;
 
-    // חלוקה מושלמת — ממשיכים רק עד שיש מספיק ממה לגוון
-    if (best && best.cost < 1e-9 && found.size >= 8) break;
+    const candidate: Candidate = {
+      lineup,
+      cost: cost(lineup, input, sizes, teamIds, priorities),
+      penalties: criterionPenalties({ ...input, lineup }, priorities),
+      sizeOff: sizeOffOf(lineup),
+    };
+    found.set(key, candidate);
+    if (!best || candidate.cost < best.cost) best = candidate;
+    return candidate;
+  };
+
+  /*
+   * תקציב הניסיונות מתחלק בין שני השלבים, כדי שהגרלה תישאר מיידית: חיפוש
+   * האלטרנטיבות יוצא מחלוקה טובה ולכן מתכנס מהר, ואין צורך לתת לו יותר.
+   */
+  const opening_restarts = Math.ceil(restarts / 2);
+  const alternative_restarts = restarts - opening_restarts;
+
+  // שלב א' — חיפוש רגיל: מוצא נקודת מוצא טובה
+  for (let i = 0; i < opening_restarts; i++) {
+    consider(
+      localSearch(greedyBuild(clusters, ratingOf, sizes, teamIds), input, sizes, teamIds, priorities),
+    );
   }
 
   if (!best) return emptyLineup(teamIds);
+  // נקודת המוצא לבעיטות; רף האיכות עצמו נקבע רק אחרי ששני השלבים סיימו
+  const opening: Candidate = best;
+
+  /*
+   * שלב ב' — חיפוש אלטרנטיבות.
+   *
+   * שלב א' לבדו לא מספיק: החיפוש המקומי יורד תמיד לאותו עמק, ובבריכות קטנות
+   * כל 60 הריסטארטים מחזירים בדיוק את אותה חלוקה. אז אין בין מה לבחור, וזו
+   * הסיבה ש"הגרלה מחדש" עדיין החזירה את אותן קבוצות.
+   *
+   * כאן מחפשים חלוקות אחרות במפורש: בועטים בחלוקה המובילה (כמה החלפות
+   * אקראיות) ויורדים מחדש — הפעם עם דחייה מהצירופים שכבר היו, שמושכת את
+   * החיפוש לעמק אחר. מה שיוצא נשקל מול אותו רף איכות, אז זה לא יכול להוזיל
+   * את האיזון; זה רק מרחיב את מבחר החלוקות ששוות לו.
+   */
+  if (tolerance > 0) {
+    // בהגרלה ראשונה אין היסטוריה, אז מתרחקים לפחות מהחלוקה המובילה עצמה
+    const repulsion = new Map(recent);
+    for (const t of lineupTeams(opening.lineup)) {
+      const members = membersOf(opening.lineup, t);
+      for (let i = 0; i < members.length; i++) {
+        for (let j = i + 1; j < members.length; j++) {
+          const k = pairKey(members[i], members[j]);
+          repulsion.set(k, (repulsion.get(k) ?? 0) + 1);
+        }
+      }
+    }
+
+    const bonded = bondedPairs(bonds);
+    const denominator = totalWeight(repulsion);
+    const { indexOf, weights, size } = repulsionTable(pool, repulsion, bonded);
+    const scale = denominator ? W_REPEAT / denominator : 0;
+
+    const bias = (lineup: Lineup): number => {
+      if (!scale) return 0;
+      let sum = 0;
+      for (const t of teamIds) {
+        const members = lineup[t];
+        if (!members) continue;
+        for (let i = 0; i < members.length; i++) {
+          const ia = indexOf.get(members[i]);
+          if (ia === undefined) continue;
+          const row = ia * size;
+          for (let j = i + 1; j < members.length; j++) {
+            const ib = indexOf.get(members[j]);
+            if (ib !== undefined) sum += weights[row + ib];
+          }
+        }
+      }
+      return sum * scale;
+    };
+
+    for (let i = 0; i < alternative_restarts; i++) {
+      consider(localSearch(kick(opening.lineup, teamIds), input, sizes, teamIds, priorities, bias));
+    }
+  }
 
   /*
    * מכאן הגיוון. במקום להחזיר תמיד את המינימום המוחלט — שהוא כמעט תמיד אותה
    * חלוקה בדיוק, ולכן "הגרלה מחדש" לא שינתה כלום — אוספים את כל החלוקות
    * ששקולות לה מעשית, ומתוכן בוחרים את זו שהכי מפרקת את הצירופים האחרונים.
    */
-  const leader = best;
+  /*
+   * רף האיכות נקבע על פני שני השלבים גם יחד: לפעמים דווקא חיפוש האלטרנטיבות
+   * נוחת על חלוקה טובה מזו של השלב הראשון, ואז היא זו שקובעת מול מה משווים.
+   */
+  const leader: Candidate = best;
   const eligible = [...found.values()].filter(
     (c) =>
       c.sizeOff <= leader.sizeOff &&
       priorities.every(
         (setting, rank) =>
-          !setting.enabled || c.penalties[rank] <= leader.penalties[rank] + tolerance + 1e-9,
+          !setting.enabled ||
+          c.penalties[rank] <= leader.penalties[rank] + tolerance * VARIETY_FLEX[setting.id] + 1e-9,
       ),
   );
 
