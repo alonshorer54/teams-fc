@@ -44,16 +44,26 @@ by a signature that ignores team colour and member order. Searching only once
 was the original mistake — collecting results is useless if the search keeps
 finding the same one, which is exactly what small squads did.
 
-The pool is then filtered against the best result found across both halves. Each
-criterion gets its own slack (`VARIETY_FLEX`), because a flat allowance is wrong
-here in both directions. `rating` gets 0.05 — five hundredths of a point of
-average gap, a third of a rating point spread over a team of seven. `friends`
-gets zero: an alternative is rejected if it splits up even one more pair than
-the best result did. The lower-priority criteria get several times the base
-allowance, since their penalties are normalised by how many players hold a tag
-or a preference — one two-player tag landing together swings that penalty by
-half, and a flat bound would let it veto every alternative. Those are the
-criteria the user ranked last, so they are the ones that should bend first.
+The pool is then filtered against the best result found across both halves, and
+each criterion carries its own allowance, because a flat one is wrong here in
+several directions at once.
+
+`rating` gets 0.05 — five hundredths of a point of average gap, a third of a
+rating point spread over a team of seven. That is the bound that protects the
+balance, and it is the only criterion measured as a proportion.
+
+`friends` and `affinity` are **counted in relations, not percentages**
+(`MAX_EXTRA_VIOLATIONS`, currently 2). Their penalties are fractions of however
+many friend pairs or preferences the pool happens to contain, so a percentage
+means something different in every squad: 5% is a whole friendship in a pool
+with nineteen of them and not half a preference in a pool with four. A squad
+where four preferences all belong to one player would have every alternative
+vetoed by that one player. One relation is one relation.
+
+The remaining criteria keep a proportional allowance (`VARIETY_FLEX`) several
+times the base, since a two-player tag landing together swings that penalty by
+half on its own. They are the criteria the user ranked last, so they are the
+ones that should bend first.
 
 Whatever survives is scored on how many recently-paired players it puts back
 together — the last four saved draws plus whatever is on screen, at a decaying
@@ -61,11 +71,19 @@ weight, ignoring friend pairs since those are meant to recur — and the loosest
 one wins. With no history they all score alike and the draw genuinely draws
 between them.
 
+A densely connected squad can still leave only one qualifying split — friendship
+is transitive here, so a chain of individual links becomes one block, and a block
+of seven in teams of seven fixes an entire team on its own. When the filter comes
+back with nothing to choose from, the search runs up to three more rounds with a
+harder kick rather than relaxing the social bounds. That costs time only when it
+is actually needed.
+
 Measured over ten consecutive redraws across squads of 12 to 21 in two and three
-teams: no configuration repeats the previous draw any more (12 players in two
-teams used to return an identical split nine times out of ten), the worst rating
-gap stays inside the 0.05 bound, and no configuration breaks more friendships
-than the same search does with variety switched off.
+teams, including a real one: no configuration repeats the previous draw any more
+(12 players in two teams used to return an identical split nine times out of
+ten), and the worst rating gap stays inside its bound. The cost is the declared
+one — up to two friend pairs or preferences given up against the best split the
+same search finds with variety switched off.
 
 Five criteria are scored, each normalised to 0..1 so the weights stay comparable:
 

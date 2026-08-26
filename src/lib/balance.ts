@@ -12,6 +12,7 @@ import {
 import {
   VARIETY_FLEX,
   criterionPenalties,
+  relationCounts,
   weightedPenalty,
   type CriterionSetting,
   type PenaltyInput,
@@ -403,6 +404,19 @@ const MEMORY_DECAY = 0.6;
 const W_REPEAT = 300;
 
 /**
+ * כמה יחסים חברתיים מותר לחלוקה מגוונת לוותר עליהם מעבר לטובה ביותר —
+ * קשר חברות שנשבר, או העדפת "מעדיף עם / בלי" שהופרה.
+ *
+ * זה נספר ביחסים ולא באחוזים בכוונה. הקנסות האלה מנורמלים לפי מספר היחסים
+ * בבריכה, כך שאותו "אחוז סובלנות" מתיר קשר שלם בקבוצה עם 19 קשרים ולא מתיר
+ * אפילו חצי העדפה בבריכה שבה יש ארבע. יחס אחד הוא יחס אחד.
+ */
+export const MAX_EXTRA_VIOLATIONS = 2;
+
+/** כמה סבבי חיפוש נוספים לנסות כשלא נמצאה אף חלופה כשירה */
+const EXTRA_SEARCH_ROUNDS = 3;
+
+/**
  * חתימה קנונית של חלוקה: לא תלויה בצבע שקיבלה כל קבוצה ולא בסדר בתוך הקבוצה.
  * שתי חלוקות עם אותה חתימה הן אותן קבוצות בדיוק.
  */
@@ -513,11 +527,11 @@ function repulsionTable(
 const KICK_SWAPS = 3;
 
 /** מחליף כמה זוגות אקראיים בין קבוצות — נקודת פתיחה חדשה בסביבת החלוקה הטובה. */
-function kick(lineup: Lineup, teamIds: readonly TeamId[]): Lineup {
+function kick(lineup: Lineup, teamIds: readonly TeamId[], swaps = KICK_SWAPS): Lineup {
   const next = cloneLineup(lineup);
   if (teamIds.length < 2) return next;
 
-  for (let k = 0; k < KICK_SWAPS; k++) {
+  for (let k = 0; k < swaps; k++) {
     const i = Math.floor(Math.random() * teamIds.length);
     let j = Math.floor(Math.random() * (teamIds.length - 1));
     if (j >= i) j++;
@@ -654,6 +668,8 @@ export function generateLineup(pool: Player[], options: GenerateOptions): Lineup
    * החיפוש לעמק אחר. מה שיוצא נשקל מול אותו רף איכות, אז זה לא יכול להוזיל
    * את האיזון; זה רק מרחיב את מבחר החלוקות ששוות לו.
    */
+  let bias: ((lineup: Lineup) => number) | undefined;
+
   if (tolerance > 0) {
     // בהגרלה ראשונה אין היסטוריה, אז מתרחקים לפחות מהחלוקה המובילה עצמה
     const repulsion = new Map(recent);
@@ -672,7 +688,7 @@ export function generateLineup(pool: Player[], options: GenerateOptions): Lineup
     const { indexOf, weights, size } = repulsionTable(pool, repulsion, bonded);
     const scale = denominator ? W_REPEAT / denominator : 0;
 
-    const bias = (lineup: Lineup): number => {
+    bias = (lineup: Lineup): number => {
       if (!scale) return 0;
       let sum = 0;
       for (const t of teamIds) {
@@ -705,18 +721,59 @@ export function generateLineup(pool: Player[], options: GenerateOptions): Lineup
    * רף האיכות נקבע על פני שני השלבים גם יחד: לפעמים דווקא חיפוש האלטרנטיבות
    * נוחת על חלוקה טובה מזו של השלב הראשון, ואז היא זו שקובעת מול מה משווים.
    */
-  const leader: Candidate = best;
-  const eligible = [...found.values()].filter(
-    (c) =>
-      c.sizeOff <= leader.sizeOff &&
-      priorities.every(
-        (setting, rank) =>
-          !setting.enabled ||
-          c.penalties[rank] <= leader.penalties[rank] + tolerance * VARIETY_FLEX[setting.id] + 1e-9,
-      ),
-  );
+  /*
+   * חברויות והעדפות נמדדות ביחסים, לא באחוזים. בבריכה מקושרת מאוד — אשכולות
+   * שממלאים קבוצה שלמה — הדרישה שחלופה לא תוותר על אף יחס משאירה מועמדת אחת
+   * בדיוק, וההגרלה חוזרת על עצמה. יחס אחד של מרווח הוא מה שפותח את זה.
+   */
+  const relations = relationCounts(pool);
+  const slackFor = (setting: CriterionSetting) => {
+    const units = relations[setting.id];
+    if (!units) return tolerance * VARIETY_FLEX[setting.id];
+    return MAX_EXTRA_VIOLATIONS / units;
+  };
 
-  let winners: Lineup[] = [leader.lineup];
+  const qualified = () => {
+    const bar = best!;
+    return [...found.values()].filter(
+      (c) =>
+        c.sizeOff <= bar.sizeOff &&
+        priorities.every(
+          (setting, rank) =>
+            !setting.enabled ||
+            c.penalties[rank] <= bar.penalties[rank] + slackFor(setting) + 1e-9,
+        ),
+    );
+  };
+
+  let eligible = qualified();
+
+  /*
+   * בריכה צפופה — אשכולות חברויות שממלאים קבוצה שלמה — מייצרת הרבה חלוקות
+   * שונות שכמעט כולן נפסלות, ולפעמים שורדת רק אחת. במקום להרפות אז את
+   * הדרישות החברתיות, מחפשים יותר: עוד סבבים, עם בעיטה חזקה יותר בכל פעם.
+   * זה עולה זמן רק כשבאמת צריך.
+   */
+  if (tolerance > 0 && bias) {
+    for (let round = 1; eligible.length <= 1 && round <= EXTRA_SEARCH_ROUNDS; round++) {
+      for (let i = 0; i < alternative_restarts; i++) {
+        consider(
+          localSearch(
+            kick(opening.lineup, teamIds, KICK_SWAPS + round),
+            input,
+            sizes,
+            teamIds,
+            priorities,
+            bias,
+          ),
+        );
+      }
+      eligible = qualified();
+    }
+  }
+
+  const chosen: Candidate = best;
+  let winners: Lineup[] = [chosen.lineup];
   if (tolerance > 0 && eligible.length > 1) {
     const bonded = bondedPairs(bonds);
     let bestScore = Infinity;

@@ -75,6 +75,34 @@ export const VARIETY_FLEX: Record<CriterionId, number> = {
   tags: 8,
 };
 
+/**
+ * כמה יחסים בדידים כל קריטריון סופר בבריכה הזו.
+ *
+ * `friends` ו-`affinity` לא מודדים גודל רציף אלא אירועים שאפשר לספור: קשר
+ * שנשבר, העדפה שהופרה. הקנס שלהם הוא שבר מתוך המספר הזה, כך שאותו אחוז
+ * סובלנות אומר דבר אחר לגמרי בבריכה עם 19 קשרים ובבריכה עם 4 העדפות.
+ * מי שרוצה לומר "קשר אחד" צריך את המכנה.
+ */
+export function relationCounts(pool: Player[]): Partial<Record<CriterionId, number>> {
+  const ids = new Set(pool.map((p) => p.id));
+  const seen = new Set<string>();
+  let friends = 0;
+  let affinity = 0;
+
+  for (const p of pool) {
+    for (const id of p.friendIds) {
+      if (!ids.has(id)) continue;
+      const key = pairKey(p.id, id);
+      if (seen.has(key)) continue;
+      seen.add(key);
+      friends++;
+    }
+    affinity += p.loveIds.filter((id) => ids.has(id)).length;
+    affinity += p.hateIds.filter((id) => ids.has(id)).length;
+  }
+  return { friends, affinity };
+}
+
 /** הקנס של כל קריטריון, מנורמל לטווח 0..1 בערך, כדי שהמשקלים יהיו בני-השוואה. */
 export interface PenaltyInput {
   lineup: Lineup;
