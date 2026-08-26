@@ -237,6 +237,12 @@ export interface MatchRecord {
   substitutions?: { out: HistoryPlayer; in: HistoryPlayer }[];
 }
 
+/** ההרכב של הגרלה שנשמרה, כמזהי שחקנים — כדי להשוות אותה להגרלות חדשות. */
+export const recordLineup = (record: MatchRecord): Lineup =>
+  Object.fromEntries(
+    teamsIn(record.teams).map((t) => [t, (record.teams[t] ?? []).map((p) => p.id)]),
+  ) as Lineup;
+
 /* ------------------------------------------------------------------ */
 /*  עיצוב הקבוצות                                                      */
 /* ------------------------------------------------------------------ */

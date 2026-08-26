@@ -191,6 +191,17 @@ export function weightedPenalty(input: PenaltyInput, priorities: CriterionSettin
   return total;
 }
 
+/**
+ * הקנס של כל קריטריון בנפרד, לפי סדר העדיפויות ובלי שקלול.
+ * קריטריון כבוי מקבל 0, כדי שהמערך יישאר מיושר מול רשימת העדיפויות.
+ */
+export function criterionPenalties(
+  input: PenaltyInput,
+  priorities: CriterionSetting[],
+): number[] {
+  return priorities.map((setting) => (setting.enabled ? PENALTY_FN[setting.id](input) : 0));
+}
+
 /** פירוט הקנסות לכל קריטריון — לתצוגה למשתמש */
 export function penaltyBreakdown(
   input: PenaltyInput,

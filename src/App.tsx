@@ -15,6 +15,7 @@ import {
   lineupTeams,
   membersOf,
   normalizePlayers,
+  recordLineup,
   teamsIn,
   type Filler,
   type Lineup,
@@ -22,7 +23,7 @@ import {
   type Placements,
   type Player,
 } from './types';
-import { removeFromLineup } from './lib/balance';
+import { VARIETY_MEMORY, removeFromLineup } from './lib/balance';
 import {
   STORAGE_KEYS,
   emptyDraft,
@@ -144,6 +145,12 @@ export default function App() {
 
   // אפקטים נלמדים לזוגות — זמינים להגרלה כשהקריטריון דלוק
   const pairEffects = useMemo(() => pairEffectMap(computePairChemistry(history)), [history]);
+
+  // ההרכבים האחרונים ששוחקו — מהם ההגרלה מנסה להתרחק כדי לגוון
+  const recentLineups = useMemo(
+    () => history.slice(0, VARIETY_MEMORY).map(recordLineup),
+    [history],
+  );
 
   const priorities = useMemo(
     () => normalizePriorities(settings.priorities),
@@ -441,6 +448,7 @@ export default function App() {
             setDraft={setDraft}
             streaks={streaks}
             pairEffects={pairEffects}
+            recentLineups={recentLineups}
             priorities={priorities}
             setPriorities={setPriorities}
             onSaveHistory={saveToHistory}

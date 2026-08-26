@@ -26,9 +26,25 @@ Hebrew, right-to-left, installable on a phone, and synced between devices.
 
 Splitting players into balanced teams is a variant of the partition problem, so
 the app uses a heuristic rather than an exact solver: greedy construction with
-random noise, then hill-climbing over every pair swap, repeated 60 times with the
-best result kept. It reaches a 0.00 rating gap in well under a second, and the
-noise is what makes every draw come out differently.
+random noise, then hill-climbing over every pair swap, repeated 60 times. It
+reaches a 0.00 rating gap in well under a second.
+
+Keeping only the single cheapest result made every draw identical — 60 restarts
+of the same cost function nearly always converge on the same split, so redrawing
+reshuffled the order within a team and nothing else. The 60 results are now
+collected instead, deduplicated by a colour-independent signature, and filtered
+to those within 0.05 of the leader **on every enabled criterion separately**.
+That bound is what protects the balance: 0.05 on `rating` is five hundredths of
+a point of average gap, and `friends` is normalised by the number of friend
+pairs, so below 20 pairs even one broken friendship already falls outside it.
+
+Out of the splits that survive, the app picks whichever breaks up the most pairs
+who played together recently — the last four saved draws plus whatever is on
+screen, at a decaying weight, ignoring friend pairs since those are meant to
+recur. With no history to go on they all score alike and the draw genuinely
+draws between them. Across twelve consecutive redraws this moved the pair
+overlap between one draw and the next from 60% down to 29% — roughly what a
+random split would give — for at most 0.043 of average rating gap.
 
 Five criteria are scored, each normalised to 0..1 so the weights stay comparable:
 

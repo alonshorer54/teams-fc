@@ -10,6 +10,7 @@ import {
   type TeamId,
 } from '../types';
 import {
+  criterionPenalties,
   weightedPenalty,
   type CriterionSetting,
   type PenaltyInput,
@@ -370,11 +371,117 @@ function localSearch(
 }
 
 /* ------------------------------------------------------------------ */
+/*  גיוון בין הגרלה להגרלה                                              */
+/* ------------------------------------------------------------------ */
+
+/**
+ * כמה מותר לחלוקה שנבחרת להיות פחות טובה מהטובה ביותר — בכל קריטריון בנפרד.
+ *
+ * הקנסות מנורמלים ל-0..1, כך ש-0.05 בקריטריון הדירוג הוא חמש מאיות של נקודה
+ * בפער הממוצעים בין הקבוצות (בקבוצה של 7 — שליש נקודת דירוג בסך הכל). זה לא
+ * מורגש על המגרש, אבל מספיק כדי לפתוח כמה חלוקות חלופיות לבחירה.
+ *
+ * בחברויות הנרמול הוא לפי מספר הקשרים, ולכן כל עוד יש פחות מ-20 קשרי חברות
+ * אפילו קשר אחד שנשבר כבר חורג מהסובלנות — כלומר החברים נשארים יחד.
+ */
+export const VARIETY_TOLERANCE = 0.05;
+
+/** כמה הגרלות אחורה נלקחות בחשבון כשמחפשים גיוון */
+export const VARIETY_MEMORY = 4;
+
+/** דעיכת המשקל לכל הגרלה נוספת אחורה: האחרונה 1, שלפניה 0.6, וכן הלאה */
+const MEMORY_DECAY = 0.6;
+
+/**
+ * חתימה קנונית של חלוקה: לא תלויה בצבע שקיבלה כל קבוצה ולא בסדר בתוך הקבוצה.
+ * שתי חלוקות עם אותה חתימה הן אותן קבוצות בדיוק.
+ */
+export function lineupKey(lineup: Lineup): string {
+  return lineupTeams(lineup)
+    .map((t) => [...membersOf(lineup, t)].sort().join(','))
+    .sort()
+    .join('|');
+}
+
+/**
+ * משקל לכל זוג שחקנים לפי כמה לאחרונה הם שובצו יחד.
+ * מקבל הרכבים מהחדש לישן; הרכבים זהים נספרים פעם אחת בלבד.
+ */
+export function recentPairWeights(
+  lineups: Lineup[],
+  memory = VARIETY_MEMORY,
+): Map<string, number> {
+  const weights = new Map<string, number>();
+  const seen = new Set<string>();
+  let rank = 0;
+
+  for (const lineup of lineups) {
+    if (rank >= memory) break;
+    const key = lineupKey(lineup);
+    if (seen.has(key)) continue;
+    seen.add(key);
+
+    const weight = Math.pow(MEMORY_DECAY, rank++);
+    for (const t of lineupTeams(lineup)) {
+      const members = membersOf(lineup, t);
+      for (let i = 0; i < members.length; i++) {
+        for (let j = i + 1; j < members.length; j++) {
+          const k = pairKey(members[i], members[j]);
+          weights.set(k, (weights.get(k) ?? 0) + weight);
+        }
+      }
+    }
+  }
+  return weights;
+}
+
+/** מפתחות הזוגות שהם קשר חברות — אלה שאמורים לחזור יחד. */
+const bondedPairs = (bonds: Bond[]): Set<string> =>
+  new Set(bonds.map(([a, b]) => pairKey(a, b)));
+
+/**
+ * כמה החלוקה הזו "שוב אותו דבר" ביחס להגרלות האחרונות. נמוך = מגוון יותר.
+ * זוגות חברים לא נספרים: הם אמורים לחזור יחד, וזה לא נחשב חוסר גיוון.
+ */
+function repeatScore(lineup: Lineup, recent: Map<string, number>, bonded: Set<string>): number {
+  if (!recent.size) return 0;
+
+  let sum = 0;
+  for (const t of lineupTeams(lineup)) {
+    const members = membersOf(lineup, t);
+    for (let i = 0; i < members.length; i++) {
+      for (let j = i + 1; j < members.length; j++) {
+        const k = pairKey(members[i], members[j]);
+        if (bonded.has(k)) continue;
+        sum += recent.get(k) ?? 0;
+      }
+    }
+  }
+  return sum;
+}
+
+/**
+ * סידור השחקנים בתוך כל קבוצה לפי שם.
+ * בלי זה סדר המערך משקף את מהלך האלגוריתם, והגרלה שהחזירה בדיוק את אותן
+ * קבוצות נראית על המסך כאילו משהו בכל זאת השתנה.
+ */
+function sortMembers(lineup: Lineup, pool: Player[]): Lineup {
+  const nameOf = new Map(pool.map((p) => [p.id, p.name]));
+  const next = cloneLineup(lineup);
+  for (const t of lineupTeams(next)) {
+    next[t] = next[t]!.sort((a, b) =>
+      (nameOf.get(a) ?? '').localeCompare(nameOf.get(b) ?? '', 'he'),
+    );
+  }
+  return next;
+}
+
+/* ------------------------------------------------------------------ */
 /*  נקודת הכניסה: הגרלת קבוצות מאוזנות                                   */
 /* ------------------------------------------------------------------ */
 
 export interface GenerateOptions {
-  /** מספר ניסיונות עצמאיים; מתוכם נבחר הטוב ביותר */
+  /** מספר ניסיונות עצמאיים; מתוכם נבחרת החלוקה שתוחזר */
   restarts?: number;
   /** סדר העדיפויות שהמשתמש הגדיר */
   priorities: CriterionSetting[];
@@ -382,12 +489,29 @@ export interface GenerateOptions {
   pairEffects?: Map<string, number>;
   /** הצבעים שישתתפו בהגרלה. ברירת מחדל: שלוש הקבוצות הקלאסיות. */
   teamIds?: readonly TeamId[];
+  /**
+   * משקל לכל זוג ששובץ יחד בהגרלות האחרונות (ראו `recentPairWeights`).
+   * מבין החלוקות ששקולות באיכותן תיבחר זו שמפרקת הכי הרבה צירופים חוזרים.
+   */
+  recentPairs?: Map<string, number>;
+  /** סובלנות הגיוון; 0 = תמיד החלוקה הטובה ביותר בלבד */
+  variety?: number;
+}
+
+/** מועמדת לחלוקה: ההרכב עצמו, איכותו, וכמה הוא חורג מגדלי הקבוצות. */
+interface Candidate {
+  lineup: Lineup;
+  cost: number;
+  penalties: number[];
+  sizeOff: number;
 }
 
 export function generateLineup(pool: Player[], options: GenerateOptions): Lineup {
   const restarts = options.restarts ?? 60;
   const { priorities } = options;
   const pairEffects = options.pairEffects ?? new Map<string, number>();
+  const recent = options.recentPairs ?? new Map<string, number>();
+  const tolerance = options.variety ?? VARIETY_TOLERANCE;
   const teamIds = options.teamIds?.length
     ? options.teamIds
     : defaultTeamIds(DEFAULT_TEAM_COUNT);
@@ -404,27 +528,73 @@ export function generateLineup(pool: Player[], options: GenerateOptions): Lineup
   const clusters = friendsOn ? buildClusters(pool, bonds, maxSize) : pool.map((p) => [p.id]);
 
   const input = { pool, ratingOf, pairEffects };
+  const sizeOffOf = (lineup: Lineup) =>
+    teamIds.reduce((s, t) => s + Math.abs(membersOf(lineup, t).length - (sizes[t] ?? 0)), 0);
 
-  let best: Lineup | null = null;
-  let bestCost = Infinity;
+  // כל החלוקות השונות שנמצאו, לפי חתימה — כדי שאותה חלוקה לא תישקל פעמיים
+  const found = new Map<string, Candidate>();
+  let best: Candidate | null = null;
 
   for (let i = 0; i < restarts; i++) {
-    const candidate = localSearch(
+    const lineup = localSearch(
       greedyBuild(clusters, ratingOf, sizes, teamIds),
       input,
       sizes,
       teamIds,
       priorities,
     );
-    const c = cost(candidate, input, sizes, teamIds, priorities);
-    if (c < bestCost) {
-      bestCost = c;
-      best = candidate;
+
+    const key = lineupKey(lineup);
+    if (!found.has(key)) {
+      const candidate: Candidate = {
+        lineup,
+        cost: cost(lineup, input, sizes, teamIds, priorities),
+        penalties: criterionPenalties({ ...input, lineup }, priorities),
+        sizeOff: sizeOffOf(lineup),
+      };
+      found.set(key, candidate);
+      if (!best || candidate.cost < best.cost) best = candidate;
     }
-    if (bestCost < 1e-9) break; // חלוקה מושלמת — אין טעם להמשיך
+
+    // חלוקה מושלמת — ממשיכים רק עד שיש מספיק ממה לגוון
+    if (best && best.cost < 1e-9 && found.size >= 8) break;
   }
 
-  return best ?? emptyLineup(teamIds);
+  if (!best) return emptyLineup(teamIds);
+
+  /*
+   * מכאן הגיוון. במקום להחזיר תמיד את המינימום המוחלט — שהוא כמעט תמיד אותה
+   * חלוקה בדיוק, ולכן "הגרלה מחדש" לא שינתה כלום — אוספים את כל החלוקות
+   * ששקולות לה מעשית, ומתוכן בוחרים את זו שהכי מפרקת את הצירופים האחרונים.
+   */
+  const leader = best;
+  const eligible = [...found.values()].filter(
+    (c) =>
+      c.sizeOff <= leader.sizeOff &&
+      priorities.every(
+        (setting, rank) =>
+          !setting.enabled || c.penalties[rank] <= leader.penalties[rank] + tolerance + 1e-9,
+      ),
+  );
+
+  let winners: Lineup[] = [leader.lineup];
+  if (tolerance > 0 && eligible.length > 1) {
+    const bonded = bondedPairs(bonds);
+    let bestScore = Infinity;
+    winners = [];
+    for (const c of eligible) {
+      const score = repeatScore(c.lineup, recent, bonded);
+      if (score < bestScore - 1e-9) {
+        bestScore = score;
+        winners = [c.lineup];
+      } else if (score <= bestScore + 1e-9) {
+        winners.push(c.lineup);
+      }
+    }
+  }
+
+  // בלי היסטוריה כל המועמדות מקבלות אותו ציון, ואז ההגרלה באמת מגרילה ביניהן
+  return sortMembers(winners[Math.floor(Math.random() * winners.length)], pool);
 }
 
 /* ------------------------------------------------------------------ */

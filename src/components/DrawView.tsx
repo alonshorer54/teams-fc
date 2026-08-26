@@ -35,6 +35,7 @@ import {
   findTeamOf,
   generateLineup,
   movePlayer,
+  recentPairWeights,
   swapPlayers,
   teamSizeList,
 } from '../lib/balance';
@@ -64,6 +65,7 @@ export function DrawView({
   setDraft,
   streaks,
   pairEffects,
+  recentLineups,
   priorities,
   setPriorities,
   onSaveHistory,
@@ -76,6 +78,8 @@ export function DrawView({
   streaks: Map<string, number>;
   /** אפקטים נלמדים לזוגות, מתוך ההיסטוריה */
   pairEffects: Map<string, number>;
+  /** ההרכבים האחרונים מההיסטוריה, מהחדש לישן */
+  recentLineups: Lineup[];
   priorities: CriterionSetting[];
   setPriorities: (next: CriterionSetting[]) => void;
   onSaveHistory: (lineup: Lineup, date: string, cancelledIds: string[]) => void;
@@ -194,6 +198,15 @@ export function DrawView({
     }
   };
 
+  /**
+   * הצירופים שכבר היו — ההרכב שעל המסך ראשון, ואחריו ההיסטוריה.
+   * בזכות זה "הגרלה מחדש" מתרחקת ממה שרואים, ולא רק משבוע לשבוע.
+   */
+  const recentPairs = useMemo(
+    () => recentPairWeights([...(lineup ? [lineup] : []), ...recentLineups]),
+    [lineup, recentLineups],
+  );
+
   const generate = () => {
     if (pool.length < teamCount) {
       notify(`צריך לפחות ${teamCount} שחקנים כדי לחלק ל-${teamCount} קבוצות`);
@@ -209,6 +222,7 @@ export function DrawView({
       priorities: effective,
       pairEffects: activeEffects,
       teamIds: colors,
+      recentPairs,
     });
     // ההגרלה הטרייה היא גם נקודת ההשוואה לעריכות שיבואו אחריה
     setDraft((p) => ({ ...p, lineup: next, baseline: next }));
