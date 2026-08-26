@@ -157,17 +157,22 @@ export function TeamCard({
                 <span className="block truncate text-sm font-semibold text-slate-100">
                   {player.name}
                 </span>
-                {bond.hasBond && (
-                  <span
-                    className={`flex items-center gap-1 truncate text-[10px] ${
-                      bond.together ? 'text-emerald-400/90' : 'text-amber-400/80'
-                    }`}
-                  >
-                    {bond.together ? <Link2 size={9} /> : <Unlink size={9} />}
-                    חבר של {bond.partnerNames.join(', ')}
-                    {!bond.together && ' · בקבוצה אחרת'}
-                  </span>
-                )}
+                {/* שורת החברים נשמרת גם למי שאין לו חבר בבריכה. בלי זה השורה
+                    נמוכה ב-12 פיקסלים, והשחקנים בשלוש הקבוצות מפסיקים להיות
+                    מיושרים זה מול זה — קבוצה עם פחות חברים מטפסת כלפי מעלה */}
+                <span
+                  className={`flex h-3 items-center gap-1 truncate text-[10px] ${
+                    bond.together ? 'text-emerald-400/90' : 'text-amber-400/80'
+                  }`}
+                >
+                  {bond.hasBond && (
+                    <>
+                      {bond.together ? <Link2 size={9} /> : <Unlink size={9} />}
+                      חבר של {bond.partnerNames.join(', ')}
+                      {!bond.together && ' · בקבוצה אחרת'}
+                    </>
+                  )}
+                </span>
               </span>
 
               {adminView && <RatingBadge rating={player.rating} size="sm" />}
