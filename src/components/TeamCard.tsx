@@ -47,7 +47,7 @@ export function TeamCard({
 
   return (
     <section
-      className={`card overflow-hidden border-2 transition ${meta.ring} ${
+      className={`card flex h-full flex-col overflow-hidden border-2 transition ${meta.ring} ${
         dropTarget ? 'ring-2 ring-emerald-400/70' : ''
       }`}
       onDragOver={(e) => {
@@ -112,7 +112,9 @@ export function TeamCard({
       </header>
 
       {/* רשימת השחקנים */}
-      <ul className={`min-h-[9rem] divide-y divide-slate-800/60 ${meta.softBg}`}>
+      {/* flex-1 מצמיד את סיכום הקבוצה לתחתית הכרטיס — אחרת קבוצה עם פחות
+          שורות מסיימת גבוה יותר, והסיכומים של שלוש הקבוצות לא מיושרים */}
+      <ul className={`min-h-[9rem] flex-1 divide-y divide-slate-800/60 ${meta.softBg}`}>
         {playerIds.length === 0 && (
           <li className="px-4 py-10 text-center text-xs text-slate-500">
             גררו לכאן שחקנים
