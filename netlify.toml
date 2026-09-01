@@ -3,7 +3,7 @@
   publish = "dist"
 
 [build.environment]
-  # Vite 8 and TypeScript 6 need a modern Node; matches the GitHub Actions workflow
+  # Vite 8 and TypeScript 6 need a modern Node.
   NODE_VERSION = "22"
 
 # Single-page app: every unknown path serves index.html so deep links and
