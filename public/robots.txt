@@ -1,0 +1,5 @@
+# כל מנוע חיפוש מוזמן לסרוק את כל האתר.
+User-agent: *
+Allow: /
+
+Sitemap: https://teams-fc.netlify.app/sitemap.xml

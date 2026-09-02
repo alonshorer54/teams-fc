@@ -30,6 +30,8 @@ dist-ssr
 
 # Personal notes and documents — kept locally, not part of the app
 *.txt
+# ...חוץ מזה, שהוא חלק מהאתר
+!public/robots.txt
 *.docx
 *.pdf
 PROJECT-SUMMARY.md
