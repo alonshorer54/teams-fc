@@ -149,8 +149,8 @@ export function AuthGate({
           </div>
 
           <p className="mx-auto mt-3 max-w-md text-[12px] leading-relaxed text-slate-400">
-            מצב דוגמה נכנס בלי הרשמה ובלי אימייל — 21 שחקני דוגמה, הגרלה אמיתית, וכל שאר
-            המסכים. שום דבר לא נשמר.
+            נכנסים בלי הרשמה ובלי אימייל — 21 שחקנים מומצאים, הגרלה אמיתית וכל שאר המסכים.
+            שום דבר לא נשמר.
           </p>
 
           <div className="mt-4 flex justify-center">
@@ -175,8 +175,7 @@ export function AuthGate({
         </ul>
 
         <p className="mt-8 text-center text-[11px] leading-relaxed text-slate-500">
-          מצב דוגמה לא שומר כלום ולא דורש חשבון. עם חשבון — הנתונים פרטיים לכם בלבד
-          ומסתנכרנים בין המכשירים.
+          עם חשבון הנתונים פרטיים לכם בלבד ומסתנכרנים בין הטלפון למחשב.
         </p>
       </div>
     );
