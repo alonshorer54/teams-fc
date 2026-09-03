@@ -405,13 +405,15 @@ function PlayerChip({
   secondaryAction?: { icon: React.ReactNode; label: string; onClick: () => void };
 }) {
   return (
+    // max-w-full ו-min-w-0 הם מה שמאפשר לשורת החברים להתקצר במקום להרחיב את
+    // הצ'יפ: בלעדיהם רשימת חברים ארוכה דחפה את כפתורי הפעולה אל מחוץ למסך בטלפון
     <span
-      className={`inline-flex items-center gap-2 rounded-xl border px-2.5 py-1.5 ${TONES[tone]}`}
+      className={`inline-flex max-w-full items-center gap-2 rounded-xl border px-2.5 py-1.5 ${TONES[tone]}`}
     >
-      <span className="flex flex-col">
-        <span className="flex items-center gap-1.5">
+      <span className="flex min-w-0 flex-col">
+        <span className="flex min-w-0 items-center gap-1.5">
           <span
-            className={`text-sm font-semibold ${
+            className={`truncate text-sm font-semibold ${
               strikethrough ? 'text-slate-400 line-through' : 'text-slate-100'
             }`}
           >
@@ -437,26 +439,30 @@ function PlayerChip({
           )}
         </span>
         {(friendNames || note) && (
-          <span className="flex items-center gap-1 truncate text-[10px] text-slate-500">
+          <span className="flex min-w-0 items-center gap-1 text-[10px] text-slate-500">
             {friendNames && (
               <>
                 <Link2 size={9} className="shrink-0" />
-                <span className="truncate">חבר של {friendNames}</span>
+                <span className="truncate" title={`חבר של ${friendNames}`}>
+                  חבר של {friendNames}
+                </span>
               </>
             )}
-            {note && <span className="text-sky-300">{note}</span>}
+            {note && <span className="shrink-0 text-sky-300">{note}</span>}
           </span>
         )}
       </span>
 
-      <RatingBadge rating={player.rating} size="sm" />
+      <span className="shrink-0">
+        <RatingBadge rating={player.rating} size="sm" />
+      </span>
 
       {/* p-2 כדי שיהיה נוח ללחוץ באצבע בטלפון */}
       <button
         onClick={action.onClick}
         title={action.label}
         aria-label={action.label}
-        className="rounded-lg p-2 text-slate-400 transition hover:bg-slate-700/60 hover:text-white"
+        className="shrink-0 rounded-lg p-2 text-slate-400 transition hover:bg-slate-700/60 hover:text-white"
       >
         {action.icon}
       </button>
@@ -466,7 +472,7 @@ function PlayerChip({
           onClick={secondaryAction.onClick}
           title={secondaryAction.label}
           aria-label={secondaryAction.label}
-          className="rounded-lg p-2 text-slate-500 transition hover:bg-slate-700/60 hover:text-white"
+          className="shrink-0 rounded-lg p-2 text-slate-500 transition hover:bg-slate-700/60 hover:text-white"
         >
           {secondaryAction.icon}
         </button>
