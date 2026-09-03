@@ -102,8 +102,20 @@ oversized team is penalised above everything else so the split stays valid.
 
 **Learned chemistry** is the one criterion the app derives rather than being told:
 it compares how often a pair wins together against how each of them performs
-individually. Pairs that beat that expectation are treated as extra strength and
-spread *apart* — the goal is balance, so clustering them would achieve the opposite.
+individually. Comparing against that expectation is the whole point — counting
+raw wins together would just rank the strongest players, since two good players
+win a lot with or without each other. Pairs that beat the expectation are treated
+as extra strength and spread *apart* — the goal is balance, so clustering them
+would achieve the opposite.
+
+It is on by default and needs no setup, because it costs nothing until it has
+something to say: a pair enters the model only after three evenings on the same
+team, and with no qualifying pair the penalty is zero for every candidate split,
+so the criterion cannot influence a draw it has no evidence for. With a stable
+squad the first pairs usually qualify around the fourth evening that has a result
+recorded. The trends screen shows each pair's own numbers — evenings together,
+what they actually won, and what was expected of them — rather than a single
+score with no way to judge it.
 
 ## Architecture
 

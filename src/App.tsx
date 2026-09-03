@@ -38,7 +38,7 @@ import { useSyncedStore } from './hooks/useSyncedStore';
 import { todayISO } from './lib/format';
 import { computeHistoryStats, streakByPlayer } from './lib/stats';
 import { computePairChemistry, pairEffectMap } from './lib/pairs';
-import { normalizePriorities, type CriterionSetting } from './lib/criteria';
+import { PRIORITIES_VERSION, normalizePriorities, type CriterionSetting } from './lib/criteria';
 import { DEMO_PLAYERS, buildDemoHistory } from './lib/demoData';
 import { PlayersView } from './components/PlayersView';
 import { DrawView } from './components/DrawView';
@@ -153,11 +153,17 @@ export default function App() {
   );
 
   const priorities = useMemo(
-    () => normalizePriorities(settings.priorities),
-    [settings.priorities],
+    () => normalizePriorities(settings.priorities, settings.prioritiesVersion),
+    [settings.priorities, settings.prioritiesVersion],
   );
+  // כל שינוי מכוון חותם את הגרסה, כדי שמיגרציית ברירות המחדל לא תרוץ שוב עליו
   const setPriorities = useCallback(
-    (next: CriterionSetting[]) => store.setSettings((prev) => ({ ...prev, priorities: next })),
+    (next: CriterionSetting[]) =>
+      store.setSettings((prev) => ({
+        ...prev,
+        priorities: next,
+        prioritiesVersion: PRIORITIES_VERSION,
+      })),
     [store],
   );
 

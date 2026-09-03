@@ -7,7 +7,7 @@ import {
   type MatchRecord,
   type Player,
 } from '../types';
-import { DEFAULT_PRIORITIES, type CriterionSetting } from './criteria';
+import { DEFAULT_PRIORITIES, PRIORITIES_VERSION, type CriterionSetting } from './criteria';
 
 // המפתחות נשמרו בשמם המקורי כדי שנתונים קיימים אצל משתמשים לא יאבדו בשינוי השם
 export const STORAGE_KEYS = {
@@ -48,6 +48,8 @@ export const emptyPayments = (matchDate: string): PaymentRound => ({
 /** הגדרות שמסתנכרנות בין המכשירים יחד עם השחקנים וההיסטוריה. */
 export interface AppSettings {
   priorities: CriterionSetting[];
+  /** גרסת ברירות המחדל שלפיה נשמר `priorities` — ראו normalizePriorities */
+  prioritiesVersion: number;
   payments: PaymentRound;
   /** המחזור הנוכחי — מסונכרן כדי שהטלפון והמחשב יראו את אותן קבוצות */
   round: Draft;
@@ -55,6 +57,7 @@ export interface AppSettings {
 
 export const defaultSettings = (): AppSettings => ({
   priorities: DEFAULT_PRIORITIES,
+  prioritiesVersion: PRIORITIES_VERSION,
   payments: emptyPayments(''),
   round: emptyDraft(''),
 });
@@ -62,6 +65,8 @@ export const defaultSettings = (): AppSettings => ({
 /** משלים שדות שנוספו אחרי שההגדרות כבר נשמרו בענן. */
 export const normalizeSettings = (raw: Partial<AppSettings> | undefined): AppSettings => ({
   priorities: raw?.priorities ?? DEFAULT_PRIORITIES,
+  // הגדרות שנשמרו לפני שהשדה קיים הן מלפני המיגרציה, כלומר גרסה 1
+  prioritiesVersion: raw?.prioritiesVersion ?? (raw?.priorities ? 1 : PRIORITIES_VERSION),
   payments: raw?.payments ?? emptyPayments(''),
   round: normalizeDraft(raw?.round ?? {}, raw?.round?.matchDate ?? ''),
 });

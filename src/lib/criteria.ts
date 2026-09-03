@@ -15,10 +15,18 @@ export interface CriterionSetting {
 export const DEFAULT_PRIORITIES: CriterionSetting[] = [
   { id: 'rating', enabled: true },
   { id: 'friends', enabled: true },
-  { id: 'gameChemistry', enabled: false },
+  // דלוק כברירת מחדל: הקנס שלו הוא 0 כל עוד אין אף זוג שעבר את סף המדגם,
+  // אז זה פשוט "מתעורר" מעצמו בשבוע שבו נצברו מספיק תוצאות
+  { id: 'gameChemistry', enabled: true },
   { id: 'affinity', enabled: true },
   { id: 'tags', enabled: true },
 ];
+
+/**
+ * גרסת ברירות המחדל של סדר העדיפויות.
+ * העלאה כאן מריצה מיגרציה חד-פעמית אצל מי שכבר שמר הגדרות בענן.
+ */
+export const PRIORITIES_VERSION = 2;
 
 export const CRITERION_META: Record<
   CriterionId,
@@ -265,10 +273,24 @@ export function penaltyBreakdown(
   });
 }
 
-/** משלים קריטריונים שנוספו בגרסאות מאוחרות, בלי לאבד את הסדר שהמשתמש בחר. */
-export function normalizePriorities(saved: CriterionSetting[] | undefined): CriterionSetting[] {
+/**
+ * משלים קריטריונים שנוספו בגרסאות מאוחרות, בלי לאבד את הסדר שהמשתמש בחר,
+ * ומריץ מיגרציות של ברירות מחדל לפי הגרסה שנשמרה.
+ */
+export function normalizePriorities(
+  saved: CriterionSetting[] | undefined,
+  savedVersion = 1,
+): CriterionSetting[] {
   if (!saved?.length) return DEFAULT_PRIORITIES;
   const known = saved.filter((s) => s.id in CRITERION_META);
   const missing = DEFAULT_PRIORITIES.filter((d) => !known.some((s) => s.id === d.id));
-  return [...known, ...missing];
+  const merged = [...known, ...missing];
+
+  // גרסה 2: הכימיה המשחקית עברה לדלוקה כברירת מחדל. מי ששמר הגדרות כשהיא
+  // הייתה כבויה יקבל אותה דלוקה פעם אחת; מרגע שיגע בסדר העדיפויות נשמרת
+  // הגרסה החדשה, וכיבוי מכוון נשאר מכובה.
+  if (savedVersion < 2) {
+    return merged.map((s) => (s.id === 'gameChemistry' ? { ...s, enabled: true } : s));
+  }
+  return merged;
 }
