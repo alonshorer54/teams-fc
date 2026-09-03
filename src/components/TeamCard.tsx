@@ -64,8 +64,9 @@ export function TeamCard({
           onClick={() => selectedId && onMove(selectedId, teamId)}
           title={selectedId ? 'לחצו כדי להעביר לכאן את השחקן שנבחר' : undefined}
         >
+          {/* הכותרת כבר צבועה בצבע הקבוצה, ואימוג'י הצבע עליה רק מבלבל:
+              ⚫ מצויר אפור ונראה בהיר על רקע שחור */}
           <div className="flex items-center gap-2">
-            <span className="text-lg leading-none">{meta.emoji}</span>
             <h3 className="text-lg font-extrabold">{meta.name}</h3>
           </div>
           <div className="flex items-center gap-2 text-sm font-bold">

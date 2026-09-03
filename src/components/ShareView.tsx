@@ -87,9 +87,7 @@ export function ShareView({
           return (
             <section key={id} className={`card overflow-hidden border-2 ${meta.ring}`}>
               <header className={`px-4 py-3 text-center ${meta.header}`}>
-                <h3 className="text-xl font-extrabold">
-                  {meta.emoji} {meta.name}
-                </h3>
+                <h3 className="text-xl font-extrabold">{meta.name}</h3>
               </header>
               <ul className={`divide-y divide-slate-800/60 ${meta.softBg}`}>
                 {names.map((name, i) => (

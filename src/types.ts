@@ -269,7 +269,7 @@ export const TEAM_META: Record<TeamId, TeamMeta> = {
     ring: 'border-slate-300/40',
     header: 'bg-gradient-to-l from-slate-100/95 to-slate-300/90 text-slate-900',
     chip: 'bg-slate-200/15 text-slate-100 border-slate-200/30',
-    dot: 'bg-slate-100',
+    dot: 'bg-white ring-1 ring-slate-400/60',
     softBg: 'bg-slate-100/[0.04]',
     hex: ['#e2e8f0'],
     hexText: '#0f172a',
@@ -280,7 +280,7 @@ export const TEAM_META: Record<TeamId, TeamMeta> = {
     ring: 'border-slate-600/50',
     header: 'bg-gradient-to-l from-slate-800 to-slate-950 text-slate-100',
     chip: 'bg-slate-700/30 text-slate-200 border-slate-600/40',
-    dot: 'bg-slate-900 ring-1 ring-slate-500',
+    dot: 'bg-black ring-1 ring-slate-600',
     softBg: 'bg-slate-950/40',
     hex: ['#1e293b'],
     hexText: '#f1f5f9',
@@ -293,7 +293,9 @@ export const TEAM_META: Record<TeamId, TeamMeta> = {
     header:
       'bg-[linear-gradient(90deg,#2563eb_0_33.34%,#facc15_33.34%_66.67%,#dc2626_66.67%_100%)] text-white [text-shadow:0_1px_3px_rgba(0,0,0,0.55)]',
     chip: 'bg-amber-400/10 text-amber-100 border-amber-400/30',
-    dot: 'bg-[linear-gradient(90deg,#2563eb_0_33.34%,#facc15_33.34%_66.67%,#dc2626_66.67%_100%)]',
+    // עוגה בשלושה צבעים — נקראת כרב-צבעונית גם בגודל של כמה פיקסלים,
+    // בניגוד לשלושה פסים אנכיים שמתמזגים לכתם אחד
+    dot: 'bg-[conic-gradient(#2563eb_0_120deg,#facc15_0_240deg,#dc2626_0_360deg)] ring-1 ring-slate-500/60',
     softBg: 'bg-amber-400/[0.04]',
     hex: ['#2563eb', '#facc15', '#dc2626'],
     hexText: '#ffffff',

@@ -188,13 +188,15 @@ export function HistoryView({
                         }`}
                       >
                         <div className={`flex items-center justify-between px-3 py-2 ${meta.header}`}>
+                          {/* בלי אימוג'י הצבע: ⚫ מצויר אפור ועל כותרת שחורה הוא
+                              נראה כמו סמל לבן. הכותרת עצמה כבר בצבע הקבוצה */}
                           <span className="flex items-center gap-1.5 text-sm font-extrabold">
                             {place && (
                               <span title={placementMeta(place, teams.length).label}>
                                 {placementMeta(place, teams.length).emoji}
                               </span>
                             )}
-                            {meta.emoji} {meta.name}
+                            {meta.name}
                           </span>
                           <span dir="ltr" className="font-mono text-[11px] tabular-nums opacity-80">
                             ⌀ {avg.toFixed(2)}
@@ -319,8 +321,11 @@ function ResultPicker({
       <ul className="space-y-1.5">
         {teams.map((t) => (
           <li key={t} className="flex items-center gap-2">
-            <span className="flex w-24 shrink-0 items-center gap-1.5 text-[11px] font-bold text-slate-200">
-              <span className={`size-2.5 shrink-0 rounded-full ${TEAM_META[t].dot}`} />
+            {/* גלולה בצבע הקבוצה עצמה, ולא נקודה זעירה: על רקע כהה נקודה שחורה
+                עם טבעת בהירה נקראה כמו הנקודה הלבנה, והצבעוני התמזג לכתם */}
+            <span
+              className={`flex w-24 shrink-0 items-center justify-center rounded-lg px-2 py-1 text-[11px] font-extrabold ring-1 ring-slate-600/50 ${TEAM_META[t].header}`}
+            >
               <span className="truncate">{TEAM_META[t].name}</span>
             </span>
             <div className="flex flex-1 flex-wrap gap-1">
