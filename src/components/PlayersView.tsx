@@ -65,13 +65,19 @@ export function PlayersView({
           />
         </div>
 
+        {/* הכפתור מתאר את המצב הנוכחי, לא את הפעולה — "לפי דירוג" לבדו היה
+            יכול להיקרא גם כהבטחה למה שיקרה בלחיצה */}
         <button
           className="btn-ghost"
           onClick={() => setSortKey(sortKey === 'rating' ? 'name' : 'rating')}
-          title="החלפת סדר מיון"
+          title={
+            sortKey === 'rating'
+              ? 'הרשימה מסודרת לפי דירוג — לחיצה תסדר לפי שם'
+              : 'הרשימה מסודרת לפי שם — לחיצה תסדר לפי דירוג'
+          }
         >
           <ArrowDownUp size={16} />
-          {sortKey === 'rating' ? 'לפי דירוג' : 'לפי שם'}
+          {sortKey === 'rating' ? 'מסודר לפי דירוג' : 'מסודר לפי שם'}
         </button>
 
         <button
