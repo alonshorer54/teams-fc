@@ -18,6 +18,9 @@ import {
 /** מתחת לזה זה רעש ולא מגמה — לא מציגים בכלל */
 export const MIN_GAMES_TOGETHER = 3;
 
+/** הפרש קטן מזה בין המצוי לצפוי הוא עיגול, לא כימיה */
+export const EFFECT_THRESHOLD = 0.05;
+
 export interface PairStat {
   aId: string;
   bId: string;
@@ -35,6 +38,13 @@ export interface PairStat {
   confidence: 'low' | 'medium' | 'high';
 }
 
+/** זוג שעדיין לא עבר את סף המשחקים — מוצג כדי להסביר כמה חסר */
+export interface PairProgress {
+  aName: string;
+  bName: string;
+  games: number;
+}
+
 export interface PairReport {
   /** זוגות שמנצחים יותר מהצפוי */
   strong: PairStat[];
@@ -42,8 +52,14 @@ export interface PairReport {
   weak: PairStat[];
   /** כמה משחקים עם תוצאה יש בסך הכל — קובע כמה אפשר לסמוך על זה */
   resolvedMatches: number;
+  /** כמה הגרלות נשמרו בלי שעודכנה להן תוצאה — הן פשוט לא נספרות כאן */
+  pendingMatches: number;
   /** כמה זוגות עברו את סף המשחקים המינימלי */
   qualifiedPairs: number;
+  /** מתוכם — כמה מנצחים בדיוק כמו שצפוי, כלומר בלי אפקט לכאן או לכאן */
+  neutralPairs: number;
+  /** הזוגות הכי קרובים לסף, כשעוד אין אף אחד שעבר אותו */
+  closest: PairProgress[];
 }
 
 const confidenceOf = (games: number): PairStat['confidence'] =>
@@ -71,6 +87,7 @@ export function computePairChemistry(history: MatchRecord[]): PairReport {
   const resolved = history
     .map((record) => ({ record, placements: recordPlacements(record) }))
     .filter((r): r is { record: MatchRecord; placements: Placements } => !!r.placements);
+  const pendingMatches = history.length - resolved.length;
 
   // ביצועים אישיים — הבסיס להשוואה
   const solo = new Map<string, { games: number; points: number; name: string }>();
@@ -117,9 +134,17 @@ export function computePairChemistry(history: MatchRecord[]): PairReport {
     return s && s.games ? s.points / s.games : 0;
   };
 
+  const nameOf = (id: string) => solo.get(id)?.name ?? '';
+
   const stats: PairStat[] = [];
+  /** מי שעוד לא הגיע לסף — שומרים כדי שנוכל לומר כמה חסר לו */
+  const belowThreshold: PairProgress[] = [];
+
   for (const entry of pairs.values()) {
-    if (entry.games < MIN_GAMES_TOGETHER) continue;
+    if (entry.games < MIN_GAMES_TOGETHER) {
+      belowThreshold.push({ aName: nameOf(entry.a), bName: nameOf(entry.b), games: entry.games });
+      continue;
+    }
 
     const winRate = (entry.wins + entry.draws * 0.5) / entry.games;
     const expected = (soloRate(entry.a) + soloRate(entry.b)) / 2;
@@ -127,8 +152,8 @@ export function computePairChemistry(history: MatchRecord[]): PairReport {
     stats.push({
       aId: entry.a,
       bId: entry.b,
-      aName: solo.get(entry.a)?.name ?? '',
-      bName: solo.get(entry.b)?.name ?? '',
+      aName: nameOf(entry.a),
+      bName: nameOf(entry.b),
       games: entry.games,
       wins: entry.wins,
       draws: entry.draws,
@@ -139,16 +164,16 @@ export function computePairChemistry(history: MatchRecord[]): PairReport {
     });
   }
 
+  const strong = stats.filter((s) => s.effect > EFFECT_THRESHOLD);
+  const weak = stats.filter((s) => s.effect < -EFFECT_THRESHOLD);
+
   return {
-    strong: stats
-      .filter((s) => s.effect > 0.05)
-      .sort((a, b) => b.effect - a.effect || b.games - a.games)
-      .slice(0, 10),
-    weak: stats
-      .filter((s) => s.effect < -0.05)
-      .sort((a, b) => a.effect - b.effect || b.games - a.games)
-      .slice(0, 10),
+    strong: strong.sort((a, b) => b.effect - a.effect || b.games - a.games).slice(0, 10),
+    weak: weak.sort((a, b) => a.effect - b.effect || b.games - a.games).slice(0, 10),
     resolvedMatches: resolved.length,
+    pendingMatches,
     qualifiedPairs: stats.length,
+    neutralPairs: stats.length - strong.length - weak.length,
+    closest: belowThreshold.sort((a, b) => b.games - a.games).slice(0, 3),
   };
 }

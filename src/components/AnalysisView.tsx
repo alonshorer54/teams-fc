@@ -198,16 +198,26 @@ function PairSection({ report }: { report: ReturnType<typeof computePairChemistr
           כימיה משחקית — נלמדת מהתוצאות
         </h2>
         <p className="mt-0.5 text-[11px] leading-relaxed text-slate-500">
-          לכל זוג ששיחק יחד, משווים את אחוז הניצחון שלהם יחד לאחוז שהיה צפוי לפי הביצועים האישיים.
-          ההפרש הוא ה״אפקט״. נדרשים לפחות {MIN_GAMES_TOGETHER} משחקים משותפים.
+          כאן רואים אילו שיבוצים של שחקנים יחד באמת עובדים. לכל זוג ששיחק באותה קבוצה לפחות{' '}
+          {MIN_GAMES_TOGETHER} ערבים, משווים כמה הם ניצחו <b>ביחד</b> לכמה שהיה צפוי מהם לפי מה
+          שכל אחד עושה בשאר הערבים. ההפרש הוא ה״אפקט״.
+        </p>
+        <p className="mt-1.5 rounded-lg border border-slate-800 bg-slate-950/40 px-2.5 py-2 text-[11px] leading-relaxed text-slate-400">
+          <span className="font-semibold text-slate-300">למה לא סתם ״כמה ניצחו יחד״: </span>
+          שני שחקנים חזקים מנצחים הרבה גם בנפרד, אז ניצחון משותף לא מלמד עליהם כלום. לעומת זאת אם
+          כל אחד מהם מנצח בערך חצי מהערבים, אבל <b>יחד</b> הם מנצחים כמעט תמיד — זה כבר משהו
+          שקורה בגללם. בדיוק את ההפרש הזה המספר מודד.
+        </p>
+        <p className="mt-1.5 text-[11px] leading-relaxed text-slate-500">
+          הקריטריון{' '}
+          <span className="font-semibold text-slate-300">✨ כימיה משחקית</span> דלוק כברירת מחדל
+          בסדר העדיפויות, אז ההגרלה מקזזת את הזוגות האלה בין הקבוצות מרגע שיש מספיק נתונים. עד אז
+          הוא פשוט לא עושה כלום.
         </p>
       </div>
 
       {!enough ? (
-        <p className="rounded-xl border border-slate-800 bg-slate-950/40 p-3 text-xs leading-relaxed text-slate-400">
-          עוד אין מספיק נתונים. יש {report.resolvedMatches} משחקים עם תוצאה מעודכנת — צריך שיצטברו
-          זוגות ששיחקו יחד לפחות {MIN_GAMES_TOGETHER} פעמים. עדכנו את הדירוג בכל שבוע וזה יתמלא לבד.
-        </p>
+        <PairEmptyState report={report} />
       ) : (
         <div className="grid gap-3 lg:grid-cols-2">
           <PairList
@@ -227,6 +237,16 @@ function PairSection({ report }: { report: ReturnType<typeof computePairChemistr
         </div>
       )}
 
+      {enough && report.strong.length + report.weak.length === 0 && (
+        <p className="rounded-xl border border-slate-800 bg-slate-950/40 p-3 text-xs leading-relaxed text-slate-400">
+          {report.qualifiedPairs === 1
+            ? 'יש זוג אחד עם מספיק משחקים משותפים'
+            : `יש ${report.qualifiedPairs} זוגות עם מספיק משחקים משותפים`}
+          , אבל כולם מנצחים בדיוק כמו שהיה צפוי לפי הביצועים האישיים שלהם. זו תשובה בפני עצמה: עוד
+          אין כאן צירוף שמשנה תוצאות.
+        </p>
+      )}
+
       {enough && (
         <p className="text-[10px] leading-relaxed text-slate-500">
           שימו לב למדגם: זוג עם {MIN_GAMES_TOGETHER} משחקים משותפים זה כיוון, לא הוכחה — ריחוף על
@@ -235,6 +255,61 @@ function PairSection({ report }: { report: ReturnType<typeof computePairChemistr
         </p>
       )}
     </section>
+  );
+}
+
+/**
+ * המצב הריק הוא המסך שרואים בשבועות הראשונים, אז הוא צריך לומר מה בדיוק חסר
+ * ולא רק "אין מספיק נתונים": כמה ערבים נספרו, כמה עוד מחכים לעדכון תוצאה,
+ * ואיזה זוג הכי קרוב לסף.
+ */
+function PairEmptyState({ report }: { report: ReturnType<typeof computePairChemistry> }) {
+  const { resolvedMatches, pendingMatches, closest } = report;
+
+  return (
+    <div className="space-y-2 rounded-xl border border-slate-800 bg-slate-950/40 p-3 text-xs leading-relaxed text-slate-400">
+      <p>
+        {resolvedMatches === 0
+          ? 'אף ערב עדיין לא נספר כאן, כי אף הגרלה לא קיבלה תוצאה.'
+          : `${resolvedMatches === 1 ? 'ערב אחד נספר' : `${resolvedMatches} ערבים נספרו`} כאן — אלה ההגרלות שסימנתם בהן איפה כל קבוצה סיימה.`}
+        {pendingMatches > 0 && (
+          <>
+            {' '}
+            <span className="font-semibold text-amber-300">
+              {pendingMatches === 1
+                ? 'הגרלה אחת נוספת שמורה בלי תוצאה'
+                : `${pendingMatches} הגרלות נוספות שמורות בלי תוצאה`}
+            </span>{' '}
+            — הן לא נספרות בחישוב עד שתסמנו אותן בלשונית "היסטוריה".
+          </>
+        )}
+      </p>
+
+      <p>
+        זוג נכנס לחישוב רק אחרי {MIN_GAMES_TOGETHER} ערבים שבהם היו באותה קבוצה. ההגרלה מערבבת כל
+        שבוע, אז בקבוצה יציבה זה מתחיל להתמלא בערך מהערב הרביעי עם תוצאה — ומאוחר יותר אם ההרכב
+        מתחלף הרבה.
+      </p>
+
+      {closest.length > 0 && (
+        <div>
+          <p className="mb-1 text-slate-500">הכי קרובים לסף כרגע:</p>
+          <ul className="flex flex-wrap gap-1.5">
+            {closest.map((c) => (
+              <li
+                key={`${c.aName}-${c.bName}`}
+                className="rounded-lg bg-slate-800/60 px-2 py-1 text-[11px] font-semibold text-slate-300"
+              >
+                {c.aName} · {c.bName}
+                <span className="mr-1 font-mono text-slate-500">
+                  {c.games}/{MIN_GAMES_TOGETHER}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -267,29 +342,32 @@ function PairList({
         <p className="text-[11px] text-slate-500">{empty}</p>
       ) : (
         <ul className="space-y-1.5">
+          {/* הפירוט בשורה שנייה ולא ב-title: בטלפון אין ריחוף, והמספר לבדו
+              לא אומר כלום בלי לראות מולו את הצפוי */}
           {pairs.map((p) => (
-            <li
-              key={`${p.aId}-${p.bId}`}
-              className="flex items-center gap-2 rounded-lg bg-slate-900/50 px-2.5 py-1.5 text-[11px]"
-            >
-              <Link2 size={11} className="shrink-0 text-slate-500" />
-              <span className="min-w-0 flex-1 truncate font-semibold text-slate-200">
-                {p.aName} · {p.bName}
-              </span>
-              <span
-                className="shrink-0 font-mono text-[10px] text-slate-500 tabular-nums"
-                title={
-                  `ניצחו ${Math.round(p.winRate * 100)}% מהמשחקים יחד, צפוי היה ${Math.round(p.expected * 100)}%` +
-                  ` · ${p.wins} ניצחונות${p.draws ? ` ו-${p.draws} תיקו` : ''} מתוך ${p.games}` +
-                  ` · ${CONFIDENCE_LABEL[p.confidence]}`
-                }
-              >
-                {Math.round(p.winRate * 100)}% מ-{p.games}
-              </span>
-              <span className={`w-12 shrink-0 text-left font-mono font-bold tabular-nums ${colors.text}`}>
-                {p.effect > 0 ? '+' : ''}
-                {Math.round(p.effect * 100)}%
-              </span>
+            <li key={`${p.aId}-${p.bId}`} className="rounded-lg bg-slate-900/50 px-2.5 py-2">
+              <div className="flex items-center gap-2">
+                <Link2 size={11} className="shrink-0 text-slate-500" />
+                <span className="min-w-0 flex-1 truncate text-[11px] font-semibold text-slate-200">
+                  {p.aName} · {p.bName}
+                </span>
+                <span
+                  className={`shrink-0 font-mono text-[11px] font-bold tabular-nums ${colors.text}`}
+                >
+                  {p.effect > 0 ? '+' : ''}
+                  {Math.round(p.effect * 100)}%
+                </span>
+              </div>
+              <p className="mt-0.5 pr-[19px] text-[10px] leading-relaxed text-slate-500">
+                {p.games} ערבים יחד · {p.wins} ניצחו
+                {p.draws > 0 && `, ${p.draws} שקול`} ·{' '}
+                <span className="font-mono tabular-nums">
+                  {Math.round(p.winRate * 100)}%
+                </span>{' '}
+                מול{' '}
+                <span className="font-mono tabular-nums">{Math.round(p.expected * 100)}%</span>{' '}
+                צפוי · {CONFIDENCE_LABEL[p.confidence]}
+              </p>
             </li>
           ))}
         </ul>
