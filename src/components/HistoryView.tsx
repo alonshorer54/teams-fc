@@ -455,7 +455,7 @@ function PlayerTable({ players }: { players: ReturnType<typeof computeHistorySta
   return (
     <div>
       <div className="overflow-x-auto">
-        <table className="w-full min-w-[26rem] text-xs">
+        <table className="w-full min-w-[30rem] text-xs">
           <thead>
             <tr className="text-[10px] text-slate-500">
               <th className="px-2 py-1.5 text-right font-semibold">שחקן</th>
@@ -463,10 +463,21 @@ function PlayerTable({ players }: { players: ReturnType<typeof computeHistorySta
               <th className="px-2 py-1.5 text-center font-semibold" title="בכמה שבועות הקבוצה שלו ניצחה הרבה">
                 ניצח
               </th>
+              <th
+                className="px-2 py-1.5 text-center font-semibold"
+                title="בכמה שבועות הקבוצה שלו סיימה באמצע — לא ניצחה הרבה ולא הפסידה הרבה"
+              >
+                שקול
+              </th>
               <th className="px-2 py-1.5 text-center font-semibold" title="בכמה שבועות הקבוצה שלו הפסידה הרבה">
                 הפסיד
               </th>
-              <th className="px-2 py-1.5 text-center font-semibold">אחוז</th>
+              <th
+                className="px-2 py-1.5 text-center font-semibold"
+                title="ניצחונות מתוך השבועות ששיחק. ערב שקול לא נספר כניצחון ולא כהפסד"
+              >
+                אחוז
+              </th>
               <th className="px-2 py-1.5 text-center font-semibold">רצף</th>
             </tr>
           </thead>
@@ -479,6 +490,9 @@ function PlayerTable({ players }: { players: ReturnType<typeof computeHistorySta
                 </td>
                 <td className="px-2 py-1.5 text-center font-mono text-emerald-300 tabular-nums">
                   {p.wins}
+                </td>
+                <td className="px-2 py-1.5 text-center font-mono text-sky-300 tabular-nums">
+                  {p.draws}
                 </td>
                 <td className="px-2 py-1.5 text-center font-mono text-rose-300 tabular-nums">
                   {p.losses}
