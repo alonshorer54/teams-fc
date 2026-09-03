@@ -38,11 +38,15 @@ export interface PairStat {
   confidence: 'low' | 'medium' | 'high';
 }
 
-/** זוג שעדיין לא עבר את סף המשחקים — מוצג כדי להסביר כמה חסר */
+/** זוג שעדיין לא עבר את סף המשחקים — מוצג כדי לומר כמה חסר לו */
 export interface PairProgress {
   aName: string;
   bName: string;
   games: number;
+  wins: number;
+  draws: number;
+  /** כמה ערבים משותפים חסרים עד שאפשר יהיה לקבוע עליו משהו */
+  missing: number;
 }
 
 export interface PairReport {
@@ -142,7 +146,14 @@ export function computePairChemistry(history: MatchRecord[]): PairReport {
 
   for (const entry of pairs.values()) {
     if (entry.games < MIN_GAMES_TOGETHER) {
-      belowThreshold.push({ aName: nameOf(entry.a), bName: nameOf(entry.b), games: entry.games });
+      belowThreshold.push({
+        aName: nameOf(entry.a),
+        bName: nameOf(entry.b),
+        games: entry.games,
+        wins: entry.wins,
+        draws: entry.draws,
+        missing: MIN_GAMES_TOGETHER - entry.games,
+      });
       continue;
     }
 
@@ -174,6 +185,14 @@ export function computePairChemistry(history: MatchRecord[]): PairReport {
     pendingMatches,
     qualifiedPairs: stats.length,
     neutralPairs: stats.length - strong.length - weak.length,
-    closest: belowThreshold.sort((a, b) => b.games - a.games).slice(0, 3),
+    // הכי קרובים לסף קודם, ובתוך אותו מספר ערבים — מי שהצליח יותר
+    closest: belowThreshold
+      .sort(
+        (a, b) =>
+          b.games - a.games ||
+          b.wins + b.draws * 0.5 - (a.wins + a.draws * 0.5) ||
+          a.aName.localeCompare(b.aName, 'he'),
+      )
+      .slice(0, 6),
   };
 }

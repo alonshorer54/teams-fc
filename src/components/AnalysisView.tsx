@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import {
   BarChart3,
   CalendarX,
+  Hourglass,
   Link2,
   Sparkles,
   TrendingDown,
@@ -202,18 +203,6 @@ function PairSection({ report }: { report: ReturnType<typeof computePairChemistr
           {MIN_GAMES_TOGETHER} ערבים, משווים כמה הם ניצחו <b>ביחד</b> לכמה שהיה צפוי מהם לפי מה
           שכל אחד עושה בשאר הערבים. ההפרש הוא ה״אפקט״.
         </p>
-        <p className="mt-1.5 rounded-lg border border-slate-800 bg-slate-950/40 px-2.5 py-2 text-[11px] leading-relaxed text-slate-400">
-          <span className="font-semibold text-slate-300">למה לא סתם ״כמה ניצחו יחד״: </span>
-          שני שחקנים חזקים מנצחים הרבה גם בנפרד, אז ניצחון משותף לא מלמד עליהם כלום. לעומת זאת אם
-          כל אחד מהם מנצח בערך חצי מהערבים, אבל <b>יחד</b> הם מנצחים כמעט תמיד — זה כבר משהו
-          שקורה בגללם. בדיוק את ההפרש הזה המספר מודד.
-        </p>
-        <p className="mt-1.5 text-[11px] leading-relaxed text-slate-500">
-          הקריטריון{' '}
-          <span className="font-semibold text-slate-300">✨ כימיה משחקית</span> דלוק כברירת מחדל
-          בסדר העדיפויות, אז ההגרלה מקזזת את הזוגות האלה בין הקבוצות מרגע שיש מספיק נתונים. עד אז
-          הוא פשוט לא עושה כלום.
-        </p>
       </div>
 
       {!enough ? (
@@ -247,13 +236,7 @@ function PairSection({ report }: { report: ReturnType<typeof computePairChemistr
         </p>
       )}
 
-      {enough && (
-        <p className="text-[10px] leading-relaxed text-slate-500">
-          שימו לב למדגם: זוג עם {MIN_GAMES_TOGETHER} משחקים משותפים זה כיוון, לא הוכחה — ריחוף על
-          המספרים מראה את הפירוט. שימו לב גם ששני שחקנים שתמיד משובצים יחד לא יופיעו כאן, כי אי אפשר
-          להפריד בין התרומה המשותפת שלהם לביצועים האישיים.
-        </p>
-      )}
+      <AlmostThere pairs={report.closest} />
     </section>
   );
 }
@@ -264,7 +247,7 @@ function PairSection({ report }: { report: ReturnType<typeof computePairChemistr
  * ואיזה זוג הכי קרוב לסף.
  */
 function PairEmptyState({ report }: { report: ReturnType<typeof computePairChemistry> }) {
-  const { resolvedMatches, pendingMatches, closest } = report;
+  const { resolvedMatches, pendingMatches } = report;
 
   return (
     <div className="space-y-2 rounded-xl border border-slate-800 bg-slate-950/40 p-3 text-xs leading-relaxed text-slate-400">
@@ -285,30 +268,53 @@ function PairEmptyState({ report }: { report: ReturnType<typeof computePairChemi
         )}
       </p>
 
-      <p>
-        זוג נכנס לחישוב רק אחרי {MIN_GAMES_TOGETHER} ערבים שבהם היו באותה קבוצה. ההגרלה מערבבת כל
-        שבוע, אז בקבוצה יציבה זה מתחיל להתמלא בערך מהערב הרביעי עם תוצאה — ומאוחר יותר אם ההרכב
-        מתחלף הרבה.
-      </p>
+      <p>עוד אין אף זוג ששיחק באותה קבוצה {MIN_GAMES_TOGETHER} ערבים.</p>
+    </div>
+  );
+}
 
-      {closest.length > 0 && (
-        <div>
-          <p className="mb-1 text-slate-500">הכי קרובים לסף כרגע:</p>
-          <ul className="flex flex-wrap gap-1.5">
-            {closest.map((c) => (
-              <li
-                key={`${c.aName}-${c.bName}`}
-                className="rounded-lg bg-slate-800/60 px-2 py-1 text-[11px] font-semibold text-slate-300"
-              >
-                {c.aName} · {c.bName}
-                <span className="mr-1 font-mono text-slate-500">
-                  {c.games}/{MIN_GAMES_TOGETHER}
-                </span>
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
+/**
+ * זוגות שנמצאים ערב־שניים מהסף. הם עוד לא נספרים בשום חישוב, אבל בלי להציג
+ * אותם אין שום דרך לדעת שמשהו מתבשל — וזה בדיוק מה שמעניין בשבועות הראשונים.
+ */
+function AlmostThere({ pairs }: { pairs: ReturnType<typeof computePairChemistry>['closest'] }) {
+  // רק השורה הקדמית: ערבוב של 2/3 עם 1/3 באותה רשימה מטשטש בדיוק את מה
+  // שהיא באה לומר — מי קרוב להיות ניתן להכרעה
+  const best = Math.max(0, ...pairs.map((p) => p.games));
+  const close = pairs.filter((p) => p.games === best && p.games > 0);
+  if (close.length === 0) return null;
+
+  return (
+    <div className="rounded-xl border border-sky-500/25 bg-sky-500/5 p-3">
+      <p className="mb-2 flex items-center gap-1.5 text-[11px] font-bold text-sky-300">
+        <Hourglass size={12} />
+        כמעט שם — עוד לא מספיק כדי לקבוע
+      </p>
+      <ul className="space-y-1.5">
+        {close.map((p) => (
+          <li
+            key={`${p.aName}-${p.bName}`}
+            className="flex items-center gap-2 rounded-lg bg-slate-900/50 px-2.5 py-1.5 text-[11px]"
+          >
+            <Link2 size={11} className="shrink-0 text-slate-500" />
+            <span className="min-w-0 flex-1 truncate font-semibold text-slate-200">
+              {p.aName} · {p.bName}
+            </span>
+            <span className="shrink-0 font-mono text-[10px] text-slate-500 tabular-nums">
+              {p.wins} ניצחו
+              {p.draws > 0 && `, ${p.draws} שקול`}
+            </span>
+            <span className="shrink-0 font-mono text-[10px] font-bold text-sky-300 tabular-nums">
+              {p.games}/{MIN_GAMES_TOGETHER}
+            </span>
+          </li>
+        ))}
+      </ul>
+      <p className="mt-2 text-[10px] text-slate-500">
+        {close[0].missing === 1
+          ? 'חסר להם עוד ערב אחד באותה קבוצה, ואז הם ייכנסו לחישוב.'
+          : `חסרים להם עוד ${close[0].missing} ערבים באותה קבוצה, ואז הם ייכנסו לחישוב.`}
+      </p>
     </div>
   );
 }
