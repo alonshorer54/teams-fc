@@ -8,6 +8,7 @@ import {
   Trash2,
   TrendingDown,
   TrendingUp,
+  Scale,
   Trophy,
   UserX,
 } from 'lucide-react';
@@ -25,6 +26,12 @@ import {
 } from '../types';
 import { buildWhatsAppText, copyToClipboard, formatHebrewDate } from '../lib/format';
 import { computeHistoryStats } from '../lib/stats';
+import {
+  GAUGE_THRESHOLD,
+  ROUNDS_PER_CHECK,
+  computeGauges,
+  roundsUntilCheck,
+} from '../lib/ratingDrift';
 import { ConfirmDialog, EmptyState } from './ui';
 
 export function HistoryView({
@@ -32,18 +39,23 @@ export function HistoryView({
   onDelete,
   onSetResult,
   onRestore,
+  driftSince,
   notify,
 }: {
   history: MatchRecord[];
   onDelete: (id: string) => void;
   onSetResult: (id: string, placements: Placements | null) => void;
   onRestore: (record: MatchRecord) => void;
+  /** מאיזה רגע המד סופר; undefined = הכל (מצב דוגמה) */
+  driftSince?: string;
   notify: (msg: string) => void;
 }) {
   const [expanded, setExpanded] = useState<string | null>(history[0]?.id ?? null);
   const [pendingDelete, setPendingDelete] = useState<MatchRecord | null>(null);
 
   const stats = useMemo(() => computeHistoryStats(history), [history]);
+  const gauges = useMemo(() => computeGauges(history, driftSince), [history, driftSince]);
+  const untilCheck = useMemo(() => roundsUntilCheck(history, driftSince), [history, driftSince]);
 
   if (history.length === 0) {
     return (
@@ -68,7 +80,7 @@ export function HistoryView({
 
   return (
     <div className="space-y-4">
-      <StatsPanel stats={stats} />
+      <StatsPanel stats={stats} gauges={gauges} untilCheck={untilCheck} />
 
       <p className="px-1 text-xs text-slate-400">
         {history.length === 1 ? 'שיחקתם פעם אחת' : `שיחקתם ${history.length} פעמים`} · הכי חדש למעלה
@@ -365,7 +377,15 @@ function ResultPicker({
 
 /* ---------------------------- לוח סטטיסטיקה ---------------------------- */
 
-function StatsPanel({ stats }: { stats: ReturnType<typeof computeHistoryStats> }) {
+function StatsPanel({
+  stats,
+  gauges,
+  untilCheck,
+}: {
+  stats: ReturnType<typeof computeHistoryStats>;
+  gauges: Map<string, number>;
+  untilCheck: number;
+}) {
   const hasResults = stats.totalWithResult > 0;
   const last = stats.lastResolved;
 
@@ -380,6 +400,18 @@ function StatsPanel({ stats }: { stats: ReturnType<typeof computeHistoryStats> }
               {stats.pending} ממתינות לעדכון
             </span>
           )}
+          {/* מונה קטן, כדי שהחלון של בדיקת הדירוגים לא יגיע בהפתעה */}
+          <span
+            className={`inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[10px] font-semibold ${
+              untilCheck === 1
+                ? 'bg-violet-500/20 text-violet-200'
+                : 'bg-slate-800 text-slate-400'
+            }`}
+            title={`כל ${ROUNDS_PER_CHECK} מחזורים עם תוצאה נבדק אם יש דירוג שצריך לזוז`}
+          >
+            <Scale size={9} />
+            {untilCheck === 1 ? 'המחזור הבא — בדיקת דירוגים' : `עוד ${untilCheck} מחזורים לבדיקה`}
+          </span>
         </h2>
         <p className="mb-3 text-[11px] leading-relaxed text-slate-500">
           לפי שחקנים ולא לפי צבע קבוצה — הצבעים מתחלפים כל שבוע. המדד הוא איפה הקבוצה של השחקן
@@ -434,7 +466,7 @@ function StatsPanel({ stats }: { stats: ReturnType<typeof computeHistoryStats> }
               </div>
             )}
 
-            <PlayerTable players={stats.players} />
+            <PlayerTable players={stats.players} gauges={gauges} />
           </div>
         )}
       </div>
@@ -448,14 +480,20 @@ function StatsPanel({ stats }: { stats: ReturnType<typeof computeHistoryStats> }
 
 /* ------------------------- טבלת שחקנים ------------------------- */
 
-function PlayerTable({ players }: { players: ReturnType<typeof computeHistoryStats>['players'] }) {
+function PlayerTable({
+  players,
+  gauges,
+}: {
+  players: ReturnType<typeof computeHistoryStats>['players'];
+  gauges: Map<string, number>;
+}) {
   const [showAll, setShowAll] = useState(false);
   const visible = showAll ? players : players.slice(0, 8);
 
   return (
     <div>
       <div className="overflow-x-auto">
-        <table className="w-full min-w-[30rem] text-xs">
+        <table className="w-full min-w-[34rem] text-xs">
           <thead>
             <tr className="text-[10px] text-slate-500">
               <th className="px-2 py-1.5 text-right font-semibold">שחקן</th>
@@ -479,6 +517,12 @@ function PlayerTable({ players }: { players: ReturnType<typeof computeHistorySta
                 אחוז
               </th>
               <th className="px-2 py-1.5 text-center font-semibold">רצף</th>
+              <th
+                className="px-2 py-1.5 text-center font-semibold"
+                title={`ניצחון +1, הפסד -1, ערב שקול לא מזיז. ב-${GAUGE_THRESHOLD}± הדירוג זז ב-0.1`}
+              >
+                מד
+              </th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-800/60">
@@ -503,6 +547,9 @@ function PlayerTable({ players }: { players: ReturnType<typeof computeHistorySta
                 <td className="px-2 py-1.5 text-center">
                   <StreakBadge streak={p.streak} />
                 </td>
+                <td className="px-2 py-1.5 text-center">
+                  <GaugeBadge value={gauges.get(p.id) ?? 0} />
+                </td>
               </tr>
             ))}
           </tbody>
@@ -518,6 +565,39 @@ function PlayerTable({ players }: { players: ReturnType<typeof computeHistorySta
         </button>
       )}
     </div>
+  );
+}
+
+/**
+ * המד של תיקון הדירוגים. מוצג תמיד, גם על 0 — הערך עצמו הוא האינדיקציה
+ * לכמה רחוק השחקן מהסף, ובלעדיו הבדיקה מרגישה כמו קופסה שחורה.
+ */
+function GaugeBadge({ value }: { value: number }) {
+  const close = Math.abs(value) >= GAUGE_THRESHOLD - 1;
+  const tone =
+    value === 0
+      ? 'text-slate-600'
+      : value > 0
+        ? close
+          ? 'bg-emerald-500/15 text-emerald-300'
+          : 'text-emerald-400/70'
+        : close
+          ? 'bg-rose-500/15 text-rose-300'
+          : 'text-rose-400/70';
+
+  return (
+    <span
+      dir="ltr"
+      className={`inline-block rounded px-1.5 py-0.5 font-mono text-[10px] font-bold tabular-nums ${tone}`}
+      title={
+        close
+          ? `עוד ${GAUGE_THRESHOLD - Math.abs(value)} ${value > 0 ? 'ניצחון' : 'הפסד'} והדירוג יזוז`
+          : 'רחוק מהסף — הדירוג לא צפוי לזוז'
+      }
+    >
+      {value > 0 ? '+' : ''}
+      {value}
+    </span>
   );
 }
 

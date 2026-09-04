@@ -218,6 +218,21 @@ export interface HistoryPlayer {
   rating: number;
 }
 
+/**
+ * שינוי דירוג יחיד שנבע מבדיקת המד (ראו lib/ratingDrift.ts).
+ * נשמר על ההגרלה שהפעילה אותו, כדי שיהיה יומן קבוע — ושניקוי התוצאה יבטל אותו.
+ */
+export interface RatingChangeRecord {
+  playerId: string;
+  name: string;
+  from: number;
+  to: number;
+  /** ערך המד שהפעיל את התיקון. הסימן שלו הוא הכיוון, וגם מה שנצרך מהמד. */
+  gauge: number;
+  /** ניקוד הערבים האחרונים של השחקן, כדי להסביר בחלון למה זה קרה */
+  recent: number[];
+}
+
 /** הגרלה שבועית שנשמרה. */
 export interface MatchRecord {
   id: string;
@@ -235,6 +250,8 @@ export interface MatchRecord {
   cancelled?: HistoryPlayer[];
   /** מי החליף את מי אחרי ביטול */
   substitutions?: { out: HistoryPlayer; in: HistoryPlayer }[];
+  /** בדיקת הדירוגים שרצה על המחזור הזה — קיים רק בכל מחזור שלישי */
+  ratingCheck?: { changes: RatingChangeRecord[] };
 }
 
 /** ההרכב של הגרלה שנשמרה, כמזהי שחקנים — כדי להשוות אותה להגרלות חדשות. */

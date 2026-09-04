@@ -50,6 +50,13 @@ export interface AppSettings {
   priorities: CriterionSetting[];
   /** גרסת ברירות המחדל שלפיה נשמר `priorities` — ראו normalizePriorities */
   prioritiesVersion: number;
+  /**
+   * מאיזה רגע המד של תיקון הדירוגים סופר (ראו lib/ratingDrift.ts).
+   * נקבע פעם אחת כשהתכונה נדלקת, כדי שהיסטוריה שנצברה לפניה לא תזיז דירוגים
+   * למפרע — התוצאות ההן נרשמו כשאף אחד לא ידע שהן ישפיעו על הדירוג.
+   * ריק = עוד לא עוגן, ואז אין בדיקות בכלל.
+   */
+  ratingDriftSince: string;
   payments: PaymentRound;
   /** המחזור הנוכחי — מסונכרן כדי שהטלפון והמחשב יראו את אותן קבוצות */
   round: Draft;
@@ -58,6 +65,7 @@ export interface AppSettings {
 export const defaultSettings = (): AppSettings => ({
   priorities: DEFAULT_PRIORITIES,
   prioritiesVersion: PRIORITIES_VERSION,
+  ratingDriftSince: '',
   payments: emptyPayments(''),
   round: emptyDraft(''),
 });
@@ -67,6 +75,9 @@ export const normalizeSettings = (raw: Partial<AppSettings> | undefined): AppSet
   priorities: raw?.priorities ?? DEFAULT_PRIORITIES,
   // הגדרות שנשמרו לפני שהשדה קיים הן מלפני המיגרציה, כלומר גרסה 1
   prioritiesVersion: raw?.prioritiesVersion ?? (raw?.priorities ? 1 : PRIORITIES_VERSION),
+  // ריק = עוד לא עוגן. App מעגן אותו פעם אחת בטעינה, ועד אז אין בדיקות —
+  // חותמת שנוצרת כאן הייתה משתנה בכל קריאה ולעולם לא הייתה נשמרת
+  ratingDriftSince: raw?.ratingDriftSince ?? '',
   payments: raw?.payments ?? emptyPayments(''),
   round: normalizeDraft(raw?.round ?? {}, raw?.round?.matchDate ?? ''),
 });

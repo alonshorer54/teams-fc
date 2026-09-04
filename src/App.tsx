@@ -38,6 +38,14 @@ import { useSyncedStore } from './hooks/useSyncedStore';
 import { todayISO } from './lib/format';
 import { computeHistoryStats, streakByPlayer } from './lib/stats';
 import { computePairChemistry, pairEffectMap } from './lib/pairs';
+import {
+  applyChanges,
+  isCheckpoint,
+  revertChanges,
+  runCheck,
+  type RatingChange,
+} from './lib/ratingDrift';
+import { RatingCheckPopup } from './components/RatingCheckPopup';
 import { PRIORITIES_VERSION, normalizePriorities, type CriterionSetting } from './lib/criteria';
 import { DEMO_PLAYERS, buildDemoHistory } from './lib/demoData';
 import { PlayersView } from './components/PlayersView';
@@ -139,6 +147,27 @@ export default function App() {
     setRealDraft(() => normalizeDraft(legacyDraft, legacyDraft.matchDate || todayISO()));
     setLegacyDraft(null);
   }, [legacyDraft, settings.round.matchDate, isDemo, store.status, setRealDraft, setLegacyDraft]);
+
+  /*
+   * מעגנים את נקודת ההתחלה של תיקון הדירוגים פעם אחת. חייב להישמר ולא להיגזר
+   * בכל טעינה: חותמת "עכשיו" שנוצרת מחדש בכל רינדור לעולם לא הייתה מאפשרת לאף
+   * מחזור להיספר, ורגע התחלה שנגזר מההיסטוריה היה זוחל קדימה עם כל הגרלה חדשה.
+   */
+  const anchoredDrift = useRef(false);
+  useEffect(() => {
+    if (anchoredDrift.current || isDemo || store.status === 'loading') return;
+    if (settings.ratingDriftSince) return;
+    anchoredDrift.current = true;
+    store.setSettings((prev) => ({ ...prev, ratingDriftSince: new Date().toISOString() }));
+  }, [isDemo, store, settings.ratingDriftSince]);
+
+  /** במצב דוגמה סופרים את כל ההיסטוריה המומצאת, אחרת אין מה להדגים */
+  const driftSince = isDemo ? undefined : settings.ratingDriftSince;
+
+  const [ratingCheck, setRatingCheck] = useState<{
+    recordId: string;
+    changes: RatingChange[];
+  } | null>(null);
 
   // רצפי ניצחון/הפסד מההיסטוריה — מוצגים ליד השמות בזמן בחירת המשתתפים
   const streaks = useMemo(() => streakByPlayer(computeHistoryStats(history)), [history]);
@@ -272,18 +301,64 @@ export default function App() {
     setHistory((prev) => [record, ...prev]);
   };
 
+  /**
+   * מסמן תוצאה, ומיד אחריה מריץ את בדיקת הדירוגים אם המחזור הזה הוא כל שלישי.
+   *
+   * הכל קורה כאן ולא ב-useEffect בכוונה: הבדיקה חייבת לרוץ פעם אחת לכל סימון,
+   * ואפקט שמסתכל על ההיסטוריה היה רץ שוב בכל סנכרון שמגיע ממכשיר אחר.
+   */
   const setResult = (recordId: string, placements: Placements | null) => {
+    const record = history.find((r) => r.id === recordId);
+
+    // ניקוי תוצאה מבטל את התיקונים שהמחזור הזה גרר — אחרת הדירוג נשאר מזוהם
+    // מראיה שכבר נמחקה, ואין שום דרך לדעת את זה בדיעבד
+    const undone = !placements ? (record?.ratingCheck?.changes ?? []) : [];
+    if (undone.length) applyToPlayers((prev) => revertChanges(prev, undone));
+
+    const nextHistory = history.map((r) => {
+      if (r.id !== recordId) return r;
+      const next = { ...r };
+      // התוצאה נשמרת רק בפורמט החדש; הישן נמחק כדי שלא יסתור אותו
+      delete next.result;
+      delete next.ratingCheck;
+      if (placements) next.placements = placements;
+      else delete next.placements;
+      return next;
+    });
+
+    // ריק = נקודת ההתחלה עוד לא עוגנה, ואז אין בדיקות בכלל
+    const canCheck = isDemo || !!settings.ratingDriftSince;
+    const changes =
+      placements && canCheck && isCheckpoint(nextHistory, recordId, driftSince)
+        ? runCheck(players, nextHistory, driftSince)
+        : null;
+
+    if (changes) {
+      if (changes.length) applyToPlayers((prev) => applyChanges(prev, changes));
+      setHistory(() =>
+        nextHistory.map((r) => (r.id === recordId ? { ...r, ratingCheck: { changes } } : r)),
+      );
+      setRatingCheck({ recordId, changes });
+    } else {
+      setHistory(() => nextHistory);
+      if (undone.length) notify('התיקונים לדירוג בוטלו יחד עם התוצאה');
+    }
+  };
+
+  /** ביטול ידני מהחלון — מחזיר את הדירוגים ומוחק את היומן מאותה הגרלה */
+  const undoRatingCheck = () => {
+    if (!ratingCheck) return;
+    applyToPlayers((prev) => revertChanges(prev, ratingCheck.changes));
     setHistory((prev) =>
       prev.map((r) => {
-        if (r.id !== recordId) return r;
+        if (r.id !== ratingCheck.recordId) return r;
         const next = { ...r };
-        // התוצאה נשמרת רק בפורמט החדש; הישן נמחק כדי שלא יסתור אותו
-        delete next.result;
-        if (placements) next.placements = placements;
-        else delete next.placements;
+        delete next.ratingCheck;
         return next;
       }),
     );
+    setRatingCheck(null);
+    notify('הדירוגים הוחזרו כפי שהיו');
   };
 
   const restoreRecord = (record: MatchRecord) => {
@@ -472,6 +547,7 @@ export default function App() {
             }}
             onSetResult={setResult}
             onRestore={restoreRecord}
+            driftSince={driftSince}
             notify={notify}
           />
         )}
@@ -489,6 +565,14 @@ export default function App() {
 
         {tab === 'analysis' && <AnalysisView players={players} history={history} />}
       </main>
+
+      {ratingCheck && (
+        <RatingCheckPopup
+          changes={ratingCheck.changes}
+          onUndo={undoRatingCheck}
+          onClose={() => setRatingCheck(null)}
+        />
+      )}
 
       <Toast message={toast} />
     </div>
