@@ -270,6 +270,11 @@ export interface TeamMeta {
   /** מחלקות Tailwind לעיצוב כרטיס הקבוצה */
   ring: string;
   header: string;
+  /**
+   * רקע לשם הקבוצה בתוך הכותרת. ריק כשהכותרת בצבע אחיד; לצבעונית זה הכרחי,
+   * כי טקסט לבן יושב שם על פס צהוב ופשוט נעלם.
+   */
+  nameChip: string;
   chip: string;
   dot: string;
   softBg: string;
@@ -285,6 +290,7 @@ export const TEAM_META: Record<TeamId, TeamMeta> = {
     emoji: '⚪',
     ring: 'border-slate-300/40',
     header: 'bg-gradient-to-l from-slate-100/95 to-slate-300/90 text-slate-900',
+    nameChip: '',
     chip: 'bg-slate-200/15 text-slate-100 border-slate-200/30',
     dot: 'bg-white ring-1 ring-slate-400/60',
     softBg: 'bg-slate-100/[0.04]',
@@ -296,6 +302,7 @@ export const TEAM_META: Record<TeamId, TeamMeta> = {
     emoji: '⚫',
     ring: 'border-slate-600/50',
     header: 'bg-gradient-to-l from-slate-800 to-slate-950 text-slate-100',
+    nameChip: '',
     chip: 'bg-slate-700/30 text-slate-200 border-slate-600/40',
     dot: 'bg-black ring-1 ring-slate-600',
     softBg: 'bg-slate-950/40',
@@ -308,7 +315,8 @@ export const TEAM_META: Record<TeamId, TeamMeta> = {
     emoji: '🔵🟡🔴',
     ring: 'border-amber-400/50',
     header:
-      'bg-[linear-gradient(90deg,#2563eb_0_33.34%,#facc15_33.34%_66.67%,#dc2626_66.67%_100%)] text-white [text-shadow:0_1px_3px_rgba(0,0,0,0.55)]',
+      'bg-[linear-gradient(90deg,#2563eb_0_33.34%,#facc15_33.34%_66.67%,#dc2626_66.67%_100%)] text-white',
+    nameChip: 'rounded-md bg-black/55 px-2 py-0.5',
     chip: 'bg-amber-400/10 text-amber-100 border-amber-400/30',
     // עוגה בשלושה צבעים — נקראת כרב-צבעונית גם בגודל של כמה פיקסלים,
     // בניגוד לשלושה פסים אנכיים שמתמזגים לכתם אחד

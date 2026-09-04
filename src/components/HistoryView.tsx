@@ -218,15 +218,10 @@ export function HistoryView({
                         }`}
                       >
                         <div className={`flex items-center justify-between px-3 py-2 ${meta.header}`}>
-                          {/* בלי אימוג'י הצבע: ⚫ מצויר אפור ועל כותרת שחורה הוא
-                              נראה כמו סמל לבן. הכותרת עצמה כבר בצבע הקבוצה */}
+                          {/* בלי אימוג'י בכלל. מדליה בגודל 12 פיקסל היא כתם, והמקום
+                              שהיא סימנה כבר כתוב בבורר שמעל ומסומן במסגרת הזהב */}
                           <span className="flex items-center gap-1.5 text-sm font-extrabold">
-                            {place && (
-                              <span title={placementMeta(place, teams.length).label}>
-                                {placementMeta(place, teams.length).emoji}
-                              </span>
-                            )}
-                            {meta.name}
+                            <span className={meta.nameChip}>{meta.name}</span>
                           </span>
                           <span dir="ltr" className="font-mono text-[11px] tabular-nums opacity-80">
                             ⌀ {avg.toFixed(2)}
@@ -354,9 +349,9 @@ function ResultPicker({
             {/* גלולה בצבע הקבוצה עצמה, ולא נקודה זעירה: על רקע כהה נקודה שחורה
                 עם טבעת בהירה נקראה כמו הנקודה הלבנה, והצבעוני התמזג לכתם */}
             <span
-              className={`flex w-24 shrink-0 items-center justify-center rounded-lg px-2 py-1 text-[11px] font-extrabold ring-1 ring-slate-600/50 ${TEAM_META[t].header}`}
+              className={`flex w-24 shrink-0 items-center justify-center rounded-lg px-1.5 py-1 text-[11px] font-extrabold ring-1 ring-slate-600/50 ${TEAM_META[t].header}`}
             >
-              <span className="truncate">{TEAM_META[t].name}</span>
+              <span className={`truncate ${TEAM_META[t].nameChip}`}>{TEAM_META[t].name}</span>
             </span>
             <div className="flex flex-1 flex-wrap gap-1">
               {places.map((place) => {
@@ -372,7 +367,7 @@ function ResultPicker({
                         : 'border-slate-700 bg-slate-800/40 text-slate-400 hover:border-slate-600 hover:text-white'
                     }`}
                   >
-                    {meta.emoji} {meta.label}
+                    {meta.label}
                   </button>
                 );
               })}

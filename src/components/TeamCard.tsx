@@ -67,7 +67,7 @@ export function TeamCard({
           {/* הכותרת כבר צבועה בצבע הקבוצה, ואימוג'י הצבע עליה רק מבלבל:
               ⚫ מצויר אפור ונראה בהיר על רקע שחור */}
           <div className="flex items-center gap-2">
-            <h3 className="text-lg font-extrabold">{meta.name}</h3>
+            <h3 className={`text-lg font-extrabold ${meta.nameChip}`}>{meta.name}</h3>
           </div>
           <div className="flex items-center gap-2 text-sm font-bold">
             {onRecolor && (
