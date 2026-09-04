@@ -107,7 +107,17 @@ export function eveningScore(record: MatchRecord): Map<string, number> {
  * נגזר מההיסטוריה ולא נשמר בנפרד: סכום ניקוד הערבים, פחות 3 על כל תיקון שכבר
  * נרשם. מקור אמת יחיד — מונה שמור היה יכול להתפצל מההיסטוריה אחרי עריכה.
  */
-export function computeGauges(history: MatchRecord[], since?: string): Map<string, number> {
+export function computeGauges(
+  history: MatchRecord[],
+  since?: string,
+  /**
+   * לעצור אחרי המחזור הזה. בדיקה שרצה על מחזור מסוים חייבת לראות רק את מה שקרה
+   * עד אליו: בלי זה, עדכון תוצאה ישנה היה מחשב את הבדיקה שלה לפי ערבים שקרו
+   * אחריה. בזרימה רגילה אין מחזורים מאוחרים יותר וזה לא משנה, אבל ברגע שעורכים
+   * תוצאה בדיעבד ההבדל הוא בין תיקון נכון לתיקון שנשען על העתיד.
+   */
+  upToRecordId?: string,
+): Map<string, number> {
   const gauges = new Map<string, number>();
   const add = (id: string, n: number) => gauges.set(id, (gauges.get(id) ?? 0) + n);
 
@@ -117,6 +127,7 @@ export function computeGauges(history: MatchRecord[], since?: string): Map<strin
     for (const c of record.ratingCheck?.changes ?? []) {
       add(c.playerId, -Math.sign(c.gauge) * GAUGE_THRESHOLD);
     }
+    if (record.id === upToRecordId) break;
   }
   return gauges;
 }
@@ -145,8 +156,9 @@ export function runCheck(
   players: Player[],
   history: MatchRecord[],
   since?: string,
+  upToRecordId?: string,
 ): RatingChange[] {
-  const gauges = computeGauges(history, since);
+  const gauges = computeGauges(history, since, upToRecordId);
 
   // ניקוד הערבים האחרונים של כל שחקן, כדי שהחלון יוכל להראות למה זה קרה
   const recent = new Map<string, number[]>();
@@ -157,6 +169,7 @@ export function runCheck(
       if (list.length > ROUNDS_PER_CHECK) list.shift();
       recent.set(id, list);
     }
+    if (record.id === upToRecordId) break;
   }
 
   const changes: RatingChange[] = [];
@@ -176,6 +189,36 @@ export function runCheck(
   return changes.sort(
     (a, b) => Math.abs(b.gauge) - Math.abs(a.gauge) || a.name.localeCompare(b.name, 'he'),
   );
+}
+
+/**
+ * מריץ את כל נקודות הבדיקה על היסטוריה קיימת, מהישן לחדש, ומחזיר את המאגר
+ * וההיסטוריה אחרי שכולן בוצעו.
+ *
+ * משמש להזרעת מצב הדוגמה: היסטוריה עם תוצאות שאף בדיקה לא רצה עליה מציגה מדים
+ * מנופחים שלא יכולים להיווצר בשימוש אמיתי, שבו כל בדיקה צורכת מהמד.
+ */
+export function replayChecks(
+  players: Player[],
+  history: MatchRecord[],
+  since?: string,
+): { players: Player[]; history: MatchRecord[] } {
+  const rounds = countedRounds(history, since);
+  let nextPlayers = players;
+  let nextHistory = history.map((r) => {
+    const copy = { ...r };
+    delete copy.ratingCheck;
+    return copy;
+  });
+
+  rounds.forEach((round, i) => {
+    if ((i + 1) % ROUNDS_PER_CHECK !== 0) return;
+    const changes = runCheck(nextPlayers, nextHistory, since, round.id);
+    nextPlayers = applyChanges(nextPlayers, changes);
+    nextHistory = nextHistory.map((r) => (r.id === round.id ? { ...r, ratingCheck: { changes } } : r));
+  });
+
+  return { players: nextPlayers, history: nextHistory };
 }
 
 /** מחיל תיקונים על המאגר */

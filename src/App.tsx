@@ -41,6 +41,7 @@ import { computePairChemistry, pairEffectMap } from './lib/pairs';
 import {
   applyChanges,
   isCheckpoint,
+  replayChecks,
   revertChanges,
   runCheck,
   type RatingChange,
@@ -253,8 +254,11 @@ export default function App() {
 
   const enterDemo = () => {
     const demo = buildDemoPlayers();
-    setDemoPlayers(demo);
-    setDemoHistory(buildDemoHistory(demo));
+    // מריצים את הבדיקות שכבר היו רצות על ההיסטוריה המומצאת. בלעדיהן הדוגמה
+    // מציגה מדים מנופחים שלא יכולים להיווצר בשימוש אמיתי, שבו כל בדיקה צורכת
+    const seeded = replayChecks(demo, buildDemoHistory(demo));
+    setDemoPlayers(seeded.players);
+    setDemoHistory(seeded.history);
     setDemoDraft(emptyDraft(todayISO()));
     setTab('draw');
     notify('מצב דוגמה — שום דבר כאן לא נשמר');
@@ -330,7 +334,7 @@ export default function App() {
     const canCheck = isDemo || !!settings.ratingDriftSince;
     const changes =
       placements && canCheck && isCheckpoint(nextHistory, recordId, driftSince)
-        ? runCheck(players, nextHistory, driftSince)
+        ? runCheck(players, nextHistory, driftSince, recordId)
         : null;
 
     if (changes) {
