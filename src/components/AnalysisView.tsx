@@ -198,10 +198,8 @@ function PairSection({ report }: { report: ReturnType<typeof computePairChemistr
           <Sparkles size={16} className="text-violet-400" />
           כימיה משחקית — נלמדת מהתוצאות
         </h2>
-        <p className="mt-0.5 text-[11px] leading-relaxed text-slate-500">
-          כאן רואים אילו שיבוצים של שחקנים יחד באמת עובדים. לכל זוג ששיחק באותה קבוצה לפחות{' '}
-          {MIN_GAMES_TOGETHER} ערבים, משווים כמה הם ניצחו <b>ביחד</b> לכמה שהיה צפוי מהם לפי מה
-          שכל אחד עושה בשאר הערבים. ההפרש הוא ה״אפקט״.
+        <p className="mt-0.5 text-[11px] text-slate-500">
+          כמה הזוג ניצח יחד, מול כמה שהיה צפוי ממנו. מ-{MIN_GAMES_TOGETHER} ערבים משותפים.
         </p>
       </div>
 
@@ -227,12 +225,9 @@ function PairSection({ report }: { report: ReturnType<typeof computePairChemistr
       )}
 
       {enough && report.strong.length + report.weak.length === 0 && (
-        <p className="rounded-xl border border-slate-800 bg-slate-950/40 p-3 text-xs leading-relaxed text-slate-400">
-          {report.qualifiedPairs === 1
-            ? 'יש זוג אחד עם מספיק משחקים משותפים'
-            : `יש ${report.qualifiedPairs} זוגות עם מספיק משחקים משותפים`}
-          , אבל כולם מנצחים בדיוק כמו שהיה צפוי לפי הביצועים האישיים שלהם. זו תשובה בפני עצמה: עוד
-          אין כאן צירוף שמשנה תוצאות.
+        <p className="rounded-xl border border-slate-800 bg-slate-950/40 p-3 text-xs text-slate-400">
+          {report.qualifiedPairs === 1 ? 'זוג אחד עבר את הסף' : `${report.qualifiedPairs} זוגות עברו את הסף`}
+          , וכולם מנצחים בדיוק כצפוי. אין כאן עדיין צירוף שמשנה תוצאות.
         </p>
       )}
 
@@ -268,7 +263,7 @@ function PairEmptyState({ report }: { report: ReturnType<typeof computePairChemi
         )}
       </p>
 
-      <p>עוד אין אף זוג ששיחק באותה קבוצה {MIN_GAMES_TOGETHER} ערבים.</p>
+      <p>אף זוג עוד לא שיחק יחד {MIN_GAMES_TOGETHER} ערבים.</p>
     </div>
   );
 }
@@ -288,7 +283,7 @@ function AlmostThere({ pairs }: { pairs: ReturnType<typeof computePairChemistry>
     <div className="rounded-xl border border-sky-500/25 bg-sky-500/5 p-3">
       <p className="mb-2 flex items-center gap-1.5 text-[11px] font-bold text-sky-300">
         <Hourglass size={12} />
-        כמעט שם — עוד לא מספיק כדי לקבוע
+        כמעט שם — {close[0].missing === 1 ? 'חסר עוד ערב אחד' : `חסרים עוד ${close[0].missing} ערבים`}
       </p>
       <ul className="space-y-1.5">
         {close.map((p) => (
@@ -310,11 +305,6 @@ function AlmostThere({ pairs }: { pairs: ReturnType<typeof computePairChemistry>
           </li>
         ))}
       </ul>
-      <p className="mt-2 text-[10px] text-slate-500">
-        {close[0].missing === 1
-          ? 'חסר להם עוד ערב אחד באותה קבוצה, ואז הם ייכנסו לחישוב.'
-          : `חסרים להם עוד ${close[0].missing} ערבים באותה קבוצה, ואז הם ייכנסו לחישוב.`}
-      </p>
     </div>
   );
 }

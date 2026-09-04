@@ -430,11 +430,6 @@ function StatsPanel({
           </span>
           )}
         </h2>
-        <p className="mb-3 text-[11px] leading-relaxed text-slate-500">
-          לפי שחקנים ולא לפי צבע קבוצה — הצבעים מתחלפים כל שבוע. המדד הוא איפה הקבוצה של השחקן
-          סיימה, לא תוצאות מדויקות של משחקים.
-        </p>
-
         {!hasResults ? (
           <p className="text-xs text-slate-400">
             עדיין לא עודכנה אף תוצאה. פתחו הגרלה למטה וסמנו איך כל קבוצה סיימה — כאן תראו מי
