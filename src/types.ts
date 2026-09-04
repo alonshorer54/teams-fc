@@ -301,7 +301,10 @@ export const TEAM_META: Record<TeamId, TeamMeta> = {
     name: 'שחור',
     emoji: '⚫',
     ring: 'border-slate-600/50',
-    header: 'bg-gradient-to-l from-slate-800 to-slate-950 text-slate-100',
+    // לא slate-950: הקצה הכהה של המדרג יצא בדיוק בבהירות של רקע הפאנל
+    // בבורר התוצאה, והגלולה נבלעה בו בלי גבול. slate-900 עדיין נקרא שחור
+    // ורחוק מספיק מהרקע כדי שתמיד תהיה לו צורה.
+    header: 'bg-gradient-to-l from-slate-700 to-slate-900 text-slate-100',
     nameChip: '',
     chip: 'bg-slate-700/30 text-slate-200 border-slate-600/40',
     dot: 'bg-black ring-1 ring-slate-600',

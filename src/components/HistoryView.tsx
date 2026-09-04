@@ -349,7 +349,7 @@ function ResultPicker({
             {/* גלולה בצבע הקבוצה עצמה, ולא נקודה זעירה: על רקע כהה נקודה שחורה
                 עם טבעת בהירה נקראה כמו הנקודה הלבנה, והצבעוני התמזג לכתם */}
             <span
-              className={`flex w-24 shrink-0 items-center justify-center rounded-lg px-1.5 py-1 text-[11px] font-extrabold ring-1 ring-slate-600/50 ${TEAM_META[t].header}`}
+              className={`flex w-24 shrink-0 items-center justify-center rounded-lg px-1.5 py-1 text-[11px] font-extrabold ring-1 ring-white/25 ${TEAM_META[t].header}`}
             >
               <span className={`truncate ${TEAM_META[t].nameChip}`}>{TEAM_META[t].name}</span>
             </span>
