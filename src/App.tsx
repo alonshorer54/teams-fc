@@ -35,7 +35,7 @@ import { isCloudConfigured } from './lib/supabase';
 import { useLocalStorage } from './hooks/useLocalStorage';
 import { useAuth } from './hooks/useAuth';
 import { useSyncedStore } from './hooks/useSyncedStore';
-import { todayISO } from './lib/format';
+import { rollRoundDate, todayISO } from './lib/format';
 import { computeHistoryStats, streakByPlayer } from './lib/stats';
 import { computePairChemistry, pairEffectMap } from './lib/pairs';
 import {
@@ -117,20 +117,38 @@ export default function App() {
 
   const settings = useMemo(() => normalizeSettings(store.settings), [store.settings]);
 
+  /**
+   * מקדם מחזור שהתאריך שלו כבר עבר אל השבוע הבא, כדי ש"המחזור הקרוב" באמת יהיה
+   * הקרוב ולא הערב שכבר שוחק.
+   *
+   * לא מקדמים כשיש חלוקה שעוד לא נשמרה להיסטוריה: אז המחזור עדיין פתוח, ושינוי
+   * התאריך מתחת לידיים היה גורם לשמירה של ערב שכבר שוחק תחת התאריך של הבא.
+   */
+  const rollRound = useCallback(
+    (round: Draft): Draft => {
+      const pending = !!round.lineup && !realHistory.some((r) => r.date === round.matchDate);
+      if (pending) return round;
+      const date = rollRoundDate(round.matchDate);
+      return date === round.matchDate ? round : { ...round, matchDate: date };
+    },
+    [realHistory],
+  );
+
   /** המחזור הנוכחי מגיע מההגדרות המסונכרנות, כדי שהטלפון והמחשב יראו אותו דבר */
   const realDraft = useMemo(
-    () => (settings.round.matchDate ? settings.round : emptyDraft(todayISO())),
-    [settings.round],
+    () => (settings.round.matchDate ? rollRound(settings.round) : emptyDraft(todayISO())),
+    [settings.round, rollRound],
   );
 
   const setRealDraft = useCallback(
     (updater: (prev: Draft) => Draft) =>
       store.setSettings((prev) => {
         const base = normalizeSettings(prev);
-        const current = base.round.matchDate ? base.round : emptyDraft(todayISO());
+        // אותו קידום כמו בתצוגה, אחרת כל עדכון היה מחזיר את התאריך הישן
+        const current = base.round.matchDate ? rollRound(base.round) : emptyDraft(todayISO());
         return { ...base, round: updater(current) };
       }),
-    [store],
+    [store, rollRound],
   );
 
   const players = demoPlayers ?? migratedPlayers;

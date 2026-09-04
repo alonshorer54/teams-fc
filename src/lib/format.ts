@@ -45,6 +45,24 @@ export function todayISO(): string {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 }
 
+/**
+ * מקדם תאריך מחזור שכבר עבר לשבוע הבא, בקפיצות של שבוע שלם.
+ *
+ * הקפיצה בת שבעה ימים היא מה ששומר על היום בשבוע בלי להגדיר אותו בשום מקום:
+ * מי שמשחק ברביעי יקבל את רביעי הבא, ומי שמשחק בחמישי את חמישי הבא. שעה 12:00
+ * כדי ששעון קיץ לא יזיז את התאריך ביום.
+ */
+export function rollRoundDate(current: string, today = todayISO()): string {
+  if (!current || current >= today) return current;
+
+  const d = new Date(`${current}T12:00:00`);
+  const now = new Date(`${today}T12:00:00`);
+  while (d < now) d.setDate(d.getDate() + 7);
+
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+}
+
 /** העתקה ללוח עם נפילה חזרה ל-execCommand בדפדפנים/הקשרים ללא הרשאה. */
 export async function copyToClipboard(text: string): Promise<boolean> {
   try {
