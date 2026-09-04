@@ -218,9 +218,14 @@ export function HistoryView({
                         }`}
                       >
                         <div className={`flex items-center justify-between px-3 py-2 ${meta.header}`}>
-                          {/* בלי אימוג'י בכלל. מדליה בגודל 12 פיקסל היא כתם, והמקום
-                              שהיא סימנה כבר כתוב בבורר שמעל ומסומן במסגרת הזהב */}
+                          {/* אימוג'י הצבע ירד מכאן — הכותרת כבר בצבע הקבוצה, ו-⚫
+                              מצויר אפור ונראה עליה בהיר. מדליית המקום נשארת */}
                           <span className="flex items-center gap-1.5 text-sm font-extrabold">
+                            {place && (
+                              <span title={placementMeta(place, teams.length).label}>
+                                {placementMeta(place, teams.length).emoji}
+                              </span>
+                            )}
                             <span className={meta.nameChip}>{meta.name}</span>
                           </span>
                           <span dir="ltr" className="font-mono text-[11px] tabular-nums opacity-80">
@@ -367,7 +372,7 @@ function ResultPicker({
                         : 'border-slate-700 bg-slate-800/40 text-slate-400 hover:border-slate-600 hover:text-white'
                     }`}
                   >
-                    {meta.label}
+                    {meta.emoji} {meta.label}
                   </button>
                 );
               })}
