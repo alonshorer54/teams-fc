@@ -20,6 +20,8 @@ Hebrew, right-to-left, installable on a phone, and synced between devices.
   A list pasted back from the group chat is matched against the squad automatically.
 - **History and trends** — saved rounds, win/loss streaks, attendance over time, and
   which pairs actually perform better together than apart.
+- **Self-correcting ratings** — a player who keeps winning whatever team they land in
+  is rated too low, so the app nudges them up a tenth of a point at a time.
 - **Payments** — who paid for the week and who still owes.
 
 ## How the draw works
@@ -117,6 +119,44 @@ recorded. The trends screen shows each pair's own numbers — evenings together,
 what they actually won, and what was expected of them — rather than a single
 score with no way to judge it.
 
+## Correcting the ratings
+
+Ratings were entered by hand and never moved, so one wrong number dragged the
+balance off every week indefinitely. The results were already being recorded, so
+the correction was there for the taking.
+
+Each player carries a gauge: **+1 for a win, −1 for a loss, and a drawn evening
+leaves it alone**. Every third round with a result, a gauge at ±3 moves that
+player's rating by 0.1 and **drops by 3 rather than resetting**.
+
+Both of those details are load-bearing, and both were arrived at by ruling out
+the obvious alternative.
+
+A drawn evening scores zero rather than counting as "did not lose". Had it
+counted, the ideal case — balanced teams every single week — would have ratcheted
+every player upward forever, which is exactly backwards. A draw is the expected
+result, so it neither earns nor costs. It follows that when the teams are
+genuinely even, nothing moves at all, which is the whole point of the app.
+
+The gauge is reduced by 3, never reset. Resetting at each checkpoint would erase a
+win-draw-win run every three rounds and that player would never be corrected,
+making draws irrelevant by another route. Progress carries; only an opposite
+result cancels it. Since the remainder is at most 2 and a window adds at most 3,
+nobody can move more than 0.1 per check.
+
+Measured over 400 simulated seasons of 21 players in three teams: thirty balanced
+evenings move nothing; a player winning 70% of evenings instead of a third gains
+0.89 over 40 rounds; a correctly rated player drifts ±0.14 a year, and that
+self-corrects, because a rating nudged too high earns weaker team-mates next week.
+Thresholds of 4 and 5 are quieter still but stop three straight wins from
+registering at all, which was the requirement.
+
+The gauge is derived from history rather than stored, so the two cannot diverge,
+and each check is recorded on the round that triggered it — an audit trail that
+also makes clearing a result undo the corrections it caused. A check reads only
+the rounds up to its own; without that, editing an old result computed its check
+from evenings that came after it.
+
 ## Architecture
 
 TypeScript · React 19 · Tailwind CSS 4 · Vite · Supabase · Netlify
@@ -144,6 +184,7 @@ instead of looping forever.
 | `src/lib/balance.ts` | The balancing algorithm and lineup statistics |
 | `src/lib/criteria.ts` | Draw criteria, their penalties, and priority weighting |
 | `src/lib/pairs.ts` | Learned chemistry between pairs of players |
+| `src/lib/ratingDrift.ts` | Correcting ratings from results — the gauge |
 | `src/lib/diff.ts` | Explains what a manual edit changed |
 | `src/lib/parseNames.ts` | Matches a pasted WhatsApp list against the squad |
 | `src/lib/storage.ts` | Local storage keys, backup export and import |

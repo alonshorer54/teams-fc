@@ -54,8 +54,21 @@ export function HistoryView({
   const [pendingDelete, setPendingDelete] = useState<MatchRecord | null>(null);
 
   const stats = useMemo(() => computeHistoryStats(history), [history]);
-  const gauges = useMemo(() => computeGauges(history, driftSince), [history, driftSince]);
-  const untilCheck = useMemo(() => roundsUntilCheck(history, driftSince), [history, driftSince]);
+
+  /*
+   * מחרוזת ריקה = נקודת ההתחלה עוד לא עוגנה (רגע אחרי טעינה, או אם השמירה
+   * נכשלה). אסור להציג מדים אז: הם היו נספרים מכל ההיסטוריה הישנה ומראים
+   * מספרים שסותרים את ההבטחה שהספירה מתחילה מעכשיו.
+   */
+  const driftReady = driftSince !== '';
+  const gauges = useMemo(
+    () => (driftReady ? computeGauges(history, driftSince) : new Map<string, number>()),
+    [history, driftSince, driftReady],
+  );
+  const untilCheck = useMemo(
+    () => roundsUntilCheck(history, driftSince),
+    [history, driftSince],
+  );
 
   if (history.length === 0) {
     return (
@@ -80,7 +93,12 @@ export function HistoryView({
 
   return (
     <div className="space-y-4">
-      <StatsPanel stats={stats} gauges={gauges} untilCheck={untilCheck} />
+      <StatsPanel
+        stats={stats}
+        gauges={gauges}
+        untilCheck={untilCheck}
+        driftReady={driftReady}
+      />
 
       <p className="px-1 text-xs text-slate-400">
         {history.length === 1 ? 'שיחקתם פעם אחת' : `שיחקתם ${history.length} פעמים`} · הכי חדש למעלה
@@ -381,10 +399,12 @@ function StatsPanel({
   stats,
   gauges,
   untilCheck,
+  driftReady,
 }: {
   stats: ReturnType<typeof computeHistoryStats>;
   gauges: Map<string, number>;
   untilCheck: number;
+  driftReady: boolean;
 }) {
   const hasResults = stats.totalWithResult > 0;
   const last = stats.lastResolved;
@@ -401,6 +421,7 @@ function StatsPanel({
             </span>
           )}
           {/* מונה קטן, כדי שהחלון של בדיקת הדירוגים לא יגיע בהפתעה */}
+          {driftReady && (
           <span
             className={`inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[10px] font-semibold ${
               untilCheck === 1
@@ -412,6 +433,7 @@ function StatsPanel({
             <Scale size={9} />
             {untilCheck === 1 ? 'המחזור הבא — בדיקת דירוגים' : `עוד ${untilCheck} מחזורים לבדיקה`}
           </span>
+          )}
         </h2>
         <p className="mb-3 text-[11px] leading-relaxed text-slate-500">
           לפי שחקנים ולא לפי צבע קבוצה — הצבעים מתחלפים כל שבוע. המדד הוא איפה הקבוצה של השחקן
@@ -466,7 +488,7 @@ function StatsPanel({
               </div>
             )}
 
-            <PlayerTable players={stats.players} gauges={gauges} />
+            <PlayerTable players={stats.players} gauges={gauges} driftReady={driftReady} />
           </div>
         )}
       </div>
@@ -483,9 +505,11 @@ function StatsPanel({
 function PlayerTable({
   players,
   gauges,
+  driftReady,
 }: {
   players: ReturnType<typeof computeHistoryStats>['players'];
   gauges: Map<string, number>;
+  driftReady: boolean;
 }) {
   const [showAll, setShowAll] = useState(false);
   const visible = showAll ? players : players.slice(0, 8);
@@ -517,12 +541,14 @@ function PlayerTable({
                 אחוז
               </th>
               <th className="px-2 py-1.5 text-center font-semibold">רצף</th>
-              <th
-                className="px-2 py-1.5 text-center font-semibold"
-                title={`ניצחון +1, הפסד -1, ערב שקול לא מזיז. ב-${GAUGE_THRESHOLD}± הדירוג זז ב-0.1`}
-              >
-                מד
-              </th>
+              {driftReady && (
+                <th
+                  className="px-2 py-1.5 text-center font-semibold"
+                  title={`ניצחון +1, הפסד -1, ערב שקול לא מזיז. ב-${GAUGE_THRESHOLD}± הדירוג זז ב-0.1`}
+                >
+                  מד
+                </th>
+              )}
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-800/60">
@@ -547,9 +573,11 @@ function PlayerTable({
                 <td className="px-2 py-1.5 text-center">
                   <StreakBadge streak={p.streak} />
                 </td>
-                <td className="px-2 py-1.5 text-center">
-                  <GaugeBadge value={gauges.get(p.id) ?? 0} />
-                </td>
+                {driftReady && (
+                  <td className="px-2 py-1.5 text-center">
+                    <GaugeBadge value={gauges.get(p.id) ?? 0} />
+                  </td>
+                )}
               </tr>
             ))}
           </tbody>
