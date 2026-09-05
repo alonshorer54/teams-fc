@@ -348,17 +348,20 @@ function ResultPicker({
       </p>
 
       {/* דירוג לכל קבוצה */}
-      <ul className="space-y-1.5">
+      <ul className="space-y-2">
         {teams.map((t) => (
-          <li key={t} className="flex items-center gap-2">
+          <li key={t} className="space-y-1">
             {/* גלולה בצבע הקבוצה עצמה, ולא נקודה זעירה: על רקע כהה נקודה שחורה
-                עם טבעת בהירה נקראה כמו הנקודה הלבנה, והצבעוני התמזג לכתם */}
+                עם טבעת בהירה נקראה כמו הנקודה הלבנה, והצבעוני התמזג לכתם.
+                השם יושב בשורה משלו: לצדו נשארו לשלושת הכפתורים פחות מ-200
+                פיקסל, ומתחת למסך ברוחב 396 "הפסידה הרבה" ירד לשורה שנייה */}
             <span
-              className={`flex w-24 shrink-0 items-center justify-center rounded-lg px-1.5 py-1 text-[11px] font-extrabold ring-1 ring-white/25 ${TEAM_META[t].header}`}
+              className={`flex w-24 items-center justify-center rounded-lg px-1.5 py-1 text-[11px] font-extrabold ring-1 ring-white/25 ${TEAM_META[t].header}`}
             >
               <span className={`truncate ${TEAM_META[t].nameChip}`}>{TEAM_META[t].name}</span>
             </span>
-            <div className="flex flex-1 flex-wrap gap-1">
+            {/* בלי flex-wrap ובלי רוחב מינימלי: שלושתם תמיד באותה שורה */}
+            <div className="flex gap-0.5">
               {places.map((place) => {
                 const meta = placementMeta(place, count);
                 return (
@@ -366,7 +369,7 @@ function ResultPicker({
                     key={place}
                     onClick={() => setPlace(t, place)}
                     title={`${TEAM_META[t].name} — ${meta.label}`}
-                    className={`min-w-16 flex-1 cursor-pointer rounded-lg border px-2 py-1.5 text-[10px] font-bold transition ${
+                    className={`min-w-0 flex-1 cursor-pointer rounded-lg border px-1 py-1.5 text-[10px] font-bold transition ${
                       value?.[t] === place
                         ? placementTone(place, count)
                         : 'border-slate-700 bg-slate-800/40 text-slate-400 hover:border-slate-600 hover:text-white'
