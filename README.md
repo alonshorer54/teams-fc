@@ -6,7 +6,7 @@ who showed up, press draw, and send the teams to the group chat.
 
 **Live app: https://teams-fc.netlify.app**
 
-Hebrew, right-to-left, installable on a phone, and synced between devices.
+installable on a phone, and synced between devices.
 
 ## What it does
 
