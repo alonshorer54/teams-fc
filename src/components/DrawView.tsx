@@ -46,7 +46,7 @@ import {
   type CriterionSetting,
 } from '../lib/criteria';
 import { compareLineups, type LineupDiff } from '../lib/diff';
-import type { Draft } from '../lib/storage';
+import type { Draft, Substitution } from '../lib/storage';
 import { EmptyState } from './ui';
 import { RoundPanel } from './RoundPanel';
 import { FormatPanel } from './FormatPanel';
@@ -58,6 +58,21 @@ import { ShareView } from './ShareView';
 import type { ShareTeams } from '../lib/format';
 
 type Mode = 'admin' | 'share';
+
+/**
+ * מחליף נכנס למחזור רק בזכות ההחלפה שלו. כשההחלפה מתבטלת או מוחלפת באחר, בלי
+ * זה הוא נשאר ברשימת המשחקים בשקט — וכל שינוי מחליף או ביטול סימון היה מגדיל
+ * את המניין באחד בלי שום סימן על המסך.
+ */
+function dropStaleReplacement(
+  selectedIds: string[],
+  staleInId: string | undefined,
+  remaining: Substitution[],
+) {
+  // עדיין מחליף מישהו אחר — נשאר במחזור
+  if (!staleInId || remaining.some((s) => s.inId === staleInId)) return selectedIds;
+  return selectedIds.filter((x) => x !== staleInId);
+}
 
 export function DrawView({
   players,
@@ -310,19 +325,40 @@ export function DrawView({
           }))
         }
         onUncancel={(id) =>
-          setDraft((p) => ({
-            ...p,
-            cancelledIds: p.cancelledIds.filter((x) => x !== id),
-            selectedIds: p.selectedIds.includes(id) ? p.selectedIds : [...p.selectedIds, id],
-            substitutions: p.substitutions.filter((s) => s.outId !== id),
-          }))
+          setDraft((p) => {
+            // הוא חוזר לשחק, ולכן המחליף שנכנס במקומו כבר לא נחוץ
+            const substitutions = p.substitutions.filter((s) => s.outId !== id);
+            const selected = dropStaleReplacement(
+              p.selectedIds,
+              p.substitutions.find((s) => s.outId === id)?.inId,
+              substitutions,
+            );
+            return {
+              ...p,
+              cancelledIds: p.cancelledIds.filter((x) => x !== id),
+              selectedIds: selected.includes(id) ? selected : [...selected, id],
+              substitutions,
+            };
+          })
         }
         onSubstitute={(outId, inId) =>
-          setDraft((p) => ({
-            ...p,
-            selectedIds: p.selectedIds.includes(inId) ? p.selectedIds : [...p.selectedIds, inId],
-            substitutions: [...p.substitutions.filter((s) => s.outId !== outId), { outId, inId }],
-          }))
+          setDraft((p) => {
+            const substitutions = [
+              ...p.substitutions.filter((s) => s.outId !== outId),
+              { outId, inId },
+            ];
+            // החלפת מחליף — הקודם יוצא, אחרת שניהם היו נשארים במחזור
+            const selected = dropStaleReplacement(
+              p.selectedIds,
+              p.substitutions.find((s) => s.outId === outId)?.inId,
+              substitutions,
+            );
+            return {
+              ...p,
+              selectedIds: selected.includes(inId) ? selected : [...selected, inId],
+              substitutions,
+            };
+          })
         }
       />
 
