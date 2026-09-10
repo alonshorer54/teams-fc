@@ -310,6 +310,9 @@ function ReplacementPicker({
         <p className="flex items-center gap-1.5 text-[11px] font-bold text-sky-300">
           <UserPlus size={12} />
           מי מחליף את {target.name}?
+          <span className="rounded bg-sky-500/20 px-1.5 font-mono text-[10px] tabular-nums">
+            {ranked.length}
+          </span>
         </p>
         <button className="text-[11px] text-slate-400 underline" onClick={onClose}>
           סגירה
@@ -319,8 +322,9 @@ function ReplacementPicker({
       {ranked.length === 0 ? (
         <p className="text-[11px] text-slate-500">אין שחקנים פנויים מחוץ למחזור.</p>
       ) : (
-        <div className="flex flex-wrap gap-1.5">
-          {ranked.slice(0, 12).map((p) => (
+        // כל המאגר הפנוי, לא רק הקרובים בדירוג — הרשימה נגללת במקום להיחתך
+        <div className="flex max-h-40 flex-wrap gap-1.5 overflow-y-auto overscroll-contain pb-0.5">
+          {ranked.map((p) => (
             <button
               key={p.id}
               onClick={() => onPick(p.id)}
