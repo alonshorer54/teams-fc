@@ -223,10 +223,10 @@ export default function App() {
     setRealHistory,
   ]);
 
-  // ההיסטוריה והמגמות מציגות רק את מי שעדיין במאגר. לפי המזהים ולא לפי השחקנים,
-  // כדי ששינוי דירוג לא יבנה מחדש את כל ההיסטוריה
+  // הסטטיסטיקות והמגמות סופרות רק את מי שעדיין במאגר; הערבים עצמם בהיסטוריה
+  // נשארים מלאים. לפי המזהים ולא לפי השחקנים, כדי ששינוי דירוג לא יבנה הכל מחדש
   const squadKey = players.map((p) => p.id).join(',');
-  const shownHistory = useMemo(() => {
+  const squadHistory = useMemo(() => {
     const ids = new Set(squadKey.split(','));
     return history.map((r) => squadOnly(r, (id) => ids.has(id)));
   }, [history, squadKey]);
@@ -629,7 +629,8 @@ export default function App() {
 
         {tab === 'history' && (
           <HistoryView
-            history={shownHistory}
+            history={history}
+            statsHistory={squadHistory}
             onDelete={(id) => {
               setHistory((prev) => prev.filter((r) => r.id !== id));
               notify('ההגרלה נמחקה');
@@ -655,7 +656,7 @@ export default function App() {
           />
         )}
 
-        {tab === 'analysis' && <AnalysisView players={players} history={shownHistory} />}
+        {tab === 'analysis' && <AnalysisView players={players} history={squadHistory} />}
       </main>
 
       {ratingCheck && (

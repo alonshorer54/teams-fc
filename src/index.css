@@ -10,6 +10,14 @@
     color-scheme: dark;
   }
 
+  /* לא משנה כלום בתצוגה — האפליקציה כהה תמיד. הדפדפן של סמסונג מחשיך בעצמו כל
+     אתר שאין בו קטע כזה, והופך את הגלולה של לבן ואת הכותרות הבהירות לכהות */
+  @media (prefers-color-scheme: dark) {
+    html {
+      color-scheme: dark;
+    }
+  }
+
   body {
     @apply bg-slate-950 text-slate-100 antialiased;
     font-family: var(--font-sans);

@@ -230,8 +230,8 @@ export function PlayersView({
         title="מחיקת שחקן"
         message={
           <>
-            למחוק את <b className="text-slate-100">{pendingDelete?.name}</b> מהמאגר? הוא לא יופיע
-            יותר בהיסטוריה ובמגמות.
+            למחוק את <b className="text-slate-100">{pendingDelete?.name}</b> מהמאגר? הוא יישאר בערבים
+            שכבר נשמרו, אבל לא בסטטיסטיקות ובמגמות.
           </>
         }
         onCancel={() => setPendingDelete(null)}

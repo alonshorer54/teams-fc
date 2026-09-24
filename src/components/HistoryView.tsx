@@ -36,6 +36,7 @@ import { ConfirmDialog, EmptyState } from './ui';
 
 export function HistoryView({
   history,
+  statsHistory,
   onDelete,
   onSetResult,
   onRestore,
@@ -43,6 +44,8 @@ export function HistoryView({
   notify,
 }: {
   history: MatchRecord[];
+  /** ההיסטוריה בלי מי שנמחק מהמאגר — לסטטיסטיקות. הכרטיסים של הערבים מלאים */
+  statsHistory: MatchRecord[];
   onDelete: (id: string) => void;
   onSetResult: (id: string, placements: Placements | null) => void;
   onRestore: (record: MatchRecord) => void;
@@ -53,7 +56,7 @@ export function HistoryView({
   const [expanded, setExpanded] = useState<string | null>(history[0]?.id ?? null);
   const [pendingDelete, setPendingDelete] = useState<MatchRecord | null>(null);
 
-  const stats = useMemo(() => computeHistoryStats(history), [history]);
+  const stats = useMemo(() => computeHistoryStats(statsHistory), [statsHistory]);
 
   /*
    * מחרוזת ריקה = נקודת ההתחלה עוד לא עוגנה (רגע אחרי טעינה, או אם השמירה
