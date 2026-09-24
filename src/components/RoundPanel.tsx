@@ -148,8 +148,7 @@ export function RoundPanel({
       {open && (
         <div className="space-y-4 border-t border-slate-800/70 p-4">
           <p className="flex flex-wrap items-center gap-1 text-[11px] leading-relaxed text-slate-500">
-            <UserX size={12} className="text-rose-400" /> = ביטל הגעה (נספר לו בהיסטוריה, ואפשר לבחור
-            מחליף) ·<X size={12} /> = הסרה מהמחזור בלי לסמן ביטול
+            <UserX size={12} className="text-rose-400" /> ביטל הגעה ·<X size={12} /> הסרה מהמחזור
           </p>
 
           <div className="flex flex-wrap gap-2">
@@ -174,9 +173,9 @@ export function RoundPanel({
             </button>
           </div>
 
-          {/* משחקים */}
+          {/* שחקנים במחזור */}
           <Group
-            title="משחקים"
+            title="שחקנים"
             count={playing.length}
             tone="emerald"
             empty="עוד לא נבחר אף אחד. הדביקו רשימה או סמנו מלמטה."

@@ -27,7 +27,6 @@ import {
   type TeamId,
 } from '../types';
 import {
-  CHEMISTRY_BONUS_PER_BOND,
   computeStats,
   describeBonds,
   findTeamOf,
@@ -701,9 +700,6 @@ function BalanceBar({
             חברויות: {stats.bondsKept}/{stats.totalBonds} נשמרו
           </span>
         )}
-        <span className="text-[11px] text-slate-500">
-          כל זוג חברים באותה קבוצה שווה {CHEMISTRY_BONUS_PER_BOND} נקודות דירוג
-        </span>
       </div>
     </div>
   );

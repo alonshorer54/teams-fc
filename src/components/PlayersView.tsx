@@ -31,7 +31,7 @@ export function PlayersView({
 }) {
   const [query, setQuery] = useState('');
   // ברירת מחדל לפי א"ב — הכי נוח למצוא שחקן מסוים
-  const [sortKey, setSortKey] = useState<SortKey>('name');
+  const [sortKey, setSortKey] = useState<SortKey>('rating');
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState<Player | null>(null);
   const [pendingDelete, setPendingDelete] = useState<Player | null>(null);
@@ -228,8 +228,8 @@ export function PlayersView({
         title="מחיקת שחקן"
         message={
           <>
-            למחוק את <b className="text-slate-100">{pendingDelete?.name}</b> מהמאגר? הגרלות שנשמרו
-            בהיסטוריה יישארו כפי שהן.
+            למחוק את <b className="text-slate-100">{pendingDelete?.name}</b> מהמאגר? הוא לא יופיע
+            יותר בהיסטוריה ובמגמות.
           </>
         }
         onCancel={() => setPendingDelete(null)}

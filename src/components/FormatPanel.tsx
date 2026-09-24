@@ -108,10 +108,6 @@ export function FormatPanel({
                 </button>
               ))}
             </div>
-            <p className="mt-1.5 text-[11px] leading-relaxed text-slate-500">
-              הגדלים נקבעים לפי כמות השחקנים — החלוקה תמיד שווה ככל האפשר.
-              את הצבעים אפשר להחליף אחרי ההגרלה, בכפתור הפלטה שעל כל קבוצה.
-            </p>
           </div>
 
           {/* משלימים */}
@@ -141,11 +137,6 @@ export function FormatPanel({
                 הוספת משלים
               </button>
             </div>
-
-            <p className="mb-2 text-[11px] leading-relaxed text-slate-500">
-              משלים הוא שחקן דמה למשחק הזה בלבד: הוא נכנס להגרלה לפי הדירוג שתיתנו לו
-              ונשמר בקבוצות של הערב, אבל לא נכנס למאגר השחקנים ולא נספר בסטטיסטיקות.
-            </p>
 
             {fillers.length === 0 ? (
               <p className="rounded-xl border border-slate-800 bg-slate-950/40 px-3 py-3 text-[11px] text-slate-500">

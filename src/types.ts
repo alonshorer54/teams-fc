@@ -255,6 +255,28 @@ export interface MatchRecord {
 }
 
 /** ההרכב של הגרלה שנשמרה, כמזהי שחקנים — כדי להשוות אותה להגרלות חדשות. */
+/**
+ * ההגרלה כפי שמוצגת בהיסטוריה ובמגמות: רק מי שעדיין במאגר. שחקן שנמחק נעלם
+ * מהתצוגה אבל נשאר ברשומה עצמה — מחיקה מהמאגר לא משכתבת את העבר, וכך גם אפשר
+ * להתחרט. משלימים נשארים: הם חלק מהערב ומעולם לא היו במאגר.
+ */
+export function squadOnly(record: MatchRecord, inSquad: (id: string) => boolean): MatchRecord {
+  const keep = (p: HistoryPlayer) => inSquad(p.id) || isFillerId(p.id);
+  return {
+    ...record,
+    teams: Object.fromEntries(
+      teamsIn(record.teams).map((t) => [t, (record.teams[t] ?? []).filter(keep)]),
+    ),
+    ...(record.cancelled && { cancelled: record.cancelled.filter(keep) }),
+    ...(record.substitutions && {
+      substitutions: record.substitutions.filter((s) => keep(s.out) && keep(s.in)),
+    }),
+    ...(record.ratingCheck && {
+      ratingCheck: { changes: record.ratingCheck.changes.filter((c) => inSquad(c.playerId)) },
+    }),
+  };
+}
+
 export const recordLineup = (record: MatchRecord): Lineup =>
   Object.fromEntries(
     teamsIn(record.teams).map((t) => [t, (record.teams[t] ?? []).map((p) => p.id)]),

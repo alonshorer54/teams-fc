@@ -64,11 +64,6 @@ export function PrioritiesPanel({
 
       {open && (
         <div className="space-y-2 border-t border-slate-800/70 p-4">
-          <p className="text-[11px] leading-relaxed text-slate-500">
-            הקריטריון העליון מכריע. כל אחד מתחתיו נשקל פחות ומשמש בעיקר לשבירת שוויון בין חלוקות
-            שקולות. אפשר לכבות כל קריטריון או לשנות את הסדר.
-          </p>
-
           <ol className="space-y-1.5">
             {priorities.map((setting, index) => {
               const meta = CRITERION_META[setting.id];

@@ -16,6 +16,7 @@ import {
   membersOf,
   normalizePlayers,
   recordLineup,
+  squadOnly,
   teamsIn,
   type Filler,
   type Lineup,
@@ -221,6 +222,12 @@ export default function App() {
     setPlayers,
     setRealHistory,
   ]);
+
+  // ההיסטוריה והמגמות מציגות רק את מי שעדיין במאגר
+  const shownHistory = useMemo(() => {
+    const ids = new Set(players.map((p) => p.id));
+    return history.map((r) => squadOnly(r, (id) => ids.has(id)));
+  }, [history, players]);
 
   // רצפי ניצחון/הפסד מההיסטוריה — מוצגים ליד השמות בזמן בחירת המשתתפים
   const streaks = useMemo(() => streakByPlayer(computeHistoryStats(history)), [history]);
@@ -620,7 +627,7 @@ export default function App() {
 
         {tab === 'history' && (
           <HistoryView
-            history={history}
+            history={shownHistory}
             onDelete={(id) => {
               setHistory((prev) => prev.filter((r) => r.id !== id));
               notify('ההגרלה נמחקה');
@@ -646,7 +653,7 @@ export default function App() {
           />
         )}
 
-        {tab === 'analysis' && <AnalysisView players={players} history={history} />}
+        {tab === 'analysis' && <AnalysisView players={players} history={shownHistory} />}
       </main>
 
       {ratingCheck && (
