@@ -223,11 +223,13 @@ export default function App() {
     setRealHistory,
   ]);
 
-  // ההיסטוריה והמגמות מציגות רק את מי שעדיין במאגר
+  // ההיסטוריה והמגמות מציגות רק את מי שעדיין במאגר. לפי המזהים ולא לפי השחקנים,
+  // כדי ששינוי דירוג לא יבנה מחדש את כל ההיסטוריה
+  const squadKey = players.map((p) => p.id).join(',');
   const shownHistory = useMemo(() => {
-    const ids = new Set(players.map((p) => p.id));
+    const ids = new Set(squadKey.split(','));
     return history.map((r) => squadOnly(r, (id) => ids.has(id)));
-  }, [history, players]);
+  }, [history, squadKey]);
 
   // רצפי ניצחון/הפסד מההיסטוריה — מוצגים ליד השמות בזמן בחירת המשתתפים
   const streaks = useMemo(() => streakByPlayer(computeHistoryStats(history)), [history]);

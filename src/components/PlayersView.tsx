@@ -43,7 +43,9 @@ export function PlayersView({
     const q = query.trim();
     const filtered = q ? players.filter((p) => p.name.includes(q)) : players;
     return [...filtered].sort((a, b) =>
-      sortKey === 'rating' ? b.rating - a.rating : a.name.localeCompare(b.name, 'he'),
+      sortKey === 'rating'
+        ? b.rating - a.rating || a.name.localeCompare(b.name, 'he')
+        : a.name.localeCompare(b.name, 'he'),
     );
   }, [players, query, sortKey]);
 
