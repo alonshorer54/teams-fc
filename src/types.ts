@@ -254,7 +254,6 @@ export interface MatchRecord {
   ratingCheck?: { changes: RatingChangeRecord[] };
 }
 
-/** ההרכב של הגרלה שנשמרה, כמזהי שחקנים — כדי להשוות אותה להגרלות חדשות. */
 /**
  * ההגרלה כפי שמוצגת בהיסטוריה ובמגמות: רק מי שעדיין במאגר. שחקן שנמחק נעלם
  * מהתצוגה אבל נשאר ברשומה עצמה — מחיקה מהמאגר לא משכתבת את העבר, וכך גם אפשר
@@ -277,6 +276,7 @@ export function squadOnly(record: MatchRecord, inSquad: (id: string) => boolean)
   };
 }
 
+/** ההרכב של הגרלה שנשמרה, כמזהי שחקנים — כדי להשוות אותה להגרלות חדשות. */
 export const recordLineup = (record: MatchRecord): Lineup =>
   Object.fromEntries(
     teamsIn(record.teams).map((t) => [t, (record.teams[t] ?? []).map((p) => p.id)]),
