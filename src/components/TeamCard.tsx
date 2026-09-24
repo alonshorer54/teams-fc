@@ -10,7 +10,6 @@ export function TeamCard({
   pool,
   lineup,
   stats,
-  adminView,
   selectedId,
   onSelect,
   onMove,
@@ -22,7 +21,6 @@ export function TeamCard({
   pool: Player[];
   lineup: Lineup;
   stats: TeamStats;
-  adminView: boolean;
   selectedId: string | null;
   onSelect: (id: string) => void;
   onMove: (playerId: string, to: TeamId) => void;
@@ -87,15 +85,13 @@ export function TeamCard({
               <Users size={12} />
               <span className="font-mono tabular-nums">{stats.count}</span>
             </span>
-            {adminView && (
-              <span
-                dir="ltr"
-                className="rounded-lg bg-black/20 px-2 py-1 font-mono text-sm tabular-nums"
-                title="סך כל הדירוגים בקבוצה"
-              >
-                {stats.total.toFixed(1)}
-              </span>
-            )}
+            <span
+              dir="ltr"
+              className="rounded-lg bg-black/20 px-2 py-1 font-mono text-sm tabular-nums"
+              title="סך כל הדירוגים בקבוצה"
+            >
+              {stats.total.toFixed(1)}
+            </span>
           </div>
         </div>
 
@@ -148,11 +144,9 @@ export function TeamCard({
             >
               <GripVertical size={14} className="shrink-0 text-slate-600" />
 
-              {adminView && (
-                <span className="w-4 shrink-0 text-center font-mono text-[11px] text-slate-500 tabular-nums">
-                  {index + 1}
-                </span>
-              )}
+              <span className="w-4 shrink-0 text-center font-mono text-[11px] text-slate-500 tabular-nums">
+                {index + 1}
+              </span>
 
               <span className="min-w-0 flex-1">
                 <span className="block truncate text-sm font-semibold text-slate-100">
@@ -176,13 +170,13 @@ export function TeamCard({
                 </span>
               </span>
 
-              {adminView && <RatingBadge rating={player.rating} size="sm" />}
+              <RatingBadge rating={player.rating} size="sm" />
             </li>
           );
         })}
       </ul>
 
-      {adminView && stats.count > 0 && (
+      {stats.count > 0 && (
         <footer className="grid grid-cols-3 divide-x divide-x-reverse divide-slate-800/70 border-t border-slate-800/70 bg-slate-950/50 text-center">
           <div className="px-2 py-2" title="סכום הדירוגים של כל השחקנים בקבוצה">
             <p className="font-mono text-base font-bold text-slate-100 tabular-nums">

@@ -2,8 +2,6 @@ import { useMemo, useRef, useState } from 'react';
 import {
   ArrowLeftRight,
   ChevronDown,
-  Eye,
-  EyeOff,
   Link2,
   Save,
   Scale,
@@ -102,7 +100,6 @@ export function DrawView({
   isDemo: boolean;
 }) {
   const [mode, setMode] = useState<Mode>('admin');
-  const [adminView, setAdminView] = useState(true);
   const [selectedPlayer, setSelectedPlayer] = useState<string | null>(null);
   /** ההשפעה של הפעולה הידנית האחרונה, להודעה הקופצת */
   const [lastChange, setLastChange] = useState<{
@@ -305,9 +302,21 @@ export function DrawView({
         hasLineup={!!lineup}
         teamCount={teamCount}
         fillerCount={fillers.length}
-        onSetAll={(ids) =>
-          setDraft((p) => ({ ...p, selectedIds: ids, cancelledIds: [], substitutions: [] }))
-        }
+        onSetAll={(ids) => {
+          // ניקוי המחזור מתחיל מחזור חדש, והחלוקה של הקודם לא שייכת אליו
+          const clearing = ids.length === 0;
+          setDraft((p) => ({
+            ...p,
+            selectedIds: ids,
+            cancelledIds: [],
+            substitutions: [],
+            ...(clearing && { lineup: null, baseline: null, fillers: [] }),
+          }));
+          if (clearing) {
+            setSelectedPlayer(null);
+            setLastChange(null);
+          }
+        }}
         onToggle={(id) =>
           setDraft((p) => ({
             ...p,
@@ -432,17 +441,6 @@ export function DrawView({
               </TabBtn>
             </div>
 
-            {mode === 'admin' && (
-              <button
-                className="btn-ghost"
-                onClick={() => setAdminView((v) => !v)}
-                title="מסתיר או מציג את הדירוגים והציונים על המסך"
-              >
-                {adminView ? <EyeOff size={16} /> : <Eye size={16} />}
-                {adminView ? 'הסתרת דירוגים' : 'הצגת דירוגים'}
-              </button>
-            )}
-
             <button
               className="btn-ghost"
               onClick={() => {
@@ -493,13 +491,9 @@ export function DrawView({
             />
           )}
 
-          {adminView && (
-            <>
-              <BalanceBar stats={stats} teamIds={teamIds} gameChemistry={!!gameChemistryOn} />
-              <CriteriaScores breakdown={breakdown} unavailable={unavailable} />
-              {bonds.length > 0 && <BondsPanel bonds={bonds} />}
-            </>
-          )}
+          <BalanceBar stats={stats} teamIds={teamIds} gameChemistry={!!gameChemistryOn} />
+          <CriteriaScores breakdown={breakdown} unavailable={unavailable} />
+          {bonds.length > 0 && <BondsPanel bonds={bonds} />}
 
           {selectedName && (
             <div className="flex items-center gap-2 rounded-xl border border-emerald-500/40 bg-emerald-500/10 px-4 py-2.5 text-sm text-emerald-200">
@@ -523,7 +517,6 @@ export function DrawView({
                 pool={pool}
                 lineup={lineup}
                 stats={stats.teams[id]!}
-                adminView={adminView}
                 selectedId={selectedPlayer}
                 onSelect={handleSelect}
                 onMove={(playerId, to) => applyChange(movePlayer(lineup, playerId, to))}

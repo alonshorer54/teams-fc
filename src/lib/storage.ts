@@ -17,7 +17,7 @@ export const STORAGE_KEYS = {
   settings: 'kohot.settings.v1',
 } as const;
 
-/** גבייה שבועית — מתאפסת בכל מחזור חדש. */
+/** גבייה שבועית — מתאפסת רק בכפתור "איפוס". */
 export interface PaymentRound {
   /** תאריך המחזור שעליו הגבייה */
   matchDate: string;
@@ -25,6 +25,12 @@ export interface PaymentRound {
   amount: number;
   /** מי כבר שילם, ואיך */
   paid: Record<string, { at: string; method: PaymentMethod }>;
+  /**
+   * מי צריך לשלם — מי ששיחק בהגרלה האחרונה שנשמרה. נשמר בנפרד מהמחזור, כי
+   * המחזור מתנקה ברגע שמסמנים תוצאה, והגבייה נמשכת אחריו. ריק = אין הגרלה
+   * שמורה, ואז הגבייה היא לפי מי שמשחק במחזור הנוכחי.
+   */
+  playerIds: string[];
 }
 
 export type PaymentMethod = 'bitGroup' | 'bit' | 'paybox' | 'cash';
@@ -43,6 +49,7 @@ export const emptyPayments = (matchDate: string): PaymentRound => ({
   matchDate,
   amount: 0,
   paid: {},
+  playerIds: [],
 });
 
 /** הגדרות שמסתנכרנות בין המכשירים יחד עם השחקנים וההיסטוריה. */
@@ -52,9 +59,8 @@ export interface AppSettings {
   prioritiesVersion: number;
   /**
    * מאיזה רגע המד של תיקון הדירוגים סופר (ראו lib/ratingDrift.ts).
-   * נקבע פעם אחת כשהתכונה נדלקת, כדי שהיסטוריה שנצברה לפניה לא תזיז דירוגים
-   * למפרע — התוצאות ההן נרשמו כשאף אחד לא ידע שהן ישפיעו על הדירוג.
-   * ריק = עוד לא עוגן, ואז אין בדיקות בכלל.
+   * `DRIFT_FROM_START` = כל ההיסטוריה. כל ערך אחר הוא עוגן ישן מהתקופה שבה
+   * רק תוצאות חדשות נספרו, ו-App מריץ עליו פעם אחת את כל ההיסטוריה מחדש.
    */
   ratingDriftSince: string;
   payments: PaymentRound;
@@ -75,10 +81,9 @@ export const normalizeSettings = (raw: Partial<AppSettings> | undefined): AppSet
   priorities: raw?.priorities ?? DEFAULT_PRIORITIES,
   // הגדרות שנשמרו לפני שהשדה קיים הן מלפני המיגרציה, כלומר גרסה 1
   prioritiesVersion: raw?.prioritiesVersion ?? (raw?.priorities ? 1 : PRIORITIES_VERSION),
-  // ריק = עוד לא עוגן. App מעגן אותו פעם אחת בטעינה, ועד אז אין בדיקות —
-  // חותמת שנוצרת כאן הייתה משתנה בכל קריאה ולעולם לא הייתה נשמרת
+  // ריק = עוד לא עוגן. App מריץ את כל ההיסטוריה פעם אחת ומעגן להתחלה
   ratingDriftSince: raw?.ratingDriftSince ?? '',
-  payments: raw?.payments ?? emptyPayments(''),
+  payments: { ...emptyPayments(''), ...raw?.payments },
   round: normalizeDraft(raw?.round ?? {}, raw?.round?.matchDate ?? ''),
 });
 

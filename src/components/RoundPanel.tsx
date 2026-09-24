@@ -164,7 +164,7 @@ export function RoundPanel({
             <button
               className="btn-ghost !py-1.5 text-xs"
               onClick={() => onSetAll([])}
-              title="מרוקן את רשימת מי שמשחק, כדי להתחיל מחזור חדש"
+              title="מרוקן את רשימת מי שמשחק ומוחק את החלוקה, כדי להתחיל מחזור חדש"
             >
               <X size={14} />
               ניקוי המחזור

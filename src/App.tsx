@@ -23,7 +23,7 @@ import {
   type Placements,
   type Player,
 } from './types';
-import { VARIETY_MEMORY, removeFromLineup } from './lib/balance';
+import { VARIETY_MEMORY, lineupKey, removeFromLineup } from './lib/balance';
 import {
   STORAGE_KEYS,
   emptyDraft,
@@ -39,9 +39,12 @@ import { rollRoundDate, todayISO } from './lib/format';
 import { computeHistoryStats, streakByPlayer } from './lib/stats';
 import { computePairChemistry, pairEffectMap } from './lib/pairs';
 import {
+  DRIFT_FROM_START,
   applyChanges,
+  countedRounds,
   isCheckpoint,
   replayChecks,
+  replayFromStart,
   revertChanges,
   runCheck,
   type RatingChange,
@@ -167,19 +170,6 @@ export default function App() {
     setLegacyDraft(null);
   }, [legacyDraft, settings.round.matchDate, isDemo, store.status, setRealDraft, setLegacyDraft]);
 
-  /*
-   * מעגנים את נקודת ההתחלה של תיקון הדירוגים פעם אחת. חייב להישמר ולא להיגזר
-   * בכל טעינה: חותמת "עכשיו" שנוצרת מחדש בכל רינדור לעולם לא הייתה מאפשרת לאף
-   * מחזור להיספר, ורגע התחלה שנגזר מההיסטוריה היה זוחל קדימה עם כל הגרלה חדשה.
-   */
-  const anchoredDrift = useRef(false);
-  useEffect(() => {
-    if (anchoredDrift.current || isDemo || store.status === 'loading') return;
-    if (settings.ratingDriftSince) return;
-    anchoredDrift.current = true;
-    store.setSettings((prev) => ({ ...prev, ratingDriftSince: new Date().toISOString() }));
-  }, [isDemo, store, settings.ratingDriftSince]);
-
   /** במצב דוגמה סופרים את כל ההיסטוריה המומצאת, אחרת אין מה להדגים */
   const driftSince = isDemo ? undefined : settings.ratingDriftSince;
 
@@ -187,6 +177,50 @@ export default function App() {
     recordId: string;
     changes: RatingChange[];
   } | null>(null);
+
+  /** מה זז כשתיקון הדירוגים הורץ מחדש על כל ההיסטוריה — מוצג פעם אחת */
+  const [replaySummary, setReplaySummary] = useState<RatingChange[] | null>(null);
+
+  /*
+   * תיקון הדירוגים סופר את כל ההיסטוריה, גם מלפני שהתכונה נוספה. מי שעוד מחזיק
+   * עוגן אחר (או ריק) מקבל פעם אחת הרצה מחדש מההתחלה, והעוגן נקבע ל"מההתחלה"
+   * כדי שזה לא יקרה שוב. לפי משתמש: התחברות לחשבון אחר בודקת את הנתונים שלו.
+   */
+  const replayedFor = useRef<string | null | undefined>(undefined);
+  useEffect(() => {
+    if (isDemo || store.status === 'loading' || store.status === 'error') return;
+    if (replayedFor.current === auth.userId) return;
+    if (settings.ratingDriftSince === DRIFT_FROM_START) return;
+    replayedFor.current = auth.userId;
+
+    const replayed = replayFromStart(migratedPlayers, realHistory);
+    const after = new Map(replayed.players.map((p) => [p.id, p.rating]));
+    const moved: RatingChange[] = migratedPlayers
+      .filter((p) => (after.get(p.id) ?? p.rating) !== p.rating)
+      .map((p) => ({
+        playerId: p.id,
+        name: p.name,
+        from: p.rating,
+        to: after.get(p.id) ?? p.rating,
+        gauge: 0,
+        recent: [],
+      }));
+
+    if (moved.length) setPlayers(() => normalizePlayers(replayed.players));
+    setRealHistory(() => replayed.history);
+    store.setSettings((prev) => ({ ...prev, ratingDriftSince: DRIFT_FROM_START }));
+    // משתמש חדש בלי תוצאות לא צריך חלון על משהו שלא קרה
+    if (countedRounds(realHistory).length) setReplaySummary(moved);
+  }, [
+    isDemo,
+    store,
+    auth.userId,
+    settings.ratingDriftSince,
+    migratedPlayers,
+    realHistory,
+    setPlayers,
+    setRealHistory,
+  ]);
 
   // רצפי ניצחון/הפסד מההיסטוריה — מוצגים ליד השמות בזמן בחירת המשתתפים
   const streaks = useMemo(() => streakByPlayer(computeHistoryStats(history)), [history]);
@@ -321,6 +355,22 @@ export default function App() {
         ),
     };
     setHistory((prev) => [record, ...prev]);
+
+    // הגבייה נצמדת להגרלה השמורה ולא למחזור, שמתנקה כשמסמנים תוצאה.
+    // במצב דוגמה לא: הגבייה יושבת בהגדרות האמיתיות
+    if (!isDemo) {
+      store.setSettings((prev) => {
+        const base = normalizeSettings(prev);
+        return {
+          ...base,
+          payments: {
+            ...base.payments,
+            matchDate: date,
+            playerIds: allInLineup(lineup).filter((id) => !isFillerId(id)),
+          },
+        };
+      });
+    }
   };
 
   /**
@@ -364,6 +414,29 @@ export default function App() {
     } else {
       setHistory(() => nextHistory);
       if (undone.length) notify('התיקונים לדירוג בוטלו יחד עם התוצאה');
+    }
+
+    // הערב נגמר ויש לו תוצאה — המחזור מתנקה לקראת הבא. רק כשהחלוקה שעל המסך
+    // היא בדיוק זו שסומנה: תוצאה למחזור ישן לא מוחקת מחזור חדש שכבר בבנייה
+    const current = draft.lineup && lineupKey(draft.lineup);
+    if (placements && record && current === lineupKey(recordLineup(record))) {
+      setDraft((prev) => ({ ...emptyDraft(prev.matchDate), teamCount: prev.teamCount }));
+
+      // הגרלה שנשמרה לפני שהגבייה נצמדה להגרלות — בלי זה הגבייה הייתה מתרוקנת
+      // יחד עם המחזור. רק כשהשדה חסר לגמרי: ריק אחרי "איפוס" נשאר ריק
+      if (!isDemo && store.settings.payments?.playerIds === undefined) {
+        store.setSettings((prev) => {
+          const base = normalizeSettings(prev);
+          return {
+            ...base,
+            payments: {
+              ...base.payments,
+              matchDate: record.date,
+              playerIds: allInLineup(recordLineup(record)).filter((id) => !isFillerId(id)),
+            },
+          };
+        });
+      }
     }
   };
 
@@ -593,6 +666,14 @@ export default function App() {
           changes={ratingCheck.changes}
           onUndo={undoRatingCheck}
           onClose={() => setRatingCheck(null)}
+        />
+      )}
+
+      {replaySummary && !ratingCheck && (
+        <RatingCheckPopup
+          title="תיקון הדירוגים — על כל ההיסטוריה"
+          changes={replaySummary}
+          onClose={() => setReplaySummary(null)}
         />
       )}
 

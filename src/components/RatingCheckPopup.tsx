@@ -19,10 +19,13 @@ export function RatingCheckPopup({
   changes,
   onUndo,
   onClose,
+  title,
 }: {
   changes: RatingChangeRecord[];
-  onUndo: () => void;
+  /** בלי — אין כפתור ביטול (הרצה מחדש על כל ההיסטוריה לא מתבטלת מכאן) */
+  onUndo?: () => void;
   onClose: () => void;
+  title?: string;
 }) {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onClose();
@@ -59,7 +62,7 @@ export function RatingCheckPopup({
             }`}
           >
             <Scale size={16} />
-            בדיקת דירוגים — כל {ROUNDS_PER_CHECK} מחזורים
+            {title ?? `בדיקת דירוגים — כל ${ROUNDS_PER_CHECK} מחזורים`}
           </h3>
           <button
             onClick={onClose}
@@ -105,23 +108,26 @@ export function RatingCheckPopup({
                       </span>
                     </div>
 
-                    <div className="mt-1.5 flex flex-wrap items-center gap-1">
-                      {c.recent.map((score, i) => {
-                        const o = OUTCOME[String(score)] ?? OUTCOME['0'];
-                        return (
-                          <span
-                            key={i}
-                            className={`rounded px-1.5 py-0.5 text-[10px] font-semibold ${o.className}`}
-                          >
-                            {o.label}
-                          </span>
-                        );
-                      })}
-                      <span className="mr-1 font-mono text-[10px] text-slate-500 tabular-nums">
-                        המד: {c.gauge > 0 ? '+' : ''}
-                        {c.gauge}
-                      </span>
-                    </div>
+                    {/* סיכום של כמה בדיקות — אין ערבים אחרונים ומד אחד להראות */}
+                    {c.recent.length > 0 && (
+                      <div className="mt-1.5 flex flex-wrap items-center gap-1">
+                        {c.recent.map((score, i) => {
+                          const o = OUTCOME[String(score)] ?? OUTCOME['0'];
+                          return (
+                            <span
+                              key={i}
+                              className={`rounded px-1.5 py-0.5 text-[10px] font-semibold ${o.className}`}
+                            >
+                              {o.label}
+                            </span>
+                          );
+                        })}
+                        <span className="mr-1 font-mono text-[10px] text-slate-500 tabular-nums">
+                          המד: {c.gauge > 0 ? '+' : ''}
+                          {c.gauge}
+                        </span>
+                      </div>
+                    )}
                   </li>
                 );
               })}
@@ -133,7 +139,7 @@ export function RatingCheckPopup({
           <button className="btn-primary flex-1" onClick={onClose}>
             הבנתי
           </button>
-          {moved.length > 0 && (
+          {moved.length > 0 && onUndo && (
             <button className="btn-ghost" onClick={onUndo}>
               <Undo2 size={15} />
               ביטול

@@ -241,3 +241,27 @@ export const revertChanges = (players: Player[], changes: RatingChange[]): Playe
     return c ? { ...p, rating: clampRating(p.rating - (c.to - c.from)) } : p;
   });
 };
+
+/**
+ * ערך העוגן שאומר "כל ההיסטוריה נספרת". התכונה נוספה באמצע ובהתחלה עוגנה
+ * ל"עכשיו" כדי לא לגעת בתוצאות ישנות; אלון ביקש שהיא תרוץ כאילו הייתה שם מהיום
+ * הראשון, וכל עוגן אחר מתורגם פעם אחת להרצה מחדש של כל ההיסטוריה.
+ */
+export const DRIFT_FROM_START = '1970-01-01T00:00:00.000Z';
+
+/**
+ * מריץ את כל הבדיקות מחדש על כל ההיסטוריה.
+ *
+ * קודם מחזיר את התיקונים שכבר בוצעו — כל מחזור לחוד, כי אותו שחקן יכול לזוז
+ * ביותר מבדיקה אחת — ורק אז מריץ מההתחלה, אחרת הם היו נספרים פעמיים.
+ */
+export function replayFromStart(
+  players: Player[],
+  history: MatchRecord[],
+): { players: Player[]; history: MatchRecord[] } {
+  const base = history.reduce(
+    (acc, r) => revertChanges(acc, r.ratingCheck?.changes ?? []),
+    players,
+  );
+  return replayChecks(base, history, DRIFT_FROM_START);
+}

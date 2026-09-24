@@ -24,7 +24,7 @@ export function PaymentsView({
   notify,
 }: {
   players: Player[];
-  /** מי משחק במחזור הנוכחי */
+  /** מי משחק במחזור הנוכחי — הגבייה לפיו רק כשאין הגרלה שמורה */
   roundPlayerIds: string[];
   matchDate: string;
   settings: AppSettings;
@@ -34,18 +34,23 @@ export function PaymentsView({
   const [confirmReset, setConfirmReset] = useState(false);
   const payments = settings.payments;
 
+  // הגבייה נצמדת להגרלה האחרונה ששמרו, ולא למחזור שמתנקה כשמסמנים תוצאה
+  const fromSaved = payments.playerIds.length > 0;
+  const payDate = fromSaved ? payments.matchDate : matchDate;
+  const rosterIds = fromSaved ? payments.playerIds : roundPlayerIds;
+
   // המחזור התחלף — הגבייה הישנה כבר לא רלוונטית
-  const staleRound = payments.matchDate !== matchDate && payments.matchDate !== '';
+  const staleRound = !fromSaved && payments.matchDate !== matchDate && payments.matchDate !== '';
 
   const roster = useMemo(() => {
-    const ids = new Set(roundPlayerIds);
+    const ids = new Set(rosterIds);
     return players
       .filter((p) => ids.has(p.id))
       .sort(
         (a, b) =>
           Number(!!b.isManager) - Number(!!a.isManager) || a.name.localeCompare(b.name, 'he'),
       );
-  }, [players, roundPlayerIds]);
+  }, [players, rosterIds]);
 
   const paidCount = roster.filter((p) => payments.paid[p.id]).length;
   const owing = roster.filter((p) => !payments.paid[p.id]);
@@ -53,7 +58,7 @@ export function PaymentsView({
   const collected = payments.amount * paidCount;
 
   const update = (next: Partial<PaymentRound>) =>
-    onChange((prev) => ({ ...prev, payments: { ...prev.payments, matchDate, ...next } }));
+    onChange((prev) => ({ ...prev, payments: { ...prev.payments, matchDate: payDate, ...next } }));
 
   const togglePaid = (id: string, method: PaymentMethod = 'bitGroup') => {
     const paid = { ...payments.paid };
@@ -64,7 +69,7 @@ export function PaymentsView({
 
   const reminderText = () => {
     const lines = [
-      `💰 תשלום לכדורגל ${formatHebrewDate(matchDate)}`,
+      `💰 תשלום לכדורגל ${formatHebrewDate(payDate)}`,
       payments.amount ? `${payments.amount} ₪ לשחקן` : null,
       '',
       'עדיין לא שילמו:',
@@ -110,7 +115,7 @@ export function PaymentsView({
         <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
           <h2 className="flex items-center gap-2 text-sm font-bold text-slate-100">
             <Wallet size={16} className="text-emerald-400" />
-            גבייה ל־{formatHebrewDate(matchDate)}
+            גבייה ל־{formatHebrewDate(payDate)}
           </h2>
           <div className="flex items-center gap-2">
             <label className="text-[11px] font-semibold text-slate-400" htmlFor="pay-amount">
@@ -171,8 +176,8 @@ export function PaymentsView({
         </header>
 
         <p className="border-b border-slate-800/70 px-4 py-2 text-[10px] leading-relaxed text-slate-500">
-          הרשימה מתעדכנת לפי מי שמשחק במחזור הנוכחי. הסימונים נשארים עד שתלחצו "איפוס" — גם אם
-          עברתם למחזור חדש.
+          הרשימה היא מי ששיחק בהגרלה האחרונה ששמרתם. היא והסימונים נשארים עד שתלחצו "איפוס" —
+          גם אחרי שהמחזור התנקה.
         </p>
 
         <ul className="divide-y divide-slate-800/60">
@@ -231,11 +236,11 @@ export function PaymentsView({
       <ConfirmDialog
         open={confirmReset}
         title="איפוס הגבייה"
-        message="לאפס את כל סימוני התשלום למחזור הזה? הסכום והקישור יישמרו."
+        message="לאפס את סימוני התשלום ואת רשימת מי שצריך לשלם? הסכום יישמר."
         confirmLabel="איפוס"
         onCancel={() => setConfirmReset(false)}
         onConfirm={() => {
-          update({ paid: {} });
+          update({ paid: {}, playerIds: [] });
           setConfirmReset(false);
           notify('הגבייה אופסה');
         }}
