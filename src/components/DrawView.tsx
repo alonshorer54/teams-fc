@@ -302,20 +302,22 @@ export function DrawView({
         hasLineup={!!lineup}
         teamCount={teamCount}
         fillerCount={fillers.length}
-        onSetAll={(ids) => {
-          // ניקוי המחזור מתחיל מחזור חדש, והחלוקה של הקודם לא שייכת אליו
-          const clearing = ids.length === 0;
+        onSetAll={(ids) =>
+          setDraft((p) => ({ ...p, selectedIds: ids, cancelledIds: [], substitutions: [] }))
+        }
+        onClearRound={() => {
+          // מחזור חדש — החלוקה של הקודם לא שייכת אליו
           setDraft((p) => ({
             ...p,
-            selectedIds: ids,
+            selectedIds: [],
             cancelledIds: [],
             substitutions: [],
-            ...(clearing && { lineup: null, baseline: null, fillers: [] }),
+            lineup: null,
+            baseline: null,
+            fillers: [],
           }));
-          if (clearing) {
-            setSelectedPlayer(null);
-            setLastChange(null);
-          }
+          setSelectedPlayer(null);
+          setLastChange(null);
         }}
         onToggle={(id) =>
           setDraft((p) => ({

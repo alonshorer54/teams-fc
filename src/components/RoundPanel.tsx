@@ -34,6 +34,7 @@ export function RoundPanel({
   teamCount,
   fillerCount,
   onSetAll,
+  onClearRound,
   onToggle,
   onCancel,
   onUncancel,
@@ -52,6 +53,8 @@ export function RoundPanel({
   /** כמה משלימים כבר נוספו, כדי שהמניין יהיה זהה לזה שההגרלה תראה */
   fillerCount: number;
   onSetAll: (ids: string[]) => void;
+  /** מרוקן את המחזור ומוחק את החלוקה — מחזור חדש */
+  onClearRound: () => void;
   onToggle: (id: string) => void;
   onCancel: (id: string) => void;
   onUncancel: (id: string) => void;
@@ -163,7 +166,7 @@ export function RoundPanel({
             </button>
             <button
               className="btn-ghost !py-1.5 text-xs"
-              onClick={() => onSetAll([])}
+              onClick={onClearRound}
               title="מרוקן את רשימת מי שמשחק ומוחק את החלוקה, כדי להתחיל מחזור חדש"
             >
               <X size={14} />

@@ -29,8 +29,11 @@ export interface PaymentRound {
    * מי צריך לשלם — מי ששיחק בהגרלה האחרונה שנשמרה. נשמר בנפרד מהמחזור, כי
    * המחזור מתנקה ברגע שמסמנים תוצאה, והגבייה נמשכת אחריו. ריק = אין הגרלה
    * שמורה, ואז הגבייה היא לפי מי שמשחק במחזור הנוכחי.
+   *
+   * חסר (ולא ריק) = הגבייה מלפני שהשדה נוסף. ההבדל נשמר בכוונה, ולכן אין לו
+   * ברירת מחדל ב-normalizeSettings: כל כתיבה של הגדרות מנורמלות הייתה מוחקת אותו.
    */
-  playerIds: string[];
+  playerIds?: string[];
 }
 
 export type PaymentMethod = 'bitGroup' | 'bit' | 'paybox' | 'cash';
@@ -49,7 +52,6 @@ export const emptyPayments = (matchDate: string): PaymentRound => ({
   matchDate,
   amount: 0,
   paid: {},
-  playerIds: [],
 });
 
 /** הגדרות שמסתנכרנות בין המכשירים יחד עם השחקנים וההיסטוריה. */
@@ -83,7 +85,7 @@ export const normalizeSettings = (raw: Partial<AppSettings> | undefined): AppSet
   prioritiesVersion: raw?.prioritiesVersion ?? (raw?.priorities ? 1 : PRIORITIES_VERSION),
   // ריק = עוד לא עוגן. App מריץ את כל ההיסטוריה פעם אחת ומעגן להתחלה
   ratingDriftSince: raw?.ratingDriftSince ?? '',
-  payments: { ...emptyPayments(''), ...raw?.payments },
+  payments: raw?.payments ?? emptyPayments(''),
   round: normalizeDraft(raw?.round ?? {}, raw?.round?.matchDate ?? ''),
 });
 

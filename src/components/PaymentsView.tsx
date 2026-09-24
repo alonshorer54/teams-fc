@@ -35,9 +35,10 @@ export function PaymentsView({
   const payments = settings.payments;
 
   // הגבייה נצמדת להגרלה האחרונה ששמרו, ולא למחזור שמתנקה כשמסמנים תוצאה
-  const fromSaved = payments.playerIds.length > 0;
+  const saved = payments.playerIds ?? [];
+  const fromSaved = saved.length > 0;
   const payDate = fromSaved ? payments.matchDate : matchDate;
-  const rosterIds = fromSaved ? payments.playerIds : roundPlayerIds;
+  const rosterIds = fromSaved ? saved : roundPlayerIds;
 
   // המחזור התחלף — הגבייה הישנה כבר לא רלוונטית
   const staleRound = !fromSaved && payments.matchDate !== matchDate && payments.matchDate !== '';
@@ -240,7 +241,9 @@ export function PaymentsView({
         confirmLabel="איפוס"
         onCancel={() => setConfirmReset(false)}
         onConfirm={() => {
-          update({ paid: {}, playerIds: [] });
+          // בלי תאריך: גבייה שאופסה לא "שייכת" לשום מחזור, אחרת האזהרה על
+          // גבייה ישנה הייתה קופצת ברגע שבונים את המחזור הבא
+          update({ paid: {}, playerIds: [], matchDate: '' });
           setConfirmReset(false);
           notify('הגבייה אופסה');
         }}

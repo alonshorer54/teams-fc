@@ -356,21 +356,18 @@ export default function App() {
     };
     setHistory((prev) => [record, ...prev]);
 
-    // הגבייה נצמדת להגרלה השמורה ולא למחזור, שמתנקה כשמסמנים תוצאה.
-    // במצב דוגמה לא: הגבייה יושבת בהגדרות האמיתיות
-    if (!isDemo) {
-      store.setSettings((prev) => {
-        const base = normalizeSettings(prev);
-        return {
-          ...base,
-          payments: {
-            ...base.payments,
-            matchDate: date,
-            playerIds: allInLineup(lineup).filter((id) => !isFillerId(id)),
-          },
-        };
-      });
-    }
+    // הגבייה נצמדת להגרלה השמורה ולא למחזור, שמתנקה כשמסמנים תוצאה
+    setPayers(date, lineup);
+  };
+
+  /** מי משלם על הערב הזה. במצב דוגמה לא: הגבייה יושבת בהגדרות האמיתיות */
+  const setPayers = (date: string, lineup: Lineup) => {
+    if (isDemo) return;
+    store.setSettings((prev) => {
+      const base = normalizeSettings(prev);
+      const playerIds = allInLineup(lineup).filter((id) => !isFillerId(id));
+      return { ...base, payments: { ...base.payments, matchDate: date, playerIds } };
+    });
   };
 
   /**
@@ -424,19 +421,7 @@ export default function App() {
 
       // הגרלה שנשמרה לפני שהגבייה נצמדה להגרלות — בלי זה הגבייה הייתה מתרוקנת
       // יחד עם המחזור. רק כשהשדה חסר לגמרי: ריק אחרי "איפוס" נשאר ריק
-      if (!isDemo && store.settings.payments?.playerIds === undefined) {
-        store.setSettings((prev) => {
-          const base = normalizeSettings(prev);
-          return {
-            ...base,
-            payments: {
-              ...base.payments,
-              matchDate: record.date,
-              playerIds: allInLineup(recordLineup(record)).filter((id) => !isFillerId(id)),
-            },
-          };
-        });
-      }
+      if (settings.payments.playerIds === undefined) setPayers(record.date, recordLineup(record));
     }
   };
 
@@ -652,7 +637,10 @@ export default function App() {
             players={players}
             roundPlayerIds={draft.selectedIds}
             matchDate={draft.matchDate}
-            settings={settings}
+            // במצב דוגמה אין הגרלה שמורה אמיתית — הגבייה לפי המחזור של הדוגמה
+            settings={
+              isDemo ? { ...settings, payments: { ...settings.payments, playerIds: [] } } : settings
+            }
             onChange={store.setSettings}
             notify={notify}
           />
