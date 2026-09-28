@@ -1,15 +1,14 @@
 import { useMemo, useState } from 'react';
-import { Check, CircleAlert, Copy, RotateCcw, ShieldCheck, Wallet } from 'lucide-react';
+import { Check, Copy, PartyPopper, RotateCcw, ShieldCheck, Wallet } from 'lucide-react';
 import type { Player } from '../types';
 import {
   PAYMENT_METHODS,
   PAYMENT_METHOD_ORDER,
-  type AppSettings,
   type PaymentMethod,
   type PaymentRound,
 } from '../lib/storage';
 import { copyToClipboard, formatHebrewDate } from '../lib/format';
-import { ConfirmDialog, EmptyState } from './ui';
+import { ConfirmDialog, EmptyState, Modal } from './ui';
 
 /**
  * גבייה שבועית. אין דרך לקרוא תשלומים מביט אוטומטית — אין להם API ציבורי —
@@ -17,34 +16,25 @@ import { ConfirmDialog, EmptyState } from './ui';
  */
 export function PaymentsView({
   players,
-  roundPlayerIds,
-  matchDate,
-  settings,
+  payments,
   onChange,
   notify,
 }: {
   players: Player[];
-  /** מי משחק במחזור הנוכחי — הגבייה לפיו רק כשאין הגרלה שמורה */
-  roundPlayerIds: string[];
-  matchDate: string;
-  settings: AppSettings;
-  onChange: (updater: (prev: AppSettings) => AppSettings) => void;
+  payments: PaymentRound;
+  onChange: (updater: (prev: PaymentRound) => PaymentRound) => void;
   notify: (msg: string) => void;
 }) {
   const [confirmReset, setConfirmReset] = useState(false);
-  const payments = settings.payments;
+  /** החלון שקופץ ברגע שהאחרון שילם */
+  const [celebrate, setCelebrate] = useState(false);
 
-  // הגבייה נצמדת להגרלה האחרונה ששמרו, ולא למחזור שמתנקה כשמסמנים תוצאה
-  const saved = payments.playerIds ?? [];
-  const fromSaved = saved.length > 0;
-  const payDate = fromSaved ? payments.matchDate : matchDate;
-  const rosterIds = fromSaved ? saved : roundPlayerIds;
-
-  // המחזור התחלף — הגבייה הישנה כבר לא רלוונטית
-  const staleRound = !fromSaved && payments.matchDate !== matchDate && payments.matchDate !== '';
+  // הגבייה נפתחת כששומרים קבוצות, ונשארת עד שכולם שילמו ואישרו
+  const payDate = payments.matchDate;
+  const rosterIds = payments.playerIds;
 
   const roster = useMemo(() => {
-    const ids = new Set(rosterIds);
+    const ids = new Set(rosterIds ?? []);
     return players
       .filter((p) => ids.has(p.id))
       .sort(
@@ -57,16 +47,20 @@ export function PaymentsView({
   const owing = roster.filter((p) => !payments.paid[p.id]);
   const total = payments.amount * roster.length;
   const collected = payments.amount * paidCount;
+  const allPaid = roster.length > 0 && owing.length === 0;
 
-  const update = (next: Partial<PaymentRound>) =>
-    onChange((prev) => ({ ...prev, payments: { ...prev.payments, matchDate: payDate, ...next } }));
+  const update = (next: Partial<PaymentRound>) => onChange((prev) => ({ ...prev, ...next }));
 
   const togglePaid = (id: string, method: PaymentMethod = 'bitGroup') => {
     const paid = { ...payments.paid };
     if (paid[id]) delete paid[id];
     else paid[id] = { at: new Date().toISOString(), method };
     update({ paid });
+    if (!payments.paid[id] && owing.length === 1 && owing[0].id === id) setCelebrate(true);
   };
+
+  // בלי תאריך: גבייה סגורה לא "שייכת" לשום ערב, והשמירה הבאה פותחת חדשה
+  const closeRound = () => update({ paid: {}, playerIds: [], matchDate: '' });
 
   const reminderText = () => {
     const lines = [
@@ -83,30 +77,23 @@ export function PaymentsView({
     return (
       <EmptyState
         icon={<Wallet size={28} />}
-        title="אין מחזור פעיל"
-        hint='בנו מחזור בלשונית "קבוצות" — מי שמשחק יופיע כאן לגבייה.'
+        title="אין גבייה פתוחה"
+        hint='גבייה נפתחת כששומרים קבוצות בלשונית "קבוצות" — כל מי ששיחק יופיע כאן.'
       />
     );
   }
 
   return (
     <div className="space-y-4">
-      {staleRound && (
-        <div className="flex flex-wrap items-center gap-2.5 rounded-xl border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-xs text-amber-200">
-          <CircleAlert size={15} className="shrink-0" />
+      {allPaid && (
+        <div className="flex flex-wrap items-center gap-2.5 rounded-xl border border-emerald-500/40 bg-emerald-500/10 px-4 py-3 text-xs text-emerald-200">
+          <PartyPopper size={15} className="shrink-0" />
           <span>
-            <b>הגבייה הזו היא מ־{formatHebrewDate(payments.matchDate)}</b>, והמחזור הנוכחי הוא מ־
-            {formatHebrewDate(matchDate)}. הסימונים לא מתאפסים לבד — כדי לא למחוק לכם נתונים בטעות.
+            <b>כולם שילמו.</b> אשרו כדי לסגור את הגבייה — הבאה תיפתח כשתשמרו קבוצות.
           </span>
-          <button
-            className="btn-ghost mr-auto !py-1.5 text-xs"
-            onClick={() => {
-              update({ paid: {}, matchDate });
-              notify('הגבייה אופסה למחזור החדש');
-            }}
-          >
-            <RotateCcw size={13} />
-            פתיחת גבייה חדשה
+          <button className="btn-primary ms-auto !py-1.5 text-xs" onClick={() => setCelebrate(true)}>
+            <Check size={13} />
+            מאשר
           </button>
         </div>
       )}
@@ -177,8 +164,8 @@ export function PaymentsView({
         </header>
 
         <p className="border-b border-slate-800/70 px-4 py-2 text-[10px] leading-relaxed text-slate-500">
-          הרשימה היא מי ששיחק בהגרלה האחרונה ששמרתם. היא והסימונים נשארים עד שתלחצו "איפוס" —
-          גם אחרי שהמחזור התנקה.
+          הרשימה היא מי ששיחק בערב הזה. גבייה חדשה נפתחת רק אחרי שכולם שילמו ואישרתם — עד אז
+          שמירה של קבוצות חדשות לא נוגעת בה.
         </p>
 
         <ul className="divide-y divide-slate-800/60">
@@ -243,11 +230,40 @@ export function PaymentsView({
         onConfirm={() => {
           // בלי תאריך: גבייה שאופסה לא "שייכת" לשום מחזור, אחרת האזהרה על
           // גבייה ישנה הייתה קופצת ברגע שבונים את המחזור הבא
-          update({ paid: {}, playerIds: [], matchDate: '' });
+          closeRound();
           setConfirmReset(false);
           notify('הגבייה אופסה');
         }}
       />
+
+      <Modal
+        open={celebrate}
+        onClose={() => setCelebrate(false)}
+        title="כולם שילמו!"
+        icon={<PartyPopper size={20} className="text-emerald-400" />}
+        maxWidth="max-w-sm"
+      >
+        <p className="text-sm leading-relaxed text-slate-300">
+          כל {roster.length} השחקנים של {formatHebrewDate(payDate)} שילמו
+          {payments.amount ? ` — ${collected} ₪ נאספו` : ''}. לאשר ולסגור את הגבייה? הגבייה הבאה
+          תיפתח כשתשמרו קבוצות בלשונית "קבוצות".
+        </p>
+        <div className="mt-6 flex gap-2">
+          <button
+            className="btn-primary flex-1"
+            onClick={() => {
+              closeRound();
+              setCelebrate(false);
+              notify('הגבייה נסגרה ✔');
+            }}
+          >
+            מאשר
+          </button>
+          <button className="btn-ghost flex-1" onClick={() => setCelebrate(false)}>
+            עוד לא
+          </button>
+        </div>
+      </Modal>
     </div>
   );
 }

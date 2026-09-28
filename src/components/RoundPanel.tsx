@@ -17,7 +17,7 @@ import type { Substitution } from '../lib/storage';
 import { formatHebrewDate } from '../lib/format';
 import { teamSizeList } from '../lib/balance';
 import { RatingBadge } from './ui';
-import { PasteListModal } from './PasteListModal';
+import { PasteListModal, type NewPlayerDraft } from './PasteListModal';
 
 /**
  * "המחזור הקרוב" — הרשימה של מי משחק השבוע.
@@ -34,6 +34,7 @@ export function RoundPanel({
   teamCount,
   fillerCount,
   onSetAll,
+  onAddPlayers,
   onClearRound,
   onToggle,
   onCancel,
@@ -53,6 +54,8 @@ export function RoundPanel({
   /** כמה משלימים כבר נוספו, כדי שהמניין יהיה זהה לזה שההגרלה תראה */
   fillerCount: number;
   onSetAll: (ids: string[]) => void;
+  /** מוסיף למאגר את מי שהודבק ולא היה בו, ומחזיר את המזהים החדשים */
+  onAddPlayers: (drafts: NewPlayerDraft[]) => string[];
   /** מרוקן את המחזור ומוחק את החלוקה — מחזור חדש */
   onClearRound: () => void;
   onToggle: (id: string) => void;
@@ -279,8 +282,8 @@ export function RoundPanel({
         open={pasteOpen}
         players={players}
         onClose={() => setPasteOpen(false)}
-        onApply={(ids) => {
-          onSetAll(ids);
+        onApply={(ids, newPlayers) => {
+          onSetAll([...ids, ...(newPlayers.length ? onAddPlayers(newPlayers) : [])]);
           setPasteOpen(false);
         }}
       />

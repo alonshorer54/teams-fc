@@ -1,16 +1,14 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
   Link2,
-  Plus,
   ShieldCheck,
   Tag,
   ThumbsDown,
   ThumbsUp,
   UserPen,
   UserPlus,
-  X,
 } from 'lucide-react';
-import type { Player } from '../types';
+import { EXCLUSIVE_TAGS, PLAYER_TAGS, type Player } from '../types';
 import { Modal } from './ui';
 
 export interface PlayerDraft {
@@ -29,7 +27,6 @@ export function PlayerFormModal({
   open,
   editing,
   players,
-  knownTags,
   onSave,
   onClose,
 }: {
@@ -37,7 +34,6 @@ export function PlayerFormModal({
   /** null = הוספת שחקן חדש */
   editing: Player | null;
   players: Player[];
-  knownTags: string[];
   onSave: (draft: PlayerDraft) => void;
   onClose: () => void;
 }) {
@@ -184,7 +180,7 @@ export function PlayerFormModal({
           tone="rose"
         />
 
-        <TagPicker knownTags={knownTags} value={tags} onChange={setTags} />
+        <TagPicker value={tags} onChange={setTags} />
 
         <label className="flex cursor-pointer items-start gap-3 rounded-xl border border-slate-800 bg-slate-950/40 p-3">
           <input
@@ -310,104 +306,47 @@ function PlayerMultiSelect({
 
 /* ------------------------------- תגיות ------------------------------- */
 
-function TagPicker({
-  knownTags,
-  value,
-  onChange,
-}: {
-  knownTags: string[];
-  value: string[];
-  onChange: (next: string[]) => void;
-}) {
-  const [input, setInput] = useState('');
-
-  const add = (tag: string) => {
-    const clean = tag.trim();
-    if (!clean || value.includes(clean)) return;
-    onChange([...value, clean]);
-    setInput('');
+function TagPicker({ value, onChange }: { value: string[]; onChange: (next: string[]) => void }) {
+  const toggle = (tag: string) => {
+    if (value.includes(tag)) return onChange(value.filter((t) => t !== tag));
+    // "בכושר" ו"לא בכושר" לא יכולים לשבת יחד — בחירה באחד מורידה את השני
+    const clash = EXCLUSIVE_TAGS.find((group) => group.includes(tag)) ?? [];
+    onChange([...value.filter((t) => !clash.includes(t)), tag]);
   };
-
-  const suggestions = knownTags.filter((t) => !value.includes(t));
 
   return (
     <div>
-      <label className="label" htmlFor="player-tags">
+      <p className="label">
         <span className="inline-flex items-center gap-1.5">
           <Tag size={13} className="text-amber-400" />
-          תגיות — מלל חופשי
-          {value.length > 0 && (
-            <span className="font-mono text-[10px] text-slate-500">({value.length})</span>
-          )}
+          תגית
         </span>
-      </label>
+      </p>
 
-      {value.length > 0 && (
-        <div className="mb-2 flex flex-wrap gap-1.5">
-          {value.map((tag) => (
-            <span
+      <div className="flex flex-wrap gap-1.5">
+        {PLAYER_TAGS.map((tag) => {
+          const on = value.includes(tag);
+          return (
+            <button
               key={tag}
-              className="inline-flex max-w-full items-center gap-1 rounded-lg border border-amber-500/40 bg-amber-500/15 px-2 py-1 text-[11px] font-semibold break-words text-amber-200"
+              type="button"
+              onClick={() => toggle(tag)}
+              aria-pressed={on}
+              className={`rounded-lg border px-3 py-1.5 text-xs font-semibold transition ${
+                on
+                  ? 'border-amber-500/50 bg-amber-500/20 text-amber-200'
+                  : 'border-slate-700 bg-slate-800/60 text-slate-300 hover:border-amber-500/40'
+              }`}
             >
               {tag}
-              <button
-                type="button"
-                onClick={() => onChange(value.filter((t) => t !== tag))}
-                aria-label={`הסרת התגית ${tag}`}
-                className="text-amber-300/70 transition hover:text-white"
-              >
-                <X size={11} />
-              </button>
-            </span>
-          ))}
-        </div>
-      )}
-
-      <div className="flex gap-2">
-        <input
-          id="player-tags"
-          className="input py-1.5 text-xs"
-          placeholder="כתבו כל דבר ולחצו Enter — למשל: חוזר מפציעה"
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter' || e.key === ',') {
-              e.preventDefault();
-              add(input);
-            }
-          }}
-        />
-        <button
-          type="button"
-          className="btn-ghost !px-3 !py-1.5"
-          onClick={() => add(input)}
-          aria-label="הוספת תגית"
-        >
-          <Plus size={14} />
-        </button>
+            </button>
+          );
+        })}
       </div>
 
-      {suggestions.length > 0 && (
-        <div className="mt-2">
-          <p className="mb-1 text-[10px] text-slate-500">תגיות שכבר השתמשתם בהן:</p>
-          <div className="flex flex-wrap gap-1.5">
-            {suggestions.map((tag) => (
-              <button
-                key={tag}
-                type="button"
-                onClick={() => add(tag)}
-                className="rounded-lg border border-slate-700 bg-slate-800/60 px-2 py-0.5 text-[11px] text-slate-300 transition hover:border-amber-500/40 hover:text-amber-200"
-              >
-                + {tag}
-              </button>
-            ))}
-          </div>
-        </div>
-      )}
-
       <p className="mt-2 text-[11px] leading-relaxed text-slate-500">
-        אין רשימה סגורה — כתבו מה שתרצו. תגית שמופיעה אצל כמה שחקנים תפוזר שווה בין הקבוצות (למשל
-        "לא בכושר"), ותגית אישית שמופיעה אצל אחד בלבד היא סתם הערה ולא משפיעה על ההגרלה.
+        התגית רק מפרידה בין מי שיש לו אותה תגית — למשל שלא כל השוערים ייפלו באותה קבוצה. היא לא
+        משנה את הדירוג.
       </p>
     </div>
   );

@@ -493,10 +493,6 @@ function StatsPanel({
           </div>
         )}
       </div>
-
-      <p className="border-t border-slate-800/70 pt-3 text-[10px] text-slate-500">
-        נוכחות לאורך זמן, כימיה משחקית וביטולים נמצאים בלשונית "מגמות".
-      </p>
     </section>
   );
 }

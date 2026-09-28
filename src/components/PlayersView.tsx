@@ -12,7 +12,7 @@ import {
   UserPlus,
   Users,
 } from 'lucide-react';
-import { collectTags, type Player } from '../types';
+import type { Player } from '../types';
 import { ConfirmDialog, EmptyState, RatingBadge } from './ui';
 import { PlayerFormModal, type PlayerDraft } from './PlayerFormModal';
 
@@ -37,7 +37,6 @@ export function PlayersView({
   const [pendingDelete, setPendingDelete] = useState<Player | null>(null);
 
   const nameById = useMemo(() => new Map(players.map((p) => [p.id, p.name])), [players]);
-  const knownTags = useMemo(() => collectTags(players), [players]);
 
   const visible = useMemo(() => {
     const q = query.trim();
@@ -216,7 +215,6 @@ export function PlayersView({
         open={formOpen}
         editing={editing}
         players={players}
-        knownTags={knownTags}
         onClose={() => setFormOpen(false)}
         onSave={(draft) => {
           if (editing) onUpdate(editing.id, draft);

@@ -28,9 +28,11 @@ import { VARIETY_MEMORY, lineupKey, removeFromLineup } from './lib/balance';
 import {
   STORAGE_KEYS,
   emptyDraft,
+  emptyPayments,
   normalizeDraft,
   normalizeSettings,
   type Draft,
+  type PaymentRound,
 } from './lib/storage';
 import { isCloudConfigured } from './lib/supabase';
 import { useLocalStorage } from './hooks/useLocalStorage';
@@ -64,6 +66,7 @@ import { AuthGate, CloudNotConfigured, PasswordRecovery } from './components/Aut
 import { SyncBadge } from './components/SyncBadge';
 import { Toast } from './components/ui';
 import type { PlayerDraft } from './components/PlayerFormModal';
+import type { NewPlayerDraft } from './components/PasteListModal';
 
 type Tab = 'players' | 'draw' | 'payments' | 'history' | 'analysis';
 
@@ -109,6 +112,7 @@ export default function App() {
   const [demoPlayers, setDemoPlayers] = useState<Player[] | null>(null);
   const [demoHistory, setDemoHistory] = useState<MatchRecord[]>([]);
   const [demoDraft, setDemoDraft] = useState<Draft>(() => emptyDraft(todayISO()));
+  const [demoPayments, setDemoPayments] = useState<PaymentRound>(() => emptyPayments(''));
   const isDemo = demoPlayers !== null;
   /** נכנס בלי חשבון — מצב דוגמה בלבד, אין מה לסנכרן ואין מה לשמור */
   const isGuest = isCloudConfigured && !auth.userId;
@@ -153,6 +157,15 @@ export default function App() {
         return { ...base, round: updater(current) };
       }),
     [store, rollRound],
+  );
+
+  const setRealPayments = useCallback(
+    (updater: (prev: PaymentRound) => PaymentRound) =>
+      store.setSettings((prev) => {
+        const base = normalizeSettings(prev);
+        return { ...base, payments: updater(base.payments) };
+      }),
+    [store],
   );
 
   const players = demoPlayers ?? migratedPlayers;
@@ -287,6 +300,26 @@ export default function App() {
     notify(`${d.name} נוסף${isDemo ? ' (מצב דוגמה)' : ' למאגר'}`);
   };
 
+  /** שחקנים שהודבקו מוואטסאפ ולא היו במאגר. המזהים חוזרים כדי לסמן אותם במחזור */
+  const addPlayers = (drafts: NewPlayerDraft[]): string[] => {
+    const fresh: Player[] = drafts.map((d) => ({
+      id: newId(),
+      name: d.name,
+      rating: d.rating,
+      friendIds: [],
+      loveIds: [],
+      hateIds: [],
+      tags: [],
+    }));
+    applyToPlayers((prev) => [...prev, ...fresh]);
+    notify(
+      fresh.length === 1
+        ? `${fresh[0].name} נוסף למאגר`
+        : `${fresh.length} שחקנים חדשים נוספו למאגר`,
+    );
+    return fresh.map((p) => p.id);
+  };
+
   const updatePlayer = (id: string, d: PlayerDraft) => {
     applyToPlayers((prev) =>
       prev.map((p) => {
@@ -321,6 +354,7 @@ export default function App() {
     setDemoPlayers(seeded.players);
     setDemoHistory(seeded.history);
     setDemoDraft(emptyDraft(todayISO()));
+    setDemoPayments(emptyPayments(''));
     setTab('draw');
     notify('מצב דוגמה — שום דבר כאן לא נשמר');
   };
@@ -336,7 +370,8 @@ export default function App() {
 
   /* ------------------------------ היסטוריה ---------------------------- */
 
-  const saveToHistory = (lineup: Lineup, date: string, cancelledIds: string[]) => {
+  /** מחזיר הודעה כשיש משהו לומר מעבר ל"נשמר" */
+  const saveToHistory = (lineup: Lineup, date: string, cancelledIds: string[]): string | undefined => {
     // המשלימים לא נמצאים במאגר, אבל הם כן חלק מהקבוצות של הערב הזה
     const byId = new Map<string, { id: string; name: string; rating: number }>([
       ...players.map((p) => [p.id, p] as const),
@@ -366,17 +401,34 @@ export default function App() {
     setHistory((prev) => [record, ...prev]);
 
     // הגבייה נצמדת להגרלה השמורה ולא למחזור, שמתנקה כשמסמנים תוצאה
-    setPayers(date, lineup);
+    if (setPayers(date, lineup) === 'kept') {
+      return 'הקבוצות נשמרו. הגבייה הקודמת עוד פתוחה — חדשה תיפתח כשכולם ישלמו';
+    }
   };
 
-  /** מי משלם על הערב הזה. במצב דוגמה לא: הגבייה יושבת בהגדרות האמיתיות */
-  const setPayers = (date: string, lineup: Lineup) => {
-    if (isDemo) return;
-    store.setSettings((prev) => {
-      const base = normalizeSettings(prev);
-      const playerIds = allInLineup(lineup).filter((id) => !isFillerId(id));
-      return { ...base, payments: { ...base.payments, matchDate: date, playerIds } };
+  /**
+   * מי משלם על הערב הזה. גבייה חדשה נפתחת רק כשאין גבייה פתוחה: עד שכולם
+   * שילמו ואישרו, שמירה של ערב אחר לא נוגעת בה. שמירה חוזרת של אותו ערב
+   * (תיקון בקבוצות) מעדכנת את הרשימה ומשאירה את מי שכבר שילם.
+   */
+  const setPayers = (date: string, lineup: Lineup): 'opened' | 'updated' | 'kept' => {
+    const current = isDemo ? demoPayments : settings.payments;
+    const playerIds = allInLineup(lineup).filter((id) => !isFillerId(id));
+    const open = (current.playerIds ?? []).length > 0;
+    if (open && current.matchDate !== date) return 'kept';
+    const result = current.matchDate === date ? 'updated' : 'opened';
+
+    // גבייה חדשה מתחילה נקייה — סימונים של ערב קודם לא עוברים אליה
+    const keep = new Set(result === 'updated' ? playerIds : []);
+    const apply = (base: PaymentRound): PaymentRound => ({
+      ...base,
+      matchDate: date,
+      playerIds,
+      paid: Object.fromEntries(Object.entries(base.paid).filter(([id]) => keep.has(id))),
     });
+    if (isDemo) setDemoPayments(apply);
+    else setRealPayments(apply);
+    return result;
   };
 
   /**
@@ -622,6 +674,7 @@ export default function App() {
             priorities={priorities}
             setPriorities={setPriorities}
             onSaveHistory={saveToHistory}
+            onAddPlayers={addPlayers}
             notify={notify}
             isDemo={isDemo}
           />
@@ -645,13 +698,9 @@ export default function App() {
         {tab === 'payments' && (
           <PaymentsView
             players={players}
-            roundPlayerIds={draft.selectedIds}
-            matchDate={draft.matchDate}
-            // במצב דוגמה אין הגרלה שמורה אמיתית — הגבייה לפי המחזור של הדוגמה
-            settings={
-              isDemo ? { ...settings, payments: { ...settings.payments, playerIds: [] } } : settings
-            }
-            onChange={store.setSettings}
+            // במצב דוגמה הגבייה חיה בזיכרון, כמו כל השאר, ולא נוגעת בגבייה האמיתית
+            payments={isDemo ? demoPayments : settings.payments}
+            onChange={isDemo ? setDemoPayments : setRealPayments}
             notify={notify}
           />
         )}

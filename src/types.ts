@@ -90,7 +90,7 @@ export interface Player {
   loveIds: string[];
   /** מעדיף להיות בלעדיהם */
   hateIds: string[];
-  /** מלל חופשי לגמרי: "לא בכושר", "רץ הרבה", "חוזר מפציעה" — מה שתרצו */
+  /** מתוך PLAYER_TAGS בלבד — ההגרלה מפזרת בין הקבוצות את מי שיש לו אותה תגית */
   tags: string[];
   /** מנהל הקבוצה — מי שסוגר את המגרש ואוסף את הכסף */
   isManager?: boolean;
@@ -99,6 +99,17 @@ export interface Player {
   /** @deprecated שדה ישן — ההערה הופכת לתגית בטעינה */
   notes?: string;
 }
+
+/**
+ * התגיות היחידות שקיימות. פעם זה היה מלל חופשי, ותגיות כמו "רץ הרבה" רק בלבלו:
+ * תגית לא משנה דירוג, היא רק מפרידה בין מי שיש לו אותה.
+ */
+export const PLAYER_TAGS = ['בכושר', 'לא בכושר', 'שוער'] as const;
+
+/** שתי תגיות שלא יכולות לשבת יחד על אותו שחקן */
+export const EXCLUSIVE_TAGS: readonly (readonly string[])[] = [['בכושר', 'לא בכושר']];
+
+const isKnownTag = (tag: string) => (PLAYER_TAGS as readonly string[]).includes(tag);
 
 /* --------------------------- שחקן משלים --------------------------- */
 
@@ -150,8 +161,10 @@ export function normalizePlayers(raw: Player[]): Player[] {
     friendIds: [...new Set(p.friendIds ?? (p.friendOf ? [p.friendOf] : []))],
     loveIds: [...new Set(p.loveIds ?? [])],
     hateIds: [...new Set(p.hateIds ?? [])],
-    // שדה ההערה בוטל לטובת תגיות חופשיות — ההערה הישנה נשמרת כתגית
-    tags: [...new Set([...(p.tags ?? []), ...(p.notes?.trim() ? [p.notes.trim()] : [])])],
+    // שדה ההערה בוטל לטובת תגיות — ההערה הישנה נשמרת אם היא אחת מהתגיות הקבועות
+    tags: [...new Set([...(p.tags ?? []), ...(p.notes?.trim() ? [p.notes.trim()] : [])])].filter(
+      isKnownTag,
+    ),
   }));
 
   const byId = new Map(players.map((p) => [p.id, p]));
@@ -181,10 +194,6 @@ export function normalizePlayers(raw: Player[]): Player[] {
   }
   return players;
 }
-
-/** כל התגיות שקיימות במאגר, למילוי אוטומטי */
-export const collectTags = (players: Player[]): string[] =>
-  [...new Set(players.flatMap((p) => p.tags ?? []))].sort((a, b) => a.localeCompare(b, 'he'));
 
 /* ------------------------------------------------------------------ */
 /*  הרכב הקבוצות                                                        */

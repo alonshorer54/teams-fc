@@ -46,6 +46,7 @@ import { compareLineups, type LineupDiff } from '../lib/diff';
 import type { Draft, Substitution } from '../lib/storage';
 import { EmptyState } from './ui';
 import { RoundPanel } from './RoundPanel';
+import type { NewPlayerDraft } from './PasteListModal';
 import { FormatPanel } from './FormatPanel';
 import { PrioritiesPanel } from './PrioritiesPanel';
 import { ChangeReport } from './ChangeReport';
@@ -81,6 +82,7 @@ export function DrawView({
   priorities,
   setPriorities,
   onSaveHistory,
+  onAddPlayers,
   notify,
   isDemo,
 }: {
@@ -94,7 +96,9 @@ export function DrawView({
   recentLineups: Lineup[];
   priorities: CriterionSetting[];
   setPriorities: (next: CriterionSetting[]) => void;
-  onSaveHistory: (lineup: Lineup, date: string, cancelledIds: string[]) => void;
+  /** מחזיר הודעה שמחליפה את ה"נשמר" הרגיל, כשיש מה לומר */
+  onSaveHistory: (lineup: Lineup, date: string, cancelledIds: string[]) => string | undefined;
+  onAddPlayers: (drafts: NewPlayerDraft[]) => string[];
   notify: (msg: string) => void;
   isDemo: boolean;
 }) {
@@ -301,6 +305,7 @@ export function DrawView({
         hasLineup={!!lineup}
         teamCount={teamCount}
         fillerCount={fillers.length}
+        onAddPlayers={onAddPlayers}
         onSetAll={(ids) =>
           setDraft((p) => ({ ...p, selectedIds: ids, cancelledIds: [], substitutions: [] }))
         }
@@ -445,8 +450,10 @@ export function DrawView({
             <button
               className="btn-ghost"
               onClick={() => {
-                onSaveHistory(lineup, matchDate, cancelledIds);
-                notify(isDemo ? 'נוסף להיסטוריית הדוגמה (זמני)' : 'הקבוצות נשמרו בהיסטוריה ✔');
+                const note = onSaveHistory(lineup, matchDate, cancelledIds);
+                notify(
+                  note ?? (isDemo ? 'נוסף להיסטוריית הדוגמה (זמני)' : 'הקבוצות נשמרו בהיסטוריה ✔'),
+                );
               }}
             >
               <Save size={16} />
