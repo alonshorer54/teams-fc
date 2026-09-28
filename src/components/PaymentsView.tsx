@@ -59,8 +59,8 @@ export function PaymentsView({
     if (!payments.paid[id] && owing.length === 1 && owing[0].id === id) setCelebrate(true);
   };
 
-  // בלי תאריך: גבייה סגורה לא "שייכת" לשום ערב, והשמירה הבאה פותחת חדשה
-  const closeRound = () => update({ paid: {}, playerIds: [], matchDate: '' });
+  // התאריך נשאר, כדי ששמירה חוזרת של אותו ערב לא תפתח עליו גבייה שנייה
+  const closeRound = () => update({ paid: {}, playerIds: [] });
 
   const reminderText = () => {
     const lines = [
@@ -230,7 +230,7 @@ export function PaymentsView({
         onConfirm={() => {
           // בלי תאריך: גבייה שאופסה לא "שייכת" לשום מחזור, אחרת האזהרה על
           // גבייה ישנה הייתה קופצת ברגע שבונים את המחזור הבא
-          closeRound();
+          update({ paid: {}, playerIds: [], matchDate: '' });
           setConfirmReset(false);
           notify('הגבייה אופסה');
         }}

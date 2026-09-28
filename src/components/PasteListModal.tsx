@@ -35,7 +35,10 @@ export function PasteListModal({
 
   const selectedIds = useMemo(() => {
     const ids = result.matched.map((m) => m.player.id);
-    for (const chosen of Object.values(picks)) if (chosen) ids.push(chosen);
+    // רק בחירות לשורות שעדיין בטקסט — שורה שנמחקה לא משאירה אחריה שחקן מסומן
+    for (const { raw } of [...result.ambiguous, ...result.unmatched]) {
+      if (picks[raw]) ids.push(picks[raw]);
+    }
     return [...new Set(ids)];
   }, [result, picks]);
 
@@ -78,10 +81,14 @@ export function PasteListModal({
     setPicks((prev) => ({ ...prev, [raw]: '' }));
   };
 
-  const close = () => {
+  const reset = () => {
     setText('');
     setPicks({});
     setFresh({});
+  };
+
+  const close = () => {
+    reset();
     onClose();
   };
 
@@ -244,7 +251,11 @@ export function PasteListModal({
         <div className="flex gap-2 pt-1">
           <button
             className="btn-primary flex-1"
-            onClick={() => onApply(selectedIds, newPlayers)}
+            onClick={() => {
+              onApply(selectedIds, newPlayers);
+              // אחרת בחירות של השבוע הזה מחכות בפעם הבאה שפותחים את החלון
+              reset();
+            }}
             disabled={total === 0}
           >
             {newPlayers.length === 0

@@ -401,8 +401,12 @@ export default function App() {
     setHistory((prev) => [record, ...prev]);
 
     // הגבייה נצמדת להגרלה השמורה ולא למחזור, שמתנקה כשמסמנים תוצאה
-    if (setPayers(date, lineup) === 'kept') {
+    const payers = setPayers(date, lineup);
+    if (payers === 'kept') {
       return 'הקבוצות נשמרו. הגבייה הקודמת עוד פתוחה — חדשה תיפתח כשכולם ישלמו';
+    }
+    if (payers === 'awaitingConfirm') {
+      return 'הקבוצות נשמרו. כולם כבר שילמו על הערב הקודם — אשרו בלשונית "תשלומים" ושמרו שוב';
     }
   };
 
@@ -411,11 +415,22 @@ export default function App() {
    * שילמו ואישרו, שמירה של ערב אחר לא נוגעת בה. שמירה חוזרת של אותו ערב
    * (תיקון בקבוצות) מעדכנת את הרשימה ומשאירה את מי שכבר שילם.
    */
-  const setPayers = (date: string, lineup: Lineup): 'opened' | 'updated' | 'kept' => {
+  const setPayers = (
+    date: string,
+    lineup: Lineup,
+  ): 'opened' | 'updated' | 'kept' | 'awaitingConfirm' | 'closed' => {
     const current = isDemo ? demoPayments : settings.payments;
     const playerIds = allInLineup(lineup).filter((id) => !isFillerId(id));
-    const open = (current.playerIds ?? []).length > 0;
-    if (open && current.matchDate !== date) return 'kept';
+    // פתוחה = יש בה מישהו שעוד במאגר. גבייה שכל השחקנים שלה נמחקו לא מוצגת
+    // בכלל, ואסור שתחסום את הבאה
+    const inSquad = new Set(players.map((p) => p.id));
+    const roster = (current.playerIds ?? []).filter((id) => inSquad.has(id));
+    const open = roster.length > 0;
+    if (open && current.matchDate !== date) {
+      return roster.every((id) => current.paid[id]) ? 'awaitingConfirm' : 'kept';
+    }
+    // הערב הזה כבר שולם ונסגר — שמירה חוזרת שלו לא גובה מכולם שוב
+    if (current.playerIds?.length === 0 && current.matchDate === date) return 'closed';
     const result = current.matchDate === date ? 'updated' : 'opened';
 
     // גבייה חדשה מתחילה נקייה — סימונים של ערב קודם לא עוברים אליה
