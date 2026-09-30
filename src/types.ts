@@ -140,6 +140,17 @@ export interface Filler {
 export const newFillerId = (): string =>
   `${FILLER_PREFIX}${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
 
+/**
+ * אילוץ חד-פעמי להגרלה של המחזור הנוכחי — "השבוע א' חייב להיות עם ב'".
+ * בניגוד לחברויות הוא לא שייך לשחקן, והוא מתנקה יחד עם המחזור.
+ */
+export interface DrawConstraint {
+  id: string;
+  aId: string;
+  bId: string;
+  kind: 'together' | 'apart';
+}
+
 /** משלים בתחפושת שחקן, כדי שכל הלוגיקה הקיימת תעבוד עליו בלי תנאים מיוחדים. */
 export const fillerAsPlayer = (filler: Filler): Player => ({
   id: filler.id,

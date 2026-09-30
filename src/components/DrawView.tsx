@@ -49,6 +49,7 @@ import { RoundPanel } from './RoundPanel';
 import type { NewPlayerDraft } from './PasteListModal';
 import { FormatPanel } from './FormatPanel';
 import { PrioritiesPanel } from './PrioritiesPanel';
+import { ConstraintsPanel } from './ConstraintsPanel';
 import { ChangeReport } from './ChangeReport';
 import { ChangePopup } from './ChangePopup';
 import { TeamCard } from './TeamCard';
@@ -121,6 +122,7 @@ export function DrawView({
     matchDate,
     teamCount,
     fillers,
+    constraints,
   } = draft;
 
   /**
@@ -238,6 +240,7 @@ export function DrawView({
       pairEffects: activeEffects,
       teamIds: colors,
       recentPairs,
+      constraints,
     });
     // ההגרלה הטרייה היא גם נקודת ההשוואה לעריכות שיבואו אחריה
     setDraft((p) => ({ ...p, lineup: next, baseline: next }));
@@ -319,6 +322,7 @@ export function DrawView({
             lineup: null,
             baseline: null,
             fillers: [],
+            constraints: [],
           }));
           setSelectedPlayer(null);
           setLastChange(null);
@@ -406,6 +410,15 @@ export function DrawView({
         priorities={priorities}
         onChange={setPriorities}
         unavailable={unavailable}
+      />
+
+      <ConstraintsPanel
+        pool={pool}
+        players={players}
+        constraints={constraints}
+        lineup={lineup}
+        onChange={(next) => setDraft((p) => ({ ...p, constraints: next }))}
+        notify={notify}
       />
 
       {/* סרגל הגרלה */}

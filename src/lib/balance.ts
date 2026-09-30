@@ -5,6 +5,7 @@ import {
   emptyLineup,
   lineupTeams,
   membersOf,
+  type DrawConstraint,
   type Lineup,
   type Player,
   type TeamId,
@@ -20,6 +21,28 @@ import {
 
 /** קנס על סטייה מגודל הקבוצה היעד — תמיד מעל הכל, אחרת החלוקה לא חוקית */
 const W_SIZE = 5000;
+
+/**
+ * קנס על אילוץ חד-פעמי שהופר. באותו סדר גודל כמו הגודל: אילוץ שהמשתמש קבע
+ * לשבוע הזה הוא דרישה, לא העדפה, ושום קריטריון לא שווה להפר אותו.
+ */
+const W_CONSTRAINT = 5000;
+
+/** האם אילוץ מתקיים בחלוקה. שחקן שלא בחלוקה — האילוץ לא נמדד ונחשב מתקיים. */
+export function constraintMet(c: DrawConstraint, teamOf: Map<string, TeamId>): boolean {
+  const ta = teamOf.get(c.aId);
+  const tb = teamOf.get(c.bId);
+  if (!ta || !tb) return true;
+  return c.kind === 'together' ? ta === tb : ta !== tb;
+}
+
+/** כמה אילוצים החלוקה מפרה. */
+export function brokenConstraints(lineup: Lineup, constraints: DrawConstraint[]): number {
+  if (!constraints.length) return 0;
+  const teamOf = new Map<string, TeamId>();
+  for (const t of lineupTeams(lineup)) for (const id of membersOf(lineup, t)) teamOf.set(id, t);
+  return constraints.filter((c) => !constraintMet(c, teamOf)).length;
+}
 
 export interface TeamStats {
   count: number;
@@ -269,11 +292,16 @@ function cost(
   sizes: Record<string, number>,
   teamIds: readonly TeamId[],
   priorities: CriterionSetting[],
+  constraints: DrawConstraint[],
 ): number {
   let sizePenalty = 0;
   for (const t of teamIds) sizePenalty += Math.abs(membersOf(lineup, t).length - (sizes[t] ?? 0));
 
-  return weightedPenalty({ ...input, lineup }, priorities) + sizePenalty * W_SIZE;
+  return (
+    weightedPenalty({ ...input, lineup }, priorities) +
+    sizePenalty * W_SIZE +
+    brokenConstraints(lineup, constraints) * W_CONSTRAINT
+  );
 }
 
 /* ------------------------------------------------------------------ */
@@ -338,12 +366,13 @@ function localSearch(
   sizes: Record<string, number>,
   teamIds: readonly TeamId[],
   priorities: CriterionSetting[],
+  constraints: DrawConstraint[],
   /** תוספת לעלות שמושכת את החיפוש הצידה — משמשת לחיפוש חלוקות חלופיות */
   bias?: (lineup: Lineup) => number,
 ): Lineup {
   const current = cloneLineup(lineup);
   const total = (l: Lineup) =>
-    cost(l, input, sizes, teamIds, priorities) + (bias ? bias(l) : 0);
+    cost(l, input, sizes, teamIds, priorities, constraints) + (bias ? bias(l) : 0);
   let best = total(current);
 
   for (let pass = 0; pass < 40; pass++) {
@@ -583,6 +612,8 @@ export interface GenerateOptions {
   recentPairs?: Map<string, number>;
   /** סובלנות הגיוון; 0 = תמיד החלוקה הטובה ביותר בלבד */
   variety?: number;
+  /** אילוצים חד-פעמיים של המחזור — "חייבים יחד / בנפרד" */
+  constraints?: DrawConstraint[];
 }
 
 /** מועמדת לחלוקה: ההרכב עצמו, איכותו, וכמה הוא חורג מגדלי הקבוצות. */
@@ -591,6 +622,8 @@ interface Candidate {
   cost: number;
   penalties: number[];
   sizeOff: number;
+  /** כמה אילוצים חד-פעמיים הופרו */
+  broken: number;
 }
 
 export function generateLineup(pool: Player[], options: GenerateOptions): Lineup {
@@ -605,14 +638,23 @@ export function generateLineup(pool: Player[], options: GenerateOptions): Lineup
 
   if (pool.length === 0) return emptyLineup(teamIds);
 
+  const inPool = new Set(pool.map((p) => p.id));
+  const constraints = (options.constraints ?? []).filter(
+    (c) => c.aId !== c.bId && inPool.has(c.aId) && inPool.has(c.bId),
+  );
+
   const ratingOf = new Map(pool.map((p) => [p.id, p.rating]));
   const bonds = extractBonds(pool);
   const sizes = teamSizes(pool.length, teamIds);
   const maxSize = Math.max(...teamIds.map((t) => sizes[t] ?? 0), 1);
 
-  // אשכולות החברויות משמשים כנקודת פתיחה רק כשהחברויות בכלל נלקחות בחשבון
+  // אשכולות החברויות משמשים כנקודת פתיחה רק כשהחברויות בכלל נלקחות בחשבון;
+  // "חייבים יחד" נכנסים לאשכול תמיד, כך שהבנייה כבר מתחילה כשהם באותה קבוצה
   const friendsOn = priorities.find((p) => p.id === 'friends')?.enabled;
-  const clusters = friendsOn ? buildClusters(pool, bonds, maxSize) : pool.map((p) => [p.id]);
+  const together: Bond[] = constraints
+    .filter((c) => c.kind === 'together')
+    .map((c) => [c.aId, c.bId] as const);
+  const clusters = buildClusters(pool, friendsOn ? [...bonds, ...together] : together, maxSize);
 
   const input = { pool, ratingOf, pairEffects };
   const sizeOffOf = (lineup: Lineup) =>
@@ -629,9 +671,10 @@ export function generateLineup(pool: Player[], options: GenerateOptions): Lineup
 
     const candidate: Candidate = {
       lineup,
-      cost: cost(lineup, input, sizes, teamIds, priorities),
+      cost: cost(lineup, input, sizes, teamIds, priorities, constraints),
       penalties: criterionPenalties({ ...input, lineup }, priorities),
       sizeOff: sizeOffOf(lineup),
+      broken: brokenConstraints(lineup, constraints),
     };
     found.set(key, candidate);
     if (!best || candidate.cost < best.cost) best = candidate;
@@ -648,7 +691,14 @@ export function generateLineup(pool: Player[], options: GenerateOptions): Lineup
   // שלב א' — חיפוש רגיל: מוצא נקודת מוצא טובה
   for (let i = 0; i < opening_restarts; i++) {
     consider(
-      localSearch(greedyBuild(clusters, ratingOf, sizes, teamIds), input, sizes, teamIds, priorities),
+      localSearch(
+        greedyBuild(clusters, ratingOf, sizes, teamIds),
+        input,
+        sizes,
+        teamIds,
+        priorities,
+        constraints,
+      ),
     );
   }
 
@@ -708,7 +758,9 @@ export function generateLineup(pool: Player[], options: GenerateOptions): Lineup
     };
 
     for (let i = 0; i < alternative_restarts; i++) {
-      consider(localSearch(kick(opening.lineup, teamIds), input, sizes, teamIds, priorities, bias));
+      consider(
+        localSearch(kick(opening.lineup, teamIds), input, sizes, teamIds, priorities, constraints, bias),
+      );
     }
   }
 
@@ -738,6 +790,7 @@ export function generateLineup(pool: Player[], options: GenerateOptions): Lineup
     return [...found.values()].filter(
       (c) =>
         c.sizeOff <= bar.sizeOff &&
+        c.broken <= bar.broken &&
         priorities.every(
           (setting, rank) =>
             !setting.enabled ||
@@ -764,6 +817,7 @@ export function generateLineup(pool: Player[], options: GenerateOptions): Lineup
             sizes,
             teamIds,
             priorities,
+            constraints,
             bias,
           ),
         );

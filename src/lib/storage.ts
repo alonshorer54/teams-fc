@@ -2,6 +2,7 @@ import {
   DEFAULT_TEAM_COUNT,
   MAX_TEAMS,
   MIN_TEAMS,
+  type DrawConstraint,
   type Filler,
   type Lineup,
   type MatchRecord,
@@ -109,6 +110,8 @@ export interface Draft {
   teamCount: number;
   /** שחקני דמה שממלאים מקומות חסרים בהגרלה הזו בלבד */
   fillers: Filler[];
+  /** "חייבים יחד / בנפרד" להגרלה הזו בלבד */
+  constraints: DrawConstraint[];
 }
 
 export const emptyDraft = (matchDate: string): Draft => ({
@@ -120,6 +123,7 @@ export const emptyDraft = (matchDate: string): Draft => ({
   substitutions: [],
   teamCount: DEFAULT_TEAM_COUNT,
   fillers: [],
+  constraints: [],
 });
 
 /** מגביל את מספר הקבוצות לטווח שהפלטה תומכת בו. */
@@ -141,6 +145,7 @@ export const normalizeDraft = (draft: Partial<Draft>, matchDate: string): Draft 
   // טיוטות מלפני התכונה נשמרו בלי השדות האלה — ברירת המחדל היא ההתנהגות הישנה
   teamCount: clampTeamCount(draft.teamCount ?? DEFAULT_TEAM_COUNT),
   fillers: draft.fillers ?? [],
+  constraints: draft.constraints ?? [],
 });
 
 export function loadJSON<T>(key: string, fallback: T): T {

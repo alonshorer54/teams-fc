@@ -4,7 +4,7 @@ import { lineupTeams, membersOf, type Lineup, type Player, type TeamId } from '.
  * הקריטריונים שההגרלה מתחשבת בהם.
  * הסדר ניתן לשינוי, וכל קריטריון אפשר לכבות.
  */
-export type CriterionId = 'rating' | 'friends' | 'gameChemistry' | 'affinity' | 'tags';
+export type CriterionId = 'rating' | 'tiers' | 'friends' | 'gameChemistry' | 'affinity' | 'tags';
 
 export interface CriterionSetting {
   id: CriterionId;
@@ -15,6 +15,7 @@ export interface CriterionSetting {
 export const DEFAULT_PRIORITIES: CriterionSetting[] = [
   { id: 'rating', enabled: true },
   { id: 'friends', enabled: true },
+  { id: 'tiers', enabled: true },
   // דלוק כברירת מחדל: הקנס שלו הוא 0 כל עוד אין אף זוג שעבר את סף המדגם,
   // אז זה פשוט "מתעורר" מעצמו בשבוע שבו נצברו מספיק תוצאות
   { id: 'gameChemistry', enabled: true },
@@ -36,6 +37,11 @@ export const CRITERION_META: Record<
     label: 'דירוג',
     emoji: '⭐',
     help: 'משווה את סך הדירוגים בין הקבוצות. זה מה שקובע שהקבוצות שקולות.',
+  },
+  tiers: {
+    label: 'פיזור רמות',
+    emoji: '📶',
+    help: 'החזקים מתחלקים בין הקבוצות, וכך גם החלשים — שלא תצא קבוצה של כוכבים מול קבוצה של חלשים.',
   },
   friends: {
     label: 'חברויות',
@@ -77,6 +83,7 @@ export const priorityWeight = (rank: number) => 1000 / Math.pow(6, rank);
  */
 export const VARIETY_FLEX: Record<CriterionId, number> = {
   rating: 1,
+  tiers: 0.5,
   friends: 0,
   gameChemistry: 5,
   affinity: 3,
@@ -144,6 +151,97 @@ function ratingPenalty({ lineup, ratingOf }: PenaltyInput): number {
   });
   // פער של נקודת דירוג שלמה בממוצע נחשב קנס מלא
   return Math.min(1, spreadOf(avgs));
+}
+
+/**
+ * סטייה ממוצעת לשחקן, בנקודות דירוג, שנחשבת קנס מלא בפיזור הרמות.
+ * נמוך מזה והקנס נתקע בתקרה כמעט בכל חלוקה — ואז לחיפוש אין לאן להשתפר.
+ */
+const TIERS_FULL_PENALTY = 0.25;
+
+interface Tiers {
+  means: number[];
+  /**
+   * הסטייה שאי אפשר להימנע ממנה: גם בחלוקה מושלמת 4.8 ו-4.5 באותה שכבה, וכל
+   * אחד רחוק מהממוצע שלה. בלי לקזז אותה החלוקה הטובה ביותר הייתה מקבלת 60.
+   */
+  floor: number;
+}
+
+/**
+ * השכבות תלויות רק בדירוגים ובמספר הקבוצות, שלא משתנים לאורך הגרלה.
+ * הפונקציה נקראת מהלולאה הפנימית של החיפוש, אז הן מחושבות פעם אחת.
+ */
+const tiersCache = new WeakMap<
+  Map<string, number>,
+  { width: number; count: number; sum: number; tiers: Tiers }
+>();
+
+function tiersOf(profiles: Float64Array[], sum: number, ratingOf: Map<string, number>): Tiers {
+  const width = profiles.length;
+  let count = 0;
+  for (const p of profiles) count += p.length;
+  // הסכום נבדק גם הוא: הרכב עם שחקנים אחרים באותה כמות לא יקבל שכבות של אחר
+  const cached = tiersCache.get(ratingOf);
+  if (cached && cached.width === width && cached.count === count && cached.sum === sum) {
+    return cached.tiers;
+  }
+
+  const all = profiles.flatMap((p) => [...p]).sort((a, b) => b - a);
+  const means: number[] = [];
+  let floor = 0;
+  for (let i = 0; i < all.length; i += width) {
+    const tier = all.slice(i, i + width);
+    const mean = tier.reduce((s, r) => s + r, 0) / tier.length;
+    means.push(mean);
+    for (const r of tier) floor += Math.abs(r - mean);
+  }
+  const tiers = { means, floor: count ? floor / count : 0 };
+  tiersCache.set(ratingOf, { width, count, sum, tiers });
+  return tiers;
+}
+
+/**
+ * השוואת "פרופיל" כל קבוצה לפרופיל האידיאלי.
+ *
+ * ממיינים את כל השחקנים לפי דירוג וחותכים לשכבות בגודל מספר הקבוצות: שלושת
+ * החזקים, שלושת הבאים, וכך הלאה. בחלוקה מושלמת השחקן החזק של כל קבוצה בא
+ * מהשכבה הראשונה, השני מהשנייה, והחלש מהאחרונה. הקנס הוא כמה כל שחקן רחוק,
+ * בנקודות דירוג, מהממוצע של השכבה שבמקומה הוא עומד.
+ *
+ * נמדד בנקודות ולא בספירת שכבות בכוונה: שני שחקנים עם אותו דירוג מתחלפים בלי
+ * קנס, וגבול בין 4.3 ל-4.2 כמעט לא עולה כלום — כך נשאר מקום לגיוון בין הגרלות.
+ */
+function tiersPenalty({ lineup, ratingOf }: PenaltyInput): number {
+  const active = activeTeams(lineup);
+  if (active.length < 2) return 0;
+
+  // מערך מספרי ממוין בלי פונקציית השוואה — הפונקציה הזו נקראת בלולאה הפנימית
+  let total = 0;
+  let count = 0;
+  const profiles = active.map((t) => {
+    const members = membersOf(lineup, t);
+    const ratings = new Float64Array(members.length);
+    for (let i = 0; i < members.length; i++) {
+      ratings[i] = ratingOf.get(members[i]) ?? 0;
+      total += ratings[i];
+    }
+    count += members.length;
+    return ratings.sort();
+  });
+  const { means, floor } = tiersOf(profiles, total, ratingOf);
+  const last = means[means.length - 1];
+
+  let sum = 0;
+  for (const profile of profiles) {
+    // ממוין מהחלש לחזק, אז החזק ביותר בסוף
+    for (let slot = 0; slot < profile.length; slot++) {
+      const r = profile[profile.length - 1 - slot];
+      // עריכה ידנית יכולה לנפח קבוצה מעבר למספר השכבות — היא נמדדת מול האחרונה
+      sum += Math.abs(r - (slot < means.length ? means[slot] : last));
+    }
+  }
+  return Math.min(1, Math.max(0, sum / count - floor) / TIERS_FULL_PENALTY);
 }
 
 function friendsPenalty({ lineup, pool }: PenaltyInput): number {
@@ -228,6 +326,7 @@ function tagsPenalty({ lineup, pool }: PenaltyInput): number {
 
 const PENALTY_FN: Record<CriterionId, (input: PenaltyInput) => number> = {
   rating: ratingPenalty,
+  tiers: tiersPenalty,
   friends: friendsPenalty,
   gameChemistry: gameChemistryPenalty,
   affinity: affinityPenalty,
@@ -282,9 +381,18 @@ export function normalizePriorities(
   savedVersion = 1,
 ): CriterionSetting[] {
   if (!saved?.length) return DEFAULT_PRIORITIES;
-  const known = saved.filter((s) => s.id in CRITERION_META);
-  const missing = DEFAULT_PRIORITIES.filter((d) => !known.some((s) => s.id === d.id));
-  const merged = [...known, ...missing];
+  const merged = saved.filter((s) => s.id in CRITERION_META);
+  // קריטריון חדש נכנס מיד אחרי כל מי שקודם לו בברירת המחדל, לא לסוף הרשימה —
+  // בתחתית המשקל שלו כמעט אפסי, ומי ששמר סדר לפני שנוסף לא היה מרגיש בו
+  DEFAULT_PRIORITIES.forEach((d, i) => {
+    if (merged.some((s) => s.id === d.id)) return;
+    const before = new Set(DEFAULT_PRIORITIES.slice(0, i).map((x) => x.id));
+    let at = 0;
+    merged.forEach((s, j) => {
+      if (before.has(s.id)) at = j + 1;
+    });
+    merged.splice(at, 0, d);
+  });
 
   // גרסה 2: הכימיה המשחקית עברה לדלוקה כברירת מחדל. מי ששמר הגדרות כשהיא
   // הייתה כבויה יקבל אותה דלוקה פעם אחת; מרגע שיגע בסדר העדיפויות נשמרת
