@@ -289,6 +289,9 @@ function buildClusters(pool: Player[], bonds: Bond[], maxSize: number): string[]
 /*  פונקציית העלות                                                     */
 /* ------------------------------------------------------------------ */
 
+/** מה שאסור לחלוקה לוותר עליו: גודל הקבוצות והאילוצים של השבוע. */
+const hardPenalty = (sizeOff: number, broken: number) => sizeOff * W_SIZE + broken * W_CONSTRAINT;
+
 function cost(
   lineup: Lineup,
   input: Omit<PenaltyInput, 'lineup'>,
@@ -306,8 +309,6 @@ function cost(
   );
 }
 
-/** מה שאסור לחלוקה לוותר עליו: גודל הקבוצות והאילוצים של השבוע. */
-const hardPenalty = (sizeOff: number, broken: number) => sizeOff * W_SIZE + broken * W_CONSTRAINT;
 
 /* ------------------------------------------------------------------ */
 /*  שלב 1: בנייה חמדנית עם רעש אקראי                                    */

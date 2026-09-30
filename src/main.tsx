@@ -18,10 +18,12 @@ if ('serviceWorker' in navigator && import.meta.env.PROD) {
   // אפליקציה שנשארת פתוחה ברקע בטלפון ממשיכה להריץ את הקוד הישן בלי הגבלת
   // זמן — ומכשיר עם גרסה ישנה כותב לענן הגדרות בלי שדות שנוספו מאז, ומוחק
   // אותם אצל כולם. לכן בכל חזרה למסך בודקים אם יש גרסה, והיא נטענת מיד.
-  // בהתקנה ראשונה אין גרסה קודמת להחליף, ואין סיבה לרענן.
-  const hadController = !!navigator.serviceWorker.controller
+  // בהתקנה ראשונה אין גרסה קודמת להחליף, ואין סיבה לרענן — אבל מההחלפה
+  // הבאה והלאה כבר כן, גם אם הדף הזה נשאר פתוח מאז.
+  let hadController = !!navigator.serviceWorker.controller
   navigator.serviceWorker.addEventListener('controllerchange', () => {
     if (hadController) window.location.reload()
+    hadController = true
   })
 
   window.addEventListener('load', () => {
