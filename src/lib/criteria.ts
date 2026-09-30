@@ -4,7 +4,7 @@ import { lineupTeams, membersOf, type Lineup, type Player, type TeamId } from '.
  * הקריטריונים שההגרלה מתחשבת בהם.
  * הסדר ניתן לשינוי, וכל קריטריון אפשר לכבות.
  */
-export type CriterionId = 'rating' | 'tiers' | 'friends' | 'gameChemistry' | 'affinity' | 'tags';
+export type CriterionId = 'rating' | 'friends' | 'gameChemistry' | 'affinity' | 'tags';
 
 export interface CriterionSetting {
   id: CriterionId;
@@ -15,7 +15,6 @@ export interface CriterionSetting {
 export const DEFAULT_PRIORITIES: CriterionSetting[] = [
   { id: 'rating', enabled: true },
   { id: 'friends', enabled: true },
-  { id: 'tiers', enabled: true },
   // דלוק כברירת מחדל: הקנס שלו הוא 0 כל עוד אין אף זוג שעבר את סף המדגם,
   // אז זה פשוט "מתעורר" מעצמו בשבוע שבו נצברו מספיק תוצאות
   { id: 'gameChemistry', enabled: true },
@@ -37,11 +36,6 @@ export const CRITERION_META: Record<
     label: 'דירוג',
     emoji: '⭐',
     help: 'משווה את סך הדירוגים בין הקבוצות. זה מה שקובע שהקבוצות שקולות.',
-  },
-  tiers: {
-    label: 'פיזור רמות',
-    emoji: '📶',
-    help: 'החזקים מתחלקים בין הקבוצות, וכך גם החלשים — שלא תצא קבוצה של כוכבים מול קבוצה של חלשים.',
   },
   friends: {
     label: 'חברויות',
@@ -83,7 +77,6 @@ export const priorityWeight = (rank: number) => 1000 / Math.pow(6, rank);
  */
 export const VARIETY_FLEX: Record<CriterionId, number> = {
   rating: 1,
-  tiers: 0.5,
   friends: 0,
   gameChemistry: 5,
   affinity: 3,
@@ -153,6 +146,20 @@ function ratingPenalty({ lineup, ratingOf }: PenaltyInput): number {
   return Math.min(1, spreadOf(avgs));
 }
 
+/* ----------------------- פיזור רמות — תמיד פעיל ----------------------- */
+
+/**
+ * פיזור הרמות אינו קריטריון שאפשר להזיז או לכבות: הוא תופס תמיד את המקום
+ * השני בשקלול, מיד אחרי הקריטריון העליון, וכל השאר יורדים דרגה. עדיף לכל
+ * קבוצה שחקן חזק משלה מאשר שני חברים חזקים באותה קבוצה.
+ */
+const TIERS_RANK = 1;
+
+/** כמה חלופה מגוונת מותר לה להיות פחות מפוזרת מהטובה ביותר (ראו VARIETY_TOLERANCE) */
+export const TIERS_VARIETY_FLEX = 0.5;
+
+export const TIERS_META = { label: 'פיזור רמות', emoji: '📶' };
+
 /**
  * סטייה ממוצעת לשחקן, בנקודות דירוג, שנחשבת קנס מלא בפיזור הרמות.
  * נמוך מזה והקנס נתקע בתקרה כמעט בכל חלוקה — ואז לחיפוש אין לאן להשתפר.
@@ -212,7 +219,7 @@ function tiersOf(profiles: Float64Array[], sum: number, ratingOf: Map<string, nu
  * נמדד בנקודות ולא בספירת שכבות בכוונה: שני שחקנים עם אותו דירוג מתחלפים בלי
  * קנס, וגבול בין 4.3 ל-4.2 כמעט לא עולה כלום — כך נשאר מקום לגיוון בין הגרלות.
  */
-function tiersPenalty({ lineup, ratingOf }: PenaltyInput): number {
+export function tiersPenalty({ lineup, ratingOf }: PenaltyInput): number {
   const active = activeTeams(lineup);
   if (active.length < 2) return 0;
 
@@ -326,7 +333,6 @@ function tagsPenalty({ lineup, pool }: PenaltyInput): number {
 
 const PENALTY_FN: Record<CriterionId, (input: PenaltyInput) => number> = {
   rating: ratingPenalty,
-  tiers: tiersPenalty,
   friends: friendsPenalty,
   gameChemistry: gameChemistryPenalty,
   affinity: affinityPenalty,
@@ -335,10 +341,11 @@ const PENALTY_FN: Record<CriterionId, (input: PenaltyInput) => number> = {
 
 /** קנס כולל משוקלל לפי סדר העדיפויות. ככל שנמוך יותר — החלוקה טובה יותר. */
 export function weightedPenalty(input: PenaltyInput, priorities: CriterionSetting[]): number {
-  let total = 0;
+  let total = tiersPenalty(input) * priorityWeight(TIERS_RANK);
   priorities.forEach((setting, rank) => {
     if (!setting.enabled) return;
-    total += PENALTY_FN[setting.id](input) * priorityWeight(rank);
+    const slot = rank < TIERS_RANK ? rank : rank + 1;
+    total += PENALTY_FN[setting.id](input) * priorityWeight(slot);
   });
   return total;
 }
@@ -381,18 +388,9 @@ export function normalizePriorities(
   savedVersion = 1,
 ): CriterionSetting[] {
   if (!saved?.length) return DEFAULT_PRIORITIES;
-  const merged = saved.filter((s) => s.id in CRITERION_META);
-  // קריטריון חדש נכנס מיד אחרי כל מי שקודם לו בברירת המחדל, לא לסוף הרשימה —
-  // בתחתית המשקל שלו כמעט אפסי, ומי ששמר סדר לפני שנוסף לא היה מרגיש בו
-  DEFAULT_PRIORITIES.forEach((d, i) => {
-    if (merged.some((s) => s.id === d.id)) return;
-    const before = new Set(DEFAULT_PRIORITIES.slice(0, i).map((x) => x.id));
-    let at = 0;
-    merged.forEach((s, j) => {
-      if (before.has(s.id)) at = j + 1;
-    });
-    merged.splice(at, 0, d);
-  });
+  const known = saved.filter((s) => s.id in CRITERION_META);
+  const missing = DEFAULT_PRIORITIES.filter((d) => !known.some((s) => s.id === d.id));
+  const merged = [...known, ...missing];
 
   // גרסה 2: הכימיה המשחקית עברה לדלוקה כברירת מחדל. מי ששמר הגדרות כשהיא
   // הייתה כבויה יקבל אותה דלוקה פעם אחת; מרגע שיגע בסדר העדיפויות נשמרת

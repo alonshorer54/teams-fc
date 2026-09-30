@@ -11,8 +11,10 @@ import {
   type TeamId,
 } from '../types';
 import {
+  TIERS_VARIETY_FLEX,
   VARIETY_FLEX,
   criterionPenalties,
+  tiersPenalty,
   relationCounts,
   weightedPenalty,
   type CriterionSetting,
@@ -621,6 +623,8 @@ interface Candidate {
   lineup: Lineup;
   cost: number;
   penalties: number[];
+  /** פיזור הרמות — לא חלק מ-penalties, כי הוא לא ברשימת העדיפויות */
+  tiers: number;
   sizeOff: number;
   /** כמה אילוצים חד-פעמיים הופרו */
   broken: number;
@@ -673,6 +677,7 @@ export function generateLineup(pool: Player[], options: GenerateOptions): Lineup
       lineup,
       cost: cost(lineup, input, sizes, teamIds, priorities, constraints),
       penalties: criterionPenalties({ ...input, lineup }, priorities),
+      tiers: tiersPenalty({ ...input, lineup }),
       sizeOff: sizeOffOf(lineup),
       broken: brokenConstraints(lineup, constraints),
     };
@@ -791,6 +796,7 @@ export function generateLineup(pool: Player[], options: GenerateOptions): Lineup
       (c) =>
         c.sizeOff <= bar.sizeOff &&
         c.broken <= bar.broken &&
+        c.tiers <= bar.tiers + tolerance * TIERS_VARIETY_FLEX + 1e-9 &&
         priorities.every(
           (setting, rank) =>
             !setting.enabled ||

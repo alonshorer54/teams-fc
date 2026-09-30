@@ -38,7 +38,9 @@ import {
 } from '../lib/balance';
 import {
   CRITERION_META,
+  TIERS_META,
   penaltyBreakdown,
+  tiersPenalty,
   type CriterionId,
   type CriterionSetting,
 } from '../lib/criteria';
@@ -161,6 +163,20 @@ export function DrawView({
         priorities,
       ),
     [lineup, teamIds, pool, ratingOf, activeEffects, priorities],
+  );
+  const tiersScore = useMemo(
+    () =>
+      Math.round(
+        (1 -
+          tiersPenalty({
+            lineup: lineup ?? emptyLineup(teamIds),
+            pool,
+            ratingOf,
+            pairEffects: activeEffects,
+          })) *
+          100,
+      ),
+    [lineup, teamIds, pool, ratingOf, activeEffects],
   );
 
   // השוואה בין ההגרלה המקורית למצב אחרי העריכות הידניות
@@ -513,7 +529,7 @@ export function DrawView({
           )}
 
           <BalanceBar stats={stats} teamIds={teamIds} gameChemistry={!!gameChemistryOn} />
-          <CriteriaScores breakdown={breakdown} unavailable={unavailable} />
+          <CriteriaScores breakdown={breakdown} unavailable={unavailable} tiers={tiersScore} />
           {bonds.length > 0 && <BondsPanel bonds={bonds} />}
 
           {selectedName && (
@@ -572,27 +588,40 @@ export function DrawView({
 
 /* --------------------- ציון לכל קריטריון בהגרלה --------------------- */
 
+const scoreTone = (score: number) =>
+  score >= 90
+    ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-300'
+    : score >= 70
+      ? 'border-sky-500/30 bg-sky-500/10 text-sky-300'
+      : 'border-amber-500/30 bg-amber-500/10 text-amber-300';
+
 function CriteriaScores({
   breakdown,
   unavailable,
+  tiers,
 }: {
   breakdown: ReturnType<typeof penaltyBreakdown>;
   unavailable: Partial<Record<CriterionId, string>>;
+  /** ציון פיזור הרמות — תמיד פעיל, ולכן בלי מספר עדיפות */
+  tiers: number;
 }) {
   const active = breakdown.filter((b) => b.enabled && !unavailable[b.id]);
-  if (!active.length) return null;
 
   return (
     <div className="card flex flex-wrap items-center gap-2 px-4 py-3">
       <span className="text-[11px] font-bold text-slate-400">עמידה בקריטריונים:</span>
+      <span
+        className={`inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-[11px] font-semibold ${scoreTone(tiers)}`}
+        title="החזקים והחלשים מתחלקים בין הקבוצות. 100 = כל קבוצה קיבלה אחד מכל רמה."
+      >
+        {TIERS_META.emoji} {TIERS_META.label}
+        <span dir="ltr" className="font-mono tabular-nums">
+          {tiers}
+        </span>
+      </span>
       {active.map((b) => {
         const meta = CRITERION_META[b.id];
-        const tone =
-          b.score >= 90
-            ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-300'
-            : b.score >= 70
-              ? 'border-sky-500/30 bg-sky-500/10 text-sky-300'
-              : 'border-amber-500/30 bg-amber-500/10 text-amber-300';
+        const tone = scoreTone(b.score);
 
         return (
           <span
