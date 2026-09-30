@@ -29,7 +29,7 @@ export function PaymentsView({
   /** החלון שקופץ ברגע שהאחרון שילם */
   const [celebrate, setCelebrate] = useState(false);
 
-  // הגבייה נפתחת כששומרים קבוצות, ונשארת עד שכולם שילמו ואישרו
+  // הגבייה היא תמיד על ההגרלה האחרונה שנשמרה (App מיישר אותה לבד)
   const payDate = payments.matchDate;
   const rosterIds = payments.playerIds;
 
@@ -164,8 +164,8 @@ export function PaymentsView({
         </header>
 
         <p className="border-b border-slate-800/70 px-4 py-2 text-[10px] leading-relaxed text-slate-500">
-          הרשימה היא מי ששיחק בערב הזה. גבייה חדשה נפתחת רק אחרי שכולם שילמו ואישרתם — עד אז
-          שמירה של קבוצות חדשות לא נוגעת בה.
+          הרשימה היא מי ששיחק בהגרלה האחרונה שנשמרה. כששומרים קבוצות של ערב חדש, הגבייה עוברת
+          אליו.
         </p>
 
         <ul className="divide-y divide-slate-800/60">
@@ -224,13 +224,12 @@ export function PaymentsView({
       <ConfirmDialog
         open={confirmReset}
         title="איפוס הגבייה"
-        message="לאפס את סימוני התשלום ואת רשימת מי שצריך לשלם? הסכום יישמר."
+        message="לאפס את כל סימוני התשלום של הערב הזה? הרשימה והסכום יישמרו."
         confirmLabel="איפוס"
         onCancel={() => setConfirmReset(false)}
         onConfirm={() => {
-          // בלי תאריך: גבייה שאופסה לא "שייכת" לשום מחזור, אחרת האזהרה על
-          // גבייה ישנה הייתה קופצת ברגע שבונים את המחזור הבא
-          update({ paid: {}, playerIds: [], matchDate: '' });
+          // רק הסימונים: הרשימה נגזרת מההגרלה האחרונה, ובלעדיה הייתה חוזרת מיד
+          update({ paid: {} });
           setConfirmReset(false);
           notify('הגבייה אופסה');
         }}

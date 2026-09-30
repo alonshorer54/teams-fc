@@ -38,7 +38,7 @@ import { isCloudConfigured } from './lib/supabase';
 import { useLocalStorage } from './hooks/useLocalStorage';
 import { useAuth } from './hooks/useAuth';
 import { useSyncedStore } from './hooks/useSyncedStore';
-import { rollRoundDate, todayISO } from './lib/format';
+import { formatHebrewDate, rollRoundDate, todayISO } from './lib/format';
 import { computeHistoryStats, streakByPlayer } from './lib/stats';
 import { computePairChemistry, pairEffectMap } from './lib/pairs';
 import {
@@ -400,51 +400,74 @@ export default function App() {
     };
     setHistory((prev) => [record, ...prev]);
 
-    // הגבייה נצמדת להגרלה השמורה ולא למחזור, שמתנקה כשמסמנים תוצאה
-    const payers = setPayers(date, lineup);
-    if (payers === 'kept') {
-      return 'הקבוצות נשמרו. הגבייה הקודמת עוד פתוחה — חדשה תיפתח כשכולם ישלמו';
-    }
-    if (payers === 'awaitingConfirm') {
-      return 'הקבוצות נשמרו. כולם כבר שילמו על הערב הקודם — אשרו בלשונית "תשלומים" ושמרו שוב';
+    // הגבייה עוברת לערב הזה לבד (ראו האפקט של latestRecord). מי שלא שילם על
+    // הערב הקודם יוצא מהרשימה — אז אומרים את זה, כדי שהחוב לא ייעלם בשקט
+    const previous = isDemo ? demoPayments : settings.payments;
+    if (previous.matchDate && previous.matchDate < date) {
+      const owing = (previous.playerIds ?? [])
+        .filter((id) => !previous.paid[id])
+        .map((id) => players.find((p) => p.id === id)?.name)
+        .filter((name): name is string => !!name);
+      if (owing.length) {
+        // הודעה קופצת לא מחזיקה רשימה ארוכה — חמישה שמות, והשאר במספר
+        const shown = owing.slice(0, 5).join(', ');
+        const more = owing.length > 5 ? ` ועוד ${owing.length - 5}` : '';
+        return `הקבוצות נשמרו והגבייה עברה לערב הזה. על ${formatHebrewDate(previous.matchDate)} עוד לא שילמו: ${shown}${more}`;
+      }
     }
   };
 
+  /** ההגרלה האחרונה שנשמרה — לפי תאריך, ובאותו תאריך זו שנשמרה אחרונה */
+  const latestRecord = useMemo(
+    () =>
+      history.reduce<MatchRecord | null>(
+        (best, r) =>
+          !best || r.date > best.date || (r.date === best.date && r.savedAt > best.savedAt)
+            ? r
+            : best,
+        null,
+      ),
+    [history],
+  );
+
   /**
-   * מי משלם על הערב הזה. גבייה חדשה נפתחת רק כשאין גבייה פתוחה: עד שכולם
-   * שילמו ואישרו, שמירה של ערב אחר לא נוגעת בה. שמירה חוזרת של אותו ערב
+   * רשימת התשלום היא תמיד מי ששיחק בהגרלה האחרונה שנשמרה. ערב חדש מחליף את
+   * הגבייה מיד — גם אם מישהו עוד חייב על הקודם — ושמירה חוזרת של אותו ערב
    * (תיקון בקבוצות) מעדכנת את הרשימה ומשאירה את מי שכבר שילם.
+   *
+   * אפקט ולא קריאה מתוך השמירה: כך גם גבייה שאופסה, נמחקה או נשארה מאחור
+   * בגרסה ישנה מתיישרת לבד, בלי לשמור את הקבוצות פעם נוספת.
    */
-  const setPayers = (
-    date: string,
-    lineup: Lineup,
-  ): 'opened' | 'updated' | 'kept' | 'awaitingConfirm' | 'closed' => {
+  useEffect(() => {
+    if (!latestRecord || (!isDemo && store.status === 'loading')) return;
     const current = isDemo ? demoPayments : settings.payments;
-    const playerIds = allInLineup(lineup).filter((id) => !isFillerId(id));
-    // פתוחה = יש בה מישהו שעוד במאגר. גבייה שכל השחקנים שלה נמחקו לא מוצגת
-    // בכלל, ואסור שתחסום את הבאה
-    const inSquad = new Set(players.map((p) => p.id));
-    const roster = (current.playerIds ?? []).filter((id) => inSquad.has(id));
-    const open = roster.length > 0;
-    if (open && current.matchDate !== date) {
-      return roster.every((id) => current.paid[id]) ? 'awaitingConfirm' : 'kept';
+    // גבייה על ערב חדש יותר מכל מה שבהיסטוריה (ההגרלה שלו נמחקה) — לא נוגעים
+    if (current.matchDate > latestRecord.date) return;
+
+    const playerIds = allInLineup(recordLineup(latestRecord)).filter((id) => !isFillerId(id));
+    const sameEvening = current.matchDate === latestRecord.date;
+    // הערב הזה כבר שולם ונסגר — לא גובים ממנו שוב
+    if (sameEvening && current.playerIds?.length === 0) return;
+    const listed = current.playerIds ?? [];
+    if (
+      sameEvening &&
+      listed.length === playerIds.length &&
+      playerIds.every((id) => listed.includes(id))
+    ) {
+      return;
     }
-    // הערב הזה כבר שולם ונסגר — שמירה חוזרת שלו לא גובה מכולם שוב
-    if (current.playerIds?.length === 0 && current.matchDate === date) return 'closed';
-    const result = current.matchDate === date ? 'updated' : 'opened';
 
     // גבייה חדשה מתחילה נקייה — סימונים של ערב קודם לא עוברים אליה
-    const keep = new Set(result === 'updated' ? playerIds : []);
+    const keep = new Set(sameEvening ? playerIds : []);
     const apply = (base: PaymentRound): PaymentRound => ({
       ...base,
-      matchDate: date,
+      matchDate: latestRecord.date,
       playerIds,
       paid: Object.fromEntries(Object.entries(base.paid).filter(([id]) => keep.has(id))),
     });
     if (isDemo) setDemoPayments(apply);
     else setRealPayments(apply);
-    return result;
-  };
+  }, [latestRecord, isDemo, store.status, demoPayments, settings.payments, setRealPayments]);
 
   /**
    * מסמן תוצאה, ומיד אחריה מריץ את בדיקת הדירוגים אם המחזור הזה הוא כל שלישי.
@@ -494,10 +517,6 @@ export default function App() {
     const current = draft.lineup && lineupKey(draft.lineup);
     if (placements && record && current === lineupKey(recordLineup(record))) {
       setDraft((prev) => ({ ...emptyDraft(prev.matchDate), teamCount: prev.teamCount }));
-
-      // הגרלה שנשמרה לפני שהגבייה נצמדה להגרלות — בלי זה הגבייה הייתה מתרוקנת
-      // יחד עם המחזור. רק כשהשדה חסר לגמרי: ריק אחרי "איפוס" נשאר ריק
-      if (settings.payments.playerIds === undefined) setPayers(record.date, recordLineup(record));
     }
   };
 

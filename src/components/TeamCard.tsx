@@ -4,6 +4,9 @@ import { ALL_TEAM_IDS, TEAM_META, type Lineup, type Player, type TeamId } from '
 import { CHEMISTRY_BONUS_PER_BOND, bondStatus, type TeamStats } from '../lib/balance';
 import { RatingBadge } from './ui';
 
+/** התגית היחידה שמוצגת על השחקן בכרטיס הקבוצה — צריך לראות מיד למי יש שוער */
+const GOALKEEPER_TAG = 'שוער';
+
 export function TeamCard({
   teamId,
   playerIds,
@@ -30,6 +33,12 @@ export function TeamCard({
 }) {
   const meta = TEAM_META[teamId];
   const byId = new Map(pool.map((p) => [p.id, p]));
+  // מהחזק לחלש, ובשוויון לפי שם — כך הסדר קבוע גם אחרי החלפה ידנית
+  const ordered = [...playerIds].sort(
+    (a, b) =>
+      (byId.get(b)?.rating ?? 0) - (byId.get(a)?.rating ?? 0) ||
+      (byId.get(a)?.name ?? '').localeCompare(byId.get(b)?.name ?? '', 'he'),
+  );
   const [dropTarget, setDropTarget] = useState(false);
   const [paletteOpen, setPaletteOpen] = useState(false);
 
@@ -118,7 +127,7 @@ export function TeamCard({
           </li>
         )}
 
-        {playerIds.map((id, index) => {
+        {ordered.map((id, index) => {
           const player = byId.get(id);
           if (!player) return null;
           const bond = bondStatus(id, lineup, pool);
@@ -149,8 +158,15 @@ export function TeamCard({
               </span>
 
               <span className="min-w-0 flex-1">
-                <span className="block truncate text-sm font-semibold text-slate-100">
-                  {player.name}
+                <span className="flex min-w-0 items-center gap-1.5">
+                  <span className="truncate text-sm font-semibold text-slate-100">
+                    {player.name}
+                  </span>
+                  {player.tags.includes(GOALKEEPER_TAG) && (
+                    <span className="shrink-0 rounded bg-amber-500/15 px-1.5 text-[10px] font-semibold text-amber-200">
+                      🧤 {GOALKEEPER_TAG}
+                    </span>
+                  )}
                 </span>
                 {/* שורת החברים נשמרת גם למי שאין לו חבר בבריכה. בלי זה השורה
                     נמוכה ב-12 פיקסלים, והשחקנים בשלוש הקבוצות מפסיקים להיות
