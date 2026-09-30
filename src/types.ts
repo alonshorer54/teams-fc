@@ -104,7 +104,9 @@ export interface Player {
  * התגיות היחידות שקיימות. פעם זה היה מלל חופשי, ותגיות כמו "רץ הרבה" רק בלבלו:
  * תגית לא משנה דירוג, היא רק מפרידה בין מי שיש לו אותה.
  */
-export const PLAYER_TAGS = ['בכושר', 'לא בכושר', 'שוער'] as const;
+export const GOALKEEPER_TAG = 'שוער';
+
+export const PLAYER_TAGS = ['בכושר', 'לא בכושר', GOALKEEPER_TAG] as const;
 
 /** שתי תגיות שלא יכולות לשבת יחד על אותו שחקן */
 export const EXCLUSIVE_TAGS: readonly (readonly string[])[] = [['בכושר', 'לא בכושר']];

@@ -441,8 +441,8 @@ export default function App() {
   useEffect(() => {
     if (!latestRecord || (!isDemo && store.status === 'loading')) return;
     const current = isDemo ? demoPayments : settings.payments;
-    // גבייה על ערב חדש יותר מכל מה שבהיסטוריה (ההגרלה שלו נמחקה) — לא נוגעים
-    if (current.matchDate > latestRecord.date) return;
+    // גבייה על ערב חדש יותר מכל מה שבהיסטוריה היא של הגרלה שנמחקה — היא מוחלפת
+    // כמו כל ערב אחר שאינו האחרון
 
     const playerIds = allInLineup(recordLineup(latestRecord)).filter((id) => !isFillerId(id));
     const sameEvening = current.matchDate === latestRecord.date;

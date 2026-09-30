@@ -1,11 +1,15 @@
 import { useState } from 'react';
 import { GripVertical, Link2, Palette, Unlink, Users } from 'lucide-react';
-import { ALL_TEAM_IDS, TEAM_META, type Lineup, type Player, type TeamId } from '../types';
+import {
+  ALL_TEAM_IDS,
+  GOALKEEPER_TAG,
+  TEAM_META,
+  type Lineup,
+  type Player,
+  type TeamId,
+} from '../types';
 import { CHEMISTRY_BONUS_PER_BOND, bondStatus, type TeamStats } from '../lib/balance';
 import { RatingBadge } from './ui';
-
-/** התגית היחידה שמוצגת על השחקן בכרטיס הקבוצה — צריך לראות מיד למי יש שוער */
-const GOALKEEPER_TAG = 'שוער';
 
 export function TeamCard({
   teamId,
@@ -162,6 +166,7 @@ export function TeamCard({
                   <span className="truncate text-sm font-semibold text-slate-100">
                     {player.name}
                   </span>
+                  {/* התגית היחידה שמוצגת כאן — צריך לראות מיד לאיזו קבוצה יש שוער */}
                   {player.tags.includes(GOALKEEPER_TAG) && (
                     <span className="shrink-0 rounded bg-amber-500/15 px-1.5 text-[10px] font-semibold text-amber-200">
                       🧤 {GOALKEEPER_TAG}
