@@ -56,16 +56,19 @@ export function ConstraintsPanel({
   const broken = lineup ? active.filter((c) => !constraintMet(c, teamOf)).length : 0;
   const outside = constraints.length - active.length;
 
+  // בחירה שנשארה בתיבה אחרי שהשחקן ירד מהמחזור לא נחשבת
+  const canAdd = inPool.has(aId) && inPool.has(bId) && aId !== bId;
+
   const add = () => {
-    if (!aId || !bId || aId === bId) return;
+    if (!canAdd) return;
     const samePair = (c: DrawConstraint) =>
       (c.aId === aId && c.bId === bId) || (c.aId === bId && c.bId === aId);
     // אותו זוג פעמיים לא הגיוני — האילוץ החדש מחליף את הקודם
-    const next = [...constraints.filter((c) => !samePair(c)), { id: newConstraintId(), aId, bId, kind }];
-    onChange(next);
+    const added: DrawConstraint = { id: newConstraintId(), aId, bId, kind };
+    onChange([...constraints.filter((c) => !samePair(c)), added]);
     setAId('');
     setBId('');
-    if (lineup) notify('האילוץ ייכנס לתוקף בהגרלה הבאה');
+    if (lineup && !constraintMet(added, teamOf)) notify('האילוץ ייכנס לתוקף בהגרלה הבאה');
   };
 
   return (
@@ -143,7 +146,7 @@ export function ConstraintsPanel({
             <button
               className="btn-primary !px-3 !py-2 text-xs"
               onClick={add}
-              disabled={!aId || !bId || aId === bId}
+              disabled={!canAdd}
             >
               <Plus size={14} />
               הוספה
@@ -171,7 +174,7 @@ export function ConstraintsPanel({
                     <Icon size={13} className="shrink-0 text-violet-300" />
                     <span className="min-w-0 flex-1 truncate">
                       {nameOf.get(c.aId) ?? '?'} · {nameOf.get(c.bId) ?? '?'}
-                      <span className="mr-1.5 opacity-70">{KIND[c.kind].short}</span>
+                      <span className="ms-1.5 opacity-70">{KIND[c.kind].short}</span>
                     </span>
                     {!playing && <span className="shrink-0 text-[10px]">לא משחק</span>}
                     {met === true && <Check size={14} className="shrink-0 text-emerald-400" />}

@@ -188,9 +188,15 @@ function tiersOf(profiles: Float64Array[], sum: number, ratingOf: Map<string, nu
   const width = profiles.length;
   let count = 0;
   for (const p of profiles) count += p.length;
-  // הסכום נבדק גם הוא: הרכב עם שחקנים אחרים באותה כמות לא יקבל שכבות של אחר
+  // הסכום נבדק גם הוא: הרכב עם שחקנים אחרים באותה כמות לא יקבל שכבות של אחר.
+  // בסובלנות, כי אותם דירוגים בסדר חיבור אחר נבדלים בספרה האחרונה
   const cached = tiersCache.get(ratingOf);
-  if (cached && cached.width === width && cached.count === count && cached.sum === sum) {
+  if (
+    cached &&
+    cached.width === width &&
+    cached.count === count &&
+    Math.abs(cached.sum - sum) < 1e-6
+  ) {
     return cached.tiers;
   }
 
