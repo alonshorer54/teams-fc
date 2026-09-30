@@ -16,6 +16,7 @@ import {
   criterionPenalties,
   tiersPenalty,
   relationCounts,
+  weighPenalties,
   weightedPenalty,
   type CriterionSetting,
   type PenaltyInput,
@@ -296,15 +297,17 @@ function cost(
   priorities: CriterionSetting[],
   constraints: DrawConstraint[],
 ): number {
-  let sizePenalty = 0;
-  for (const t of teamIds) sizePenalty += Math.abs(membersOf(lineup, t).length - (sizes[t] ?? 0));
+  let sizeOff = 0;
+  for (const t of teamIds) sizeOff += Math.abs(membersOf(lineup, t).length - (sizes[t] ?? 0));
 
   return (
     weightedPenalty({ ...input, lineup }, priorities) +
-    sizePenalty * W_SIZE +
-    brokenConstraints(lineup, constraints) * W_CONSTRAINT
+    hardPenalty(sizeOff, brokenConstraints(lineup, constraints))
   );
 }
+
+/** מה שאסור לחלוקה לוותר עליו: גודל הקבוצות והאילוצים של השבוע. */
+const hardPenalty = (sizeOff: number, broken: number) => sizeOff * W_SIZE + broken * W_CONSTRAINT;
 
 /* ------------------------------------------------------------------ */
 /*  שלב 1: בנייה חמדנית עם רעש אקראי                                    */
@@ -673,13 +676,18 @@ export function generateLineup(pool: Player[], options: GenerateOptions): Lineup
     const known = found.get(key);
     if (known) return known;
 
+    // כל רכיב מחושב פעם אחת, והעלות נבנית מהם — כמו ב-cost, בלי לחשב שוב
+    const penalties = criterionPenalties({ ...input, lineup }, priorities);
+    const tiers = tiersPenalty({ ...input, lineup });
+    const sizeOff = sizeOffOf(lineup);
+    const broken = brokenConstraints(lineup, constraints);
     const candidate: Candidate = {
       lineup,
-      cost: cost(lineup, input, sizes, teamIds, priorities, constraints),
-      penalties: criterionPenalties({ ...input, lineup }, priorities),
-      tiers: tiersPenalty({ ...input, lineup }),
-      sizeOff: sizeOffOf(lineup),
-      broken: brokenConstraints(lineup, constraints),
+      cost: weighPenalties(tiers, penalties) + hardPenalty(sizeOff, broken),
+      penalties,
+      tiers,
+      sizeOff,
+      broken,
     };
     found.set(key, candidate);
     if (!best || candidate.cost < best.cost) best = candidate;

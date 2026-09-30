@@ -2,7 +2,7 @@ import { useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { AlertTriangle, ArrowLeft, CheckCircle2, Undo2, X } from 'lucide-react';
 import { TEAM_META } from '../types';
-import { CRITERION_META } from '../lib/criteria';
+import { scoreMeta } from '../lib/criteria';
 import type { LineupDiff } from '../lib/diff';
 
 /**
@@ -122,7 +122,7 @@ export function ChangePopup({
                         : 'border-emerald-500/30 bg-emerald-500/10 text-emerald-200'
                     }`}
                   >
-                    {CRITERION_META[c.id].emoji} {CRITERION_META[c.id].label}
+                    {scoreMeta(c.id).emoji} {scoreMeta(c.id).label}
                     <span dir="ltr" className="font-mono tabular-nums">
                       {c.before} → {c.after}
                     </span>

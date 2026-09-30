@@ -1,6 +1,6 @@
 import { AlertTriangle, ArrowLeft, CheckCircle2, RotateCcw } from 'lucide-react';
 import { TEAM_META } from '../types';
-import { CRITERION_META } from '../lib/criteria';
+import { scoreMeta } from '../lib/criteria';
 import type { LineupDiff } from '../lib/diff';
 
 /**
@@ -102,7 +102,7 @@ export function ChangeReport({ diff, onRevert }: { diff: LineupDiff; onRevert: (
             <p className="mb-1.5 text-[11px] font-bold text-slate-400">ציוני הקריטריונים</p>
             <ul className="flex flex-wrap gap-1.5">
               {[...worsened, ...improved].map((c) => {
-                const meta = CRITERION_META[c.id];
+                const meta = scoreMeta(c.id);
                 const down = c.delta < 0;
                 return (
                   <li

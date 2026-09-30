@@ -158,7 +158,17 @@ const TIERS_RANK = 1;
 /** כמה חלופה מגוונת מותר לה להיות פחות מפוזרת מהטובה ביותר (ראו VARIETY_TOLERANCE) */
 export const TIERS_VARIETY_FLEX = 0.5;
 
-export const TIERS_META = { label: 'פיזור רמות', emoji: '📶' };
+export const TIERS_META = {
+  label: 'פיזור רמות',
+  emoji: '📶',
+  help: 'החזקים והחלשים מתחלקים בין הקבוצות. 100 = כל קבוצה קיבלה אחד מכל רמה.',
+};
+
+/** ציון שמוצג לצד הקריטריונים: אחד מהם, או פיזור הרמות שתמיד פעיל */
+export type ScoreId = CriterionId | 'tiers';
+
+export const scoreMeta = (id: ScoreId): { label: string; emoji: string; help: string } =>
+  id === 'tiers' ? TIERS_META : CRITERION_META[id];
 
 /**
  * סטייה ממוצעת לשחקן, בנקודות דירוג, שנחשבת קנס מלא בפיזור הרמות.
@@ -347,11 +357,17 @@ const PENALTY_FN: Record<CriterionId, (input: PenaltyInput) => number> = {
 
 /** קנס כולל משוקלל לפי סדר העדיפויות. ככל שנמוך יותר — החלוקה טובה יותר. */
 export function weightedPenalty(input: PenaltyInput, priorities: CriterionSetting[]): number {
-  let total = tiersPenalty(input) * priorityWeight(TIERS_RANK);
-  priorities.forEach((setting, rank) => {
-    if (!setting.enabled) return;
-    const slot = rank < TIERS_RANK ? rank : rank + 1;
-    total += PENALTY_FN[setting.id](input) * priorityWeight(slot);
+  return weighPenalties(tiersPenalty(input), criterionPenalties(input, priorities));
+}
+
+/**
+ * השקלול עצמו, מקנסות שכבר חושבו — למי שצריך גם את הקנסות בנפרד ולא רוצה
+ * לחשב אותם פעמיים. `penalties` מיושר מול סדר העדיפויות, כמו ב-criterionPenalties.
+ */
+export function weighPenalties(tiers: number, penalties: number[]): number {
+  let total = tiers * priorityWeight(TIERS_RANK);
+  penalties.forEach((penalty, rank) => {
+    total += penalty * priorityWeight(rank < TIERS_RANK ? rank : rank + 1);
   });
   return total;
 }

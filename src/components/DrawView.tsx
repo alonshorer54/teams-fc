@@ -183,9 +183,9 @@ export function DrawView({
   const diff = useMemo(
     () =>
       lineup && baseline
-        ? compareLineups(baseline, lineup, pool, activeEffects, priorities)
+        ? compareLineups(baseline, lineup, pool, activeEffects, priorities, constraints)
         : null,
-    [lineup, baseline, pool, activeEffects, priorities],
+    [lineup, baseline, pool, activeEffects, priorities, constraints],
   );
 
   const unavailable = useMemo(() => {
@@ -223,7 +223,7 @@ export function DrawView({
    */
   const applyChange = (next: Lineup) => {
     if (!lineup) return;
-    const immediate = compareLineups(lineup, next, pool, activeEffects, priorities);
+    const immediate = compareLineups(lineup, next, pool, activeEffects, priorities, constraints);
     setLineup(next);
     setSelectedPlayer(null);
     if (immediate.changed) {
@@ -612,7 +612,7 @@ function CriteriaScores({
       <span className="text-[11px] font-bold text-slate-400">עמידה בקריטריונים:</span>
       <span
         className={`inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-[11px] font-semibold ${scoreTone(tiers)}`}
-        title="החזקים והחלשים מתחלקים בין הקבוצות. 100 = כל קבוצה קיבלה אחד מכל רמה."
+        title={TIERS_META.help}
       >
         {TIERS_META.emoji} {TIERS_META.label}
         <span dir="ltr" className="font-mono tabular-nums">

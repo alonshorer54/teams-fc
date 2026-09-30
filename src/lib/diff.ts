@@ -2,12 +2,18 @@ import {
   TEAM_META,
   lineupTeams,
   membersOf,
+  type DrawConstraint,
   type Lineup,
   type Player,
   type TeamId,
 } from '../types';
-import { describeBonds } from './balance';
-import { penaltyBreakdown, type CriterionSetting, type CriterionId } from './criteria';
+import { constraintMet, describeBonds } from './balance';
+import {
+  penaltyBreakdown,
+  tiersPenalty,
+  type CriterionSetting,
+  type ScoreId,
+} from './criteria';
 
 export interface MovedPlayer {
   id: string;
@@ -23,7 +29,7 @@ export interface LineupIssue {
 }
 
 export interface CriterionDelta {
-  id: CriterionId;
+  id: ScoreId;
   before: number;
   after: number;
   delta: number;
@@ -53,6 +59,8 @@ export function compareLineups(
   pool: Player[],
   pairEffects: Map<string, number>,
   priorities: CriterionSetting[],
+  /** אילוצי השבוע — אילוץ שעריכה ידנית הפרה הוא הבעיה הראשונה שמדווחת */
+  constraints: DrawConstraint[] = [],
 ): LineupDiff {
   const byId = new Map(pool.map((p) => [p.id, p]));
   const ratingOf = new Map(pool.map((p) => [p.id, p.rating]));
@@ -75,18 +83,54 @@ export function compareLineups(
     );
   const before = scoreOf(baseline);
   const after = scoreOf(current);
+  const tiersScore = (lineup: Lineup) =>
+    Math.round((1 - tiersPenalty({ lineup, pool, ratingOf, pairEffects })) * 100);
 
-  const criteria: CriterionDelta[] = priorities
-    .filter((p) => p.enabled)
-    .map((p) => ({
-      id: p.id,
-      before: before.get(p.id) ?? 0,
-      after: after.get(p.id) ?? 0,
-      delta: (after.get(p.id) ?? 0) - (before.get(p.id) ?? 0),
-    }));
+  // פיזור הרמות תמיד פעיל, ולכן תמיד נמדד — ובא ראשון, כמו בשורת הציונים
+  const tiersBefore = tiersScore(baseline);
+  const tiersAfter = tiersScore(current);
+  const criteria: CriterionDelta[] = [
+    { id: 'tiers', before: tiersBefore, after: tiersAfter, delta: tiersAfter - tiersBefore },
+    ...priorities
+      .filter((p) => p.enabled)
+      .map((p) => ({
+        id: p.id,
+        before: before.get(p.id) ?? 0,
+        after: after.get(p.id) ?? 0,
+        delta: (after.get(p.id) ?? 0) - (before.get(p.id) ?? 0),
+      })),
+  ];
+
+  const issues: LineupIssue[] = [];
+
+  /* אילוצי השבוע */
+  const teamMapOf = (lineup: Lineup) => {
+    const map = new Map<string, TeamId>();
+    for (const t of lineupTeams(lineup)) for (const id of membersOf(lineup, t)) map.set(id, t);
+    return map;
+  };
+  const teamsBefore = teamMapOf(baseline);
+  const teamsAfter = teamMapOf(current);
+  for (const c of constraints) {
+    const a = byId.get(c.aId)?.name;
+    const b = byId.get(c.bId)?.name;
+    if (!a || !b) continue;
+    const was = constraintMet(c, teamsBefore);
+    const now = constraintMet(c, teamsAfter);
+    if (was && !now) {
+      issues.push({
+        kind: 'warn',
+        text:
+          c.kind === 'together'
+            ? `${a} ו${b} חייבים לשחק יחד השבוע — והופרדו`
+            : `${a} ו${b} חייבים להיות בנפרד השבוע — ועכשיו הם באותה קבוצה`,
+      });
+    } else if (!was && now) {
+      issues.push({ kind: 'good', text: `האילוץ על ${a} ו${b} מתקיים עכשיו` });
+    }
+  }
 
   /* קשרים שנשברו או תוקנו */
-  const issues: LineupIssue[] = [];
 
   const satisfied = (lineup: Lineup) => {
     const map = new Map<string, boolean>();
