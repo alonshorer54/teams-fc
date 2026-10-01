@@ -265,7 +265,7 @@ function PairEmptyState({ report }: { report: ReturnType<typeof computePairChemi
         )}
       </p>
 
-      <p>אף זוג עוד לא שיחק יחד {MIN_GAMES_TOGETHER} ערבים.</p>
+      <p>אף זוג עוד לא צבר {MIN_GAMES_TOGETHER} ערבים יחד (ערב שקול נספר כחצי).</p>
     </div>
   );
 }

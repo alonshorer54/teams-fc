@@ -39,11 +39,11 @@ export interface PairStat {
   wins: number;
   losses: number;
   draws: number;
-  /** אחוז הניצחון מתוך הערבים שהוכרעו */
+  /** אחוז הניצחון, כשערב שקול נספר כחצי ערב שיצא בדיוק כצפוי */
   winRate: number;
   /** אחוז הניצחון שהיה צפוי לפי הביצועים האישיים שלהם */
   expected: number;
-  /** כמה הם מוסיפים אחד לשני — winRate פחות expected, מדולל בערבים השקולים */
+  /** winRate פחות expected — כמה הם מוסיפים אחד לשני */
   effect: number;
   confidence: 'low' | 'medium' | 'high';
 }
@@ -178,6 +178,8 @@ export function computePairChemistry(history: MatchRecord[]): PairReport {
     }
 
     const expected = (soloRate(entry.a) + soloRate(entry.b)) / 2;
+    // ערב שקול נחשב כאילו יצא בדיוק כצפוי, אז הוא מדלל את האפקט ולא יוצר אותו
+    const winRate = (entry.wins + entry.draws * DRAW_WEIGHT * expected) / counted;
 
     stats.push({
       aId: entry.a,
@@ -189,10 +191,9 @@ export function computePairChemistry(history: MatchRecord[]): PairReport {
       wins: entry.wins,
       losses: entry.losses,
       draws: entry.draws,
-      winRate: decisiveRate(entry.wins, entry.losses),
+      winRate,
       expected,
-      // ערב שקול נחשב כאילו יצא בדיוק כצפוי, אז הוא נכנס רק למכנה
-      effect: (entry.wins - expected * decisive) / counted,
+      effect: winRate - expected,
       confidence: confidenceOf(counted),
     });
   }

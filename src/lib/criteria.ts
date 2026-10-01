@@ -357,21 +357,28 @@ export function misplacedPositions(lineup: Lineup, pool: Player[]): number {
   if (active.length < 2) return 0;
   const positionOf = positionsOf(pool);
 
+  // ספירה אחת לכל קבוצה: counts[team][position]
+  const counts = active.map((t) => {
+    const byPosition: Partial<Record<Position, number>> = {};
+    for (const id of membersOf(lineup, t)) {
+      const position = positionOf.get(id);
+      if (position) byPosition[position] = (byPosition[position] ?? 0) + 1;
+    }
+    return byPosition;
+  });
+
   let misplaced = 0;
   for (const position of SPREAD_POSITIONS) {
-    const counts = active.map((t) => {
-      let n = 0;
-      for (const id of membersOf(lineup, t)) if (positionOf.get(id) === position) n++;
-      return n;
-    });
-    const holders = counts.reduce((s, c) => s + c, 0);
+    let holders = 0;
+    for (const team of counts) holders += team[position] ?? 0;
     if (!holders) continue;
 
     const low = Math.floor(holders / active.length);
     const high = Math.ceil(holders / active.length);
     let over = 0;
     let under = 0;
-    for (const c of counts) {
+    for (const team of counts) {
+      const c = team[position] ?? 0;
       over += Math.max(0, c - high);
       under += Math.max(0, low - c);
     }

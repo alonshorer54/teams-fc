@@ -172,11 +172,10 @@ export default function App() {
   const players = demoPlayers ?? migratedPlayers;
   // שמות לפי המאגר של היום — רק השמות, כדי ששינוי דירוג לא יבנה את ההיסטוריה מחדש
   const namesKey = JSON.stringify(players.map((p) => [p.id, p.name]));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const names = useMemo(() => players.map((p) => ({ id: p.id, name: p.name })), [namesKey]);
   const rawHistory = isDemo ? demoHistory : realHistory;
-  const history = useMemo(() => {
-    const names = (JSON.parse(namesKey) as [string, string][]).map(([id, name]) => ({ id, name }));
-    return withCurrentNames(rawHistory, names);
-  }, [rawHistory, namesKey]);
+  const history = useMemo(() => withCurrentNames(rawHistory, names), [rawHistory, names]);
   const setHistory = isDemo ? setDemoHistory : setRealHistory;
   const draft = isDemo ? demoDraft : realDraft;
   const setDraft = isDemo ? setDemoDraft : setRealDraft;
