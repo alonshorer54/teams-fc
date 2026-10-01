@@ -175,9 +175,9 @@ export function computeStats(
       Position,
       number
     >;
+    // שחקן של כמה עמדות נספר בכל אחת מהן: "3 הגנה" = שלושה שיכולים לשחק בהגנה
     for (const id of members) {
-      const position = byId.get(id)?.position;
-      if (position) positionCounts[position]++;
+      for (const position of byId.get(id)?.positions ?? []) positionCounts[position]++;
     }
 
     teams[t] = {

@@ -333,13 +333,22 @@ function affinityPenalty({ lineup, pool }: PenaltyInput): number {
   return total ? violated / total : 0;
 }
 
-/** העמדה של כל שחקן — מחושב פעם אחת לבריכה, כי הקנס נקרא מהלולאה הפנימית */
-const positionCache = new WeakMap<Player[], Map<string, Position>>();
+/**
+ * כמה כל שחקן שווה בכל עמדה: שחקן של עמדה אחת שווה 1 בה, ושחקן של הגנה וקישור
+ * שווה חצי בכל אחת. כך שני שחקנים כאלה באותה קבוצה הם שחקן הגנה ושחקן קישור.
+ * מחושב פעם אחת לבריכה, כי הקנס נקרא מהלולאה הפנימית.
+ */
+const positionCache = new WeakMap<Player[], Map<string, [Position, number][]>>();
 
-const positionsOf = (pool: Player[]): Map<string, Position> => {
+const positionsOf = (pool: Player[]): Map<string, [Position, number][]> => {
   let map = positionCache.get(pool);
   if (!map) {
-    map = new Map(pool.map((p) => [p.id, p.position]));
+    map = new Map(
+      pool.map((p) => {
+        const spread = p.positions.filter((pos) => pos !== 'any');
+        return [p.id, spread.map((pos) => [pos, 1 / spread.length] as [Position, number])];
+      }),
+    );
     positionCache.set(pool, map);
   }
   return map;
@@ -361,8 +370,9 @@ export function misplacedPositions(lineup: Lineup, pool: Player[]): number {
   const counts = active.map((t) => {
     const byPosition: Partial<Record<Position, number>> = {};
     for (const id of membersOf(lineup, t)) {
-      const position = positionOf.get(id);
-      if (position) byPosition[position] = (byPosition[position] ?? 0) + 1;
+      for (const [position, share] of positionOf.get(id) ?? []) {
+        byPosition[position] = (byPosition[position] ?? 0) + share;
+      }
     }
     return byPosition;
   });

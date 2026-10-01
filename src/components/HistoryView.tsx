@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
 import {
+  AlertTriangle,
   CalendarDays,
   ChevronDown,
   Copy,
@@ -15,6 +16,7 @@ import {
 import {
   TEAM_META,
   describePlacements,
+  impossibleResult,
   isFillerId,
   placementMeta,
   recordPlacements,
@@ -33,7 +35,7 @@ import {
   computeGauges,
   roundsUntilCheck,
 } from '../lib/ratingDrift';
-import { ConfirmDialog, EmptyState } from './ui';
+import { ConfirmDialog, EmptyState, Modal } from './ui';
 
 export function HistoryView({
   history,
@@ -336,11 +338,16 @@ function ResultPicker({
   const places = Array.from({ length: count }, (_, i) => i + 1);
   /** "כולן באמצע" — נקודת הפתיחה כשעוד לא נקבעה תוצאה */
   const middle = Math.max(1, Math.ceil(count / 2));
+  const [mistake, setMistake] = useState<'won' | 'lost' | null>(null);
 
   const setPlace = (team: TeamId, place: Placement) => {
     const base: Placements =
       value ?? (Object.fromEntries(teams.map((t) => [t, middle])) as Placements);
-    onChange({ ...base, [team]: place });
+    const next = { ...base, [team]: place };
+    // סימון שלא יכול לקרות לא נשמר בכלל — אחרת הוא נכנס לסטטיסטיקות ולתיקון הדירוגים
+    const impossible = impossibleResult(next, teams);
+    if (impossible) return setMistake(impossible);
+    onChange(next);
   };
 
   return (
@@ -399,6 +406,22 @@ function ResultPicker({
           ניקוי התוצאה
         </button>
       )}
+
+      <Modal
+        open={!!mistake}
+        onClose={() => setMistake(null)}
+        title="טעות בסימון"
+        icon={<AlertTriangle size={20} className="text-rose-400" />}
+        maxWidth="max-w-sm"
+      >
+        <p className="text-sm leading-relaxed text-slate-300">
+          {mistake === 'won' ? 'כל הקבוצות סומנו שניצחו' : 'כל הקבוצות סומנו שהפסידו'} — זה לא
+          יכול לקרות. אם כולן היו שקולות, סמנו את כולן "באמצע". הסימון האחרון לא נשמר.
+        </p>
+        <button className="btn-primary mt-5 w-full" onClick={() => setMistake(null)}>
+          הבנתי
+        </button>
+      </Modal>
     </div>
   );
 }

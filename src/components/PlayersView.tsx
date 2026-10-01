@@ -147,7 +147,7 @@ export function PlayersView({
                 <div className="min-w-0 flex-1 space-y-0.5">
                   <p className="flex items-center gap-1.5 truncate font-semibold text-slate-100">
                     <span className="truncate">{p.name}</span>
-                    <PositionChip position={p.position} />
+                    <PositionChip positions={p.positions} />
                     {p.isManager && (
                       <ShieldCheck size={13} className="shrink-0 text-amber-400" aria-label="מנהל קבוצה" />
                     )}

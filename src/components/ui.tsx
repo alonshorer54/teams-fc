@@ -136,16 +136,20 @@ export function EmptyState({
 
 /* ------------------------------ עמדה ------------------------------ */
 
-/** "כללי" באפור: הוא ברירת המחדל, וצריך לראות שיש עמדה בלי שזה יתחרה בעמדות האמיתיות */
-export function PositionChip({ position }: { position: Position }) {
-  const { emoji, label } = POSITION_META[position];
+/**
+ * "כללי" באפור: הוא ברירת המחדל, וצריך לראות שיש עמדה בלי שזה יתחרה בעמדות
+ * האמיתיות. כמה עמדות יושבות בתווית אחת — "🛡️🔄 הגנה/קישור" — כדי שהשם לא ייחנק.
+ */
+export function PositionChip({ positions }: { positions: Position[] }) {
+  const general = positions.includes('any');
   return (
     <span
       className={`shrink-0 rounded px-1.5 text-[10px] font-semibold ${
-        position === 'any' ? 'bg-slate-700/40 text-slate-400' : 'bg-amber-500/15 text-amber-200'
+        general ? 'bg-slate-700/40 text-slate-400' : 'bg-amber-500/15 text-amber-200'
       }`}
     >
-      {emoji} {label}
+      {positions.map((p) => POSITION_META[p].emoji).join('')}{' '}
+      {positions.map((p) => POSITION_META[p].label).join('/')}
     </span>
   );
 }

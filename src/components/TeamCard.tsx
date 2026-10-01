@@ -167,7 +167,7 @@ export function TeamCard({
                   <span className="truncate text-sm font-semibold text-slate-100">
                     {player.name}
                   </span>
-                  <PositionChip position={player.position} />
+                  <PositionChip positions={player.positions} />
                 </span>
                 {/* שורת החברים נשמרת גם למי שאין לו חבר בבריכה. בלי זה השורה
                     נמוכה ב-12 פיקסלים, והשחקנים בשלוש הקבוצות מפסיקים להיות

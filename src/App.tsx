@@ -94,7 +94,7 @@ function buildDemoPlayers(): Player[] {
       friendIds: p.friendOfIndex != null ? [ids[p.friendOfIndex]] : [],
       loveIds: p.loveIndex != null ? [ids[p.loveIndex]] : [],
       hateIds: p.hateIndex != null ? [ids[p.hateIndex]] : [],
-      position: p.position ?? 'any',
+      positions: p.positions ?? ['any'],
     })),
   );
 }
@@ -315,7 +315,7 @@ export default function App() {
       friendIds: [],
       loveIds: [],
       hateIds: [],
-      position: 'any',
+      positions: ['any'],
     }));
     applyToPlayers((prev) => [...prev, ...fresh]);
     notify(

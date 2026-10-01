@@ -10,8 +10,8 @@ installable on a phone, and synced between devices.
 
 ## What it does
 
-- **Squad** — players with a 1–5 rating, friendships, "prefers with / without", and a position
-  (goalkeeper, defence, midfield, attack, or general).
+- **Squad** — players with a 1–5 rating, friendships, "prefers with / without", and one or more
+  positions (goalkeeper, defence, midfield, attack, or general).
 - **Draw** — splits whoever showed up into 2 or 3 balanced teams. Team colours can be
   swapped after the draw, and an incomplete squad can be topped up with one-off
   "filler" players so the teams still come out even.
@@ -93,7 +93,7 @@ Five criteria are scored, each normalised to 0..1 so the weights stay comparable
 | Criterion | What it measures |
 | --- | --- |
 | `rating` | Average rating gap between teams |
-| `positions` | How many players would have to move for every position to be spread evenly |
+| `positions` | How many players would have to move for every position to be spread evenly (a two-position player counts half in each) |
 | `friends` | How many friend pairs were split up |
 | `gameChemistry` | Spread of learned pair effects across teams |
 | `affinity` | How many "prefers with / without" requests were violated |

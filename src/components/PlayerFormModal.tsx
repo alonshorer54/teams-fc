@@ -8,7 +8,7 @@ import {
   UserPen,
   UserPlus,
 } from 'lucide-react';
-import { POSITIONS, POSITION_META, type Player, type Position } from '../types';
+import { POSITIONS, POSITION_META, cleanPositions, type Player, type Position } from '../types';
 import { Modal } from './ui';
 
 export interface PlayerDraft {
@@ -17,7 +17,7 @@ export interface PlayerDraft {
   friendIds: string[];
   loveIds: string[];
   hateIds: string[];
-  position: Position;
+  positions: Position[];
   isManager: boolean;
 }
 
@@ -42,7 +42,7 @@ export function PlayerFormModal({
   const [friendIds, setFriendIds] = useState<string[]>([]);
   const [loveIds, setLoveIds] = useState<string[]>([]);
   const [hateIds, setHateIds] = useState<string[]>([]);
-  const [position, setPosition] = useState<Position>('any');
+  const [positions, setPositions] = useState<Position[]>(['any']);
   const [isManager, setIsManager] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -53,7 +53,7 @@ export function PlayerFormModal({
     setFriendIds(editing?.friendIds ?? []);
     setLoveIds(editing?.loveIds ?? []);
     setHateIds(editing?.hateIds ?? []);
-    setPosition(editing?.position ?? 'any');
+    setPositions(editing?.positions ?? ['any']);
     setIsManager(editing?.isManager ?? false);
     setError(null);
   }, [open, editing]);
@@ -80,7 +80,7 @@ export function PlayerFormModal({
       // חברות גוברת על השתיים; ובין אהבה לשנאה — השנאה גוברת
       loveIds: loveIds.filter((id) => !hateIds.includes(id) && !friendIds.includes(id)),
       hateIds: hateIds.filter((id) => !friendIds.includes(id)),
-      position,
+      positions,
       isManager,
     });
   };
@@ -145,7 +145,7 @@ export function PlayerFormModal({
           </div>
         </div>
 
-        <PositionPicker value={position} onChange={setPosition} />
+        <PositionPicker value={positions} onChange={setPositions} />
 
         <PlayerMultiSelect
           label="חברים"
@@ -310,28 +310,33 @@ function PositionPicker({
   value,
   onChange,
 }: {
-  value: Position;
-  onChange: (next: Position) => void;
+  value: Position[];
+  onChange: (next: Position[]) => void;
 }) {
+  // "כללי" מנקה את השאר; עמדה אחרת מורידה את "כללי"; ומי שנשאר בלי כלום חוזר ל"כללי"
+  const toggle = (pos: Position) => {
+    if (pos === 'any') return onChange(['any']);
+    onChange(cleanPositions(value.includes(pos) ? value.filter((p) => p !== pos) : [...value, pos]));
+  };
+
   return (
     <div>
       <p className="label">
         <span className="inline-flex items-center gap-1.5">
           <MapPin size={13} className="text-amber-400" />
-          עמדה
+          עמדות
         </span>
       </p>
 
-      <div className="flex flex-wrap gap-1.5" role="radiogroup" aria-label="עמדה">
+      <div className="flex flex-wrap gap-1.5" role="group" aria-label="עמדות">
         {POSITIONS.map((pos) => {
-          const on = value === pos;
+          const on = value.includes(pos);
           return (
             <button
               key={pos}
               type="button"
-              role="radio"
-              aria-checked={on}
-              onClick={() => onChange(pos)}
+              aria-pressed={on}
+              onClick={() => toggle(pos)}
               className={`rounded-lg border px-3 py-1.5 text-xs font-semibold transition ${
                 on
                   ? 'border-amber-500/50 bg-amber-500/20 text-amber-200'
@@ -345,7 +350,8 @@ function PositionPicker({
       </div>
 
       <p className="mt-2 text-[11px] leading-relaxed text-slate-500">
-        ההגרלה מפזרת כל עמדה שווה בין הקבוצות. "כללי" = משחק איפה שצריך, ולא נספר בפיזור.
+        אפשר לסמן כמה עמדות. ההגרלה מפזרת כל עמדה שווה בין הקבוצות, ושחקן של שתי עמדות נספר
+        חצי בכל אחת. "כללי" = משחק איפה שצריך, ולא נספר בפיזור.
       </p>
     </div>
   );

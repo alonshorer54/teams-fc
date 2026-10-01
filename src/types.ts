@@ -56,6 +56,23 @@ export function placementMeta(place: Placement, teamCount: number): {
 }
 
 /**
+ * סימון שלא יכול לקרות: כל הקבוצות ניצחו, או כל הקבוצות הפסידו. מישהו תמיד
+ * מסיים מעל מישהו אחר — אם כולן באותו מקום, זה ערב שקול וכולן באמצע.
+ *
+ * רק מ-3 קבוצות: בשתיים אין "באמצע", ושתיהן באותו מקום היא הדרך היחידה לסמן תיקו.
+ */
+export function impossibleResult(
+  placements: Placements,
+  teams: readonly TeamId[],
+): 'won' | 'lost' | null {
+  if (teams.length < 3) return null;
+  const places = new Set(teams.map((t) => placements[t] ?? teams.length));
+  if (places.size !== 1) return null;
+  const [place] = places;
+  return place <= 1 ? 'won' : place >= teams.length ? 'lost' : null;
+}
+
+/**
  * תיאור הערב, מכל הדירוג ולא רק מהמקום הראשון — ביטוי לכל מקום.
  *
  * "שקול" נכון רק כשכל הקבוצות באותו מקום. כששתיים חולקות מקום והשלישית מעליהן
@@ -64,6 +81,7 @@ export function placementMeta(place: Placement, teamCount: number): {
  * לגמרי מ"לבן ניצחו · שחור וצבעוני הפסידו".
  */
 export function describePlacements(placements: Placements, teams: readonly TeamId[]): string[] {
+  if (impossibleResult(placements, teams)) return ['⚠️ טעות בסימון'];
   const places = [...new Set(teams.map((t) => placements[t] ?? teams.length))].sort((a, b) => a - b);
   if (places.length <= 1) return ['ערב שקול'];
 
@@ -115,8 +133,11 @@ export interface Player {
   loveIds: string[];
   /** מעדיף להיות בלעדיהם */
   hateIds: string[];
-  /** העמדה במגרש — ההגרלה מפזרת כל עמדה שווה בין הקבוצות */
-  position: Position;
+  /**
+   * העמדות במגרש, אחת או יותר — ההגרלה מפזרת כל עמדה שווה בין הקבוצות.
+   * אף פעם לא ריק: מי שלא סומן הוא ['any'], ו"כללי" לא יושב לצד עמדה אחרת.
+   */
+  positions: Position[];
   /** מנהל הקבוצה — מי שסוגר את המגרש ואוסף את הכסף */
   isManager?: boolean;
   /** @deprecated שדה ישן מגרסה קודמת — מומר ל-friendIds בטעינה */
@@ -125,6 +146,8 @@ export interface Player {
   notes?: string;
   /** @deprecated התגיות הוחלפו בעמדה; "שוער" הופך לעמדת שוער בטעינה */
   tags?: string[];
+  /** @deprecated עמדה יחידה, מלפני שאפשר היה לסמן כמה — הופכת ל-positions בטעינה */
+  position?: Position;
 }
 
 /**
@@ -148,6 +171,15 @@ export const POSITION_META: Record<Position, { label: string; emoji: string }> =
 
 const isPosition = (value: unknown): value is Position =>
   (POSITIONS as readonly unknown[]).includes(value);
+
+/**
+ * רשימת עמדות תקינה: בלי כפילויות, לפי הסדר הקבוע, ו"כללי" רק כשאין שום עמדה
+ * אחרת — שחקן שסומן גם הגנה וגם כללי הוא פשוט שחקן הגנה.
+ */
+export function cleanPositions(raw: unknown[]): Position[] {
+  const specific = POSITIONS.filter((p) => p !== 'any' && raw.includes(p));
+  return specific.length ? specific : ['any'];
+}
 
 /* --------------------------- שחקן משלים --------------------------- */
 
@@ -197,7 +229,7 @@ export const fillerAsPlayer = (filler: Filler): Player => ({
   friendIds: [],
   loveIds: [],
   hateIds: [],
-  position: 'any',
+  positions: ['any'],
 });
 
 /**
@@ -210,13 +242,15 @@ export function normalizePlayers(raw: Player[]): Player[] {
     friendIds: [...new Set(p.friendIds ?? (p.friendOf ? [p.friendOf] : []))],
     loveIds: [...new Set(p.loveIds ?? [])],
     hateIds: [...new Set(p.hateIds ?? [])],
-    // התגיות הוחלפו בעמדות. התגית היחידה שאומרת משהו על עמדה היא "שוער" — גם
+    // מהחדש לישן: רשימת עמדות, עמדה יחידה מהגרסה הקודמת, ותגית "שוער" — גם
     // כשהגיעה מהערה ישנה; "בכושר" ו"לא בכושר" פשוט נעלמות
-    position: isPosition(p.position)
-      ? p.position
-      : [...(p.tags ?? []), p.notes?.trim()].includes('שוער')
-        ? ('gk' as const)
-        : ('any' as const),
+    positions: Array.isArray(p.positions)
+      ? cleanPositions(p.positions)
+      : isPosition(p.position)
+        ? cleanPositions([p.position])
+        : [...(p.tags ?? []), p.notes?.trim()].includes('שוער')
+          ? (['gk'] as Position[])
+          : (['any'] as Position[]),
   }));
 
   const byId = new Map(players.map((p) => [p.id, p]));
@@ -244,6 +278,7 @@ export function normalizePlayers(raw: Player[]): Player[] {
     delete p.friendOf;
     delete p.notes;
     delete p.tags;
+    delete p.position;
   }
   return players;
 }

@@ -22,28 +22,28 @@ export const DEMO_PLAYERS: {
   friendOfIndex?: number;
   loveIndex?: number;
   hateIndex?: number;
-  position?: Position;
+  positions?: Position[];
 }[] = [
-  { name: 'איתי לוי', rating: 4.8, position: 'att' },
-  { name: 'עומר כהן', rating: 4.6, hateIndex: 4, position: 'mid' },
-  { name: 'דניאל מזרחי', rating: 4.5, friendOfIndex: 0, position: 'gk' },
-  { name: 'יונתן פרץ', rating: 4.3, position: 'gk' },
-  { name: 'רועי בן דוד', rating: 4.2, position: 'att' },
-  { name: 'אלון שרון', rating: 4.0, friendOfIndex: 1, position: 'mid' },
-  { name: 'ניר אברהמי', rating: 3.9, loveIndex: 7, position: 'def' },
-  { name: 'שחר גולן', rating: 3.8, position: 'att' },
-  { name: 'עידו ביטון', rating: 3.7, friendOfIndex: 3, position: 'mid' },
-  { name: 'טל אשכנזי', rating: 3.6, position: 'def' },
+  { name: 'איתי לוי', rating: 4.8, positions: ['att'] },
+  { name: 'עומר כהן', rating: 4.6, hateIndex: 4, positions: ['mid', 'att'] },
+  { name: 'דניאל מזרחי', rating: 4.5, friendOfIndex: 0, positions: ['gk'] },
+  { name: 'יונתן פרץ', rating: 4.3, positions: ['gk'] },
+  { name: 'רועי בן דוד', rating: 4.2, positions: ['att'] },
+  { name: 'אלון שרון', rating: 4.0, friendOfIndex: 1, positions: ['mid'] },
+  { name: 'ניר אברהמי', rating: 3.9, loveIndex: 7, positions: ['def', 'mid'] },
+  { name: 'שחר גולן', rating: 3.8, positions: ['att'] },
+  { name: 'עידו ביטון', rating: 3.7, friendOfIndex: 3, positions: ['mid'] },
+  { name: 'טל אשכנזי', rating: 3.6, positions: ['def'] },
   { name: 'גיא מלכה', rating: 3.5 },
-  { name: 'אורי דהן', rating: 3.4, friendOfIndex: 10, position: 'gk' },
-  { name: 'מתן שמש', rating: 3.3, position: 'def' },
-  { name: 'ליאור אוחנה', rating: 3.2, position: 'mid' },
+  { name: 'אורי דהן', rating: 3.4, friendOfIndex: 10, positions: ['gk', 'def'] },
+  { name: 'מתן שמש', rating: 3.3, positions: ['def'] },
+  { name: 'ליאור אוחנה', rating: 3.2, positions: ['mid'] },
   { name: 'עידן חדד', rating: 3.1, friendOfIndex: 13, hateIndex: 16 },
-  { name: 'נדב ברששת', rating: 3.0, position: 'att' },
-  { name: 'יובל אלמוג', rating: 2.8, position: 'def' },
-  { name: 'רן שטרן', rating: 2.7, friendOfIndex: 16, position: 'att' },
+  { name: 'נדב ברששת', rating: 3.0, positions: ['att'] },
+  { name: 'יובל אלמוג', rating: 2.8, positions: ['def'] },
+  { name: 'רן שטרן', rating: 2.7, friendOfIndex: 16, positions: ['att'] },
   { name: 'אסף נחום', rating: 2.5, loveIndex: 10 },
-  { name: 'עמית קדוש', rating: 2.3, position: 'def' },
+  { name: 'עמית קדוש', rating: 2.3, positions: ['def'] },
   { name: 'בר יוספי', rating: 2.0, friendOfIndex: 19 },
 ];
 
