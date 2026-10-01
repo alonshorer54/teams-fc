@@ -1,32 +1,40 @@
-import { lineupTeams, membersOf, type Lineup, type Player, type TeamId } from '../types';
+import {
+  SPREAD_POSITIONS,
+  lineupTeams,
+  membersOf,
+  type Lineup,
+  type Player,
+  type Position,
+  type TeamId,
+} from '../types';
 
 /**
  * הקריטריונים שההגרלה מתחשבת בהם.
  * הסדר ניתן לשינוי, וכל קריטריון אפשר לכבות.
  */
-export type CriterionId = 'rating' | 'friends' | 'gameChemistry' | 'affinity' | 'tags';
+export type CriterionId = 'rating' | 'positions' | 'friends' | 'gameChemistry' | 'affinity';
 
 export interface CriterionSetting {
   id: CriterionId;
   enabled: boolean;
 }
 
-/** סדר ברירת המחדל — דירוג ראשון, אחר כך חברויות, כימיה משחקית, ואהבה/שנאה */
+/** סדר ברירת המחדל — דירוג ראשון, אחר כך עמדות, חברויות, כימיה משחקית, ואהבה/שנאה */
 export const DEFAULT_PRIORITIES: CriterionSetting[] = [
   { id: 'rating', enabled: true },
+  { id: 'positions', enabled: true },
   { id: 'friends', enabled: true },
   // דלוק כברירת מחדל: הקנס שלו הוא 0 כל עוד אין אף זוג שעבר את סף המדגם,
   // אז זה פשוט "מתעורר" מעצמו בשבוע שבו נצברו מספיק תוצאות
   { id: 'gameChemistry', enabled: true },
   { id: 'affinity', enabled: true },
-  { id: 'tags', enabled: true },
 ];
 
 /**
  * גרסת ברירות המחדל של סדר העדיפויות.
  * העלאה כאן מריצה מיגרציה חד-פעמית אצל מי שכבר שמר הגדרות בענן.
  */
-export const PRIORITIES_VERSION = 2;
+export const PRIORITIES_VERSION = 3;
 
 export const CRITERION_META: Record<
   CriterionId,
@@ -36,6 +44,11 @@ export const CRITERION_META: Record<
     label: 'דירוג',
     emoji: '⭐',
     help: 'משווה את סך הדירוגים בין הקבוצות. זה מה שקובע שהקבוצות שקולות.',
+  },
+  positions: {
+    label: 'עמדות',
+    emoji: '🧤',
+    help: 'מפזר שווה בין הקבוצות שוערים, הגנה, קישור והתקפה — שלא כל החלוצים ייפלו לאותה קבוצה.',
   },
   friends: {
     label: 'חברויות',
@@ -52,11 +65,6 @@ export const CRITERION_META: Record<
     emoji: '👍',
     help: 'מחבר את מי שמעדיף לשחק יחד, ומפריד את מי שמעדיף לא.',
   },
-  tags: {
-    label: 'תגיות',
-    emoji: '🏷️',
-    help: 'מפזר שווה בין הקבוצות שחקנים עם אותה תגית — למשל שלא כל מי שלא בכושר ייפול לאותה קבוצה.',
-  },
 };
 
 /**
@@ -70,17 +78,17 @@ export const priorityWeight = (rank: number) => 1000 / Math.pow(6, rank);
  * כמה כל קריטריון מוכן להתגמש כשמחפשים חלוקה מגוונת, כמכפיל של סובלנות הבסיס.
  *
  * זה לא אותו דבר לכל הקריטריונים, ובכוונה. דירוג הוא האיזון עצמו וחברויות הן
- * הבטחה למשתמש, אז שניהם כמעט לא זזים. אבל הקנסות של תגיות והעדפות אישיות
- * מנורמלים לפי מספר המחזיקים, כך שתגית שיש לה שני שחקנים קופצת ב-0.5 שלמות
- * ברגע ששניהם באותה קבוצה — סובלנות אחידה הייתה פוסלת בגללה כל חלופה.
+ * הבטחה למשתמש, אז שניהם כמעט לא זזים. עמדות קופצות בשליש שלם על כל שחקן
+ * שלא במקומו, והעדפות אישיות מנורמלות לפי מספר המחזיקים — סובלנות אחידה הייתה
+ * פוסלת בגללן כל חלופה.
  * הקריטריונים התחתונים הם בדיוק אלה שאמורים לזוז ראשונים.
  */
 export const VARIETY_FLEX: Record<CriterionId, number> = {
   rating: 1,
+  positions: 2,
   friends: 0,
   gameChemistry: 5,
   affinity: 3,
-  tags: 8,
 };
 
 /**
@@ -325,26 +333,60 @@ function affinityPenalty({ lineup, pool }: PenaltyInput): number {
   return total ? violated / total : 0;
 }
 
-function tagsPenalty({ lineup, pool }: PenaltyInput): number {
-  const byId = new Map(pool.map((p) => [p.id, p]));
-  const tags = [...new Set(pool.flatMap((p) => p.tags))];
-  if (!tags.length) return 0;
+/** העמדה של כל שחקן — מחושב פעם אחת לבריכה, כי הקנס נקרא מהלולאה הפנימית */
+const positionCache = new WeakMap<Player[], Map<string, Position>>();
 
+const positionsOf = (pool: Player[]): Map<string, Position> => {
+  let map = positionCache.get(pool);
+  if (!map) {
+    map = new Map(pool.map((p) => [p.id, p.position]));
+    positionCache.set(pool, map);
+  }
+  return map;
+};
+
+/** שוער כפול באותה קבוצה הוא הבעיה הכי מורגשת על המגרש */
+const GOALKEEPER_WEIGHT = 2;
+
+/**
+ * כמה שחקנים צריך להעביר כדי שכל עמדה תתחלק שווה. 4 חלוצים ב-3 קבוצות זה
+ * 2/1/1; חלוקה של 2/2/0 רחוקה מזה בשחקן אחד, ו-4/0/0 בשניים.
+ */
+export function misplacedPositions(lineup: Lineup, pool: Player[]): number {
   const active = activeTeams(lineup);
   if (active.length < 2) return 0;
+  const positionOf = positionsOf(pool);
 
-  let sum = 0;
-  for (const tag of tags) {
-    const counts = active.map(
-      (t) => membersOf(lineup, t).filter((id) => byId.get(id)?.tags.includes(tag)).length,
-    );
+  let misplaced = 0;
+  for (const position of SPREAD_POSITIONS) {
+    const counts = active.map((t) => {
+      let n = 0;
+      for (const id of membersOf(lineup, t)) if (positionOf.get(id) === position) n++;
+      return n;
+    });
     const holders = counts.reduce((s, c) => s + c, 0);
     if (!holders) continue;
-    // פיזור מושלם = הפרש 0 או 1. מנרמלים מול המקרה הגרוע (כולם בקבוצה אחת)
-    const worst = Math.max(1, holders);
-    sum += Math.max(0, spreadOf(counts) - 1) / worst;
+
+    const low = Math.floor(holders / active.length);
+    const high = Math.ceil(holders / active.length);
+    let over = 0;
+    let under = 0;
+    for (const c of counts) {
+      over += Math.max(0, c - high);
+      under += Math.max(0, low - c);
+    }
+    misplaced += Math.max(over, under) * (position === 'gk' ? GOALKEEPER_WEIGHT : 1);
   }
-  return Math.min(1, sum / tags.length);
+  return misplaced;
+}
+
+/**
+ * שחקן אחד לא במקום כבר עולה הרבה: בשלוש קבוצות זה שליש מהקנס המלא. כך העמדות
+ * מכריעות בין כל החלוקות ששקולות בדירוג, ולא רק שוברות שוויון מדי פעם.
+ */
+function positionsPenalty({ lineup, pool }: PenaltyInput): number {
+  const teams = activeTeams(lineup).length;
+  return teams < 2 ? 0 : Math.min(1, misplacedPositions(lineup, pool) / teams);
 }
 
 const PENALTY_FN: Record<CriterionId, (input: PenaltyInput) => number> = {
@@ -352,7 +394,7 @@ const PENALTY_FN: Record<CriterionId, (input: PenaltyInput) => number> = {
   friends: friendsPenalty,
   gameChemistry: gameChemistryPenalty,
   affinity: affinityPenalty,
-  tags: tagsPenalty,
+  positions: positionsPenalty,
 };
 
 /** קנס כולל משוקלל לפי סדר העדיפויות. ככל שנמוך יותר — החלוקה טובה יותר. */
@@ -417,8 +459,16 @@ export function normalizePriorities(
   // גרסה 2: הכימיה המשחקית עברה לדלוקה כברירת מחדל. מי ששמר הגדרות כשהיא
   // הייתה כבויה יקבל אותה דלוקה פעם אחת; מרגע שיגע בסדר העדיפויות נשמרת
   // הגרסה החדשה, וכיבוי מכוון נשאר מכובה.
+  let result = merged;
   if (savedVersion < 2) {
-    return merged.map((s) => (s.id === 'gameChemistry' ? { ...s, enabled: true } : s));
+    result = result.map((s) => (s.id === 'gameChemistry' ? { ...s, enabled: true } : s));
   }
-  return merged;
+  // גרסה 3: התגיות הוחלפו בעמדות. קריטריון חדש היה נכנס בסוף הרשימה, שם הוא
+  // כמעט לא משפיע — אז פעם אחת הוא עובר למקום השני, מיד אחרי הקריטריון העליון
+  if (savedVersion < 3) {
+    const positions = result.find((s) => s.id === 'positions')!;
+    const rest = result.filter((s) => s.id !== 'positions');
+    result = [rest[0], { ...positions, enabled: true }, ...rest.slice(1)];
+  }
+  return result;
 }

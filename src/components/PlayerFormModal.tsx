@@ -1,14 +1,14 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
   Link2,
+  MapPin,
   ShieldCheck,
-  Tag,
   ThumbsDown,
   ThumbsUp,
   UserPen,
   UserPlus,
 } from 'lucide-react';
-import { EXCLUSIVE_TAGS, PLAYER_TAGS, type Player } from '../types';
+import { POSITIONS, POSITION_META, type Player, type Position } from '../types';
 import { Modal } from './ui';
 
 export interface PlayerDraft {
@@ -17,7 +17,7 @@ export interface PlayerDraft {
   friendIds: string[];
   loveIds: string[];
   hateIds: string[];
-  tags: string[];
+  position: Position;
   isManager: boolean;
 }
 
@@ -42,7 +42,7 @@ export function PlayerFormModal({
   const [friendIds, setFriendIds] = useState<string[]>([]);
   const [loveIds, setLoveIds] = useState<string[]>([]);
   const [hateIds, setHateIds] = useState<string[]>([]);
-  const [tags, setTags] = useState<string[]>([]);
+  const [position, setPosition] = useState<Position>('any');
   const [isManager, setIsManager] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -53,7 +53,7 @@ export function PlayerFormModal({
     setFriendIds(editing?.friendIds ?? []);
     setLoveIds(editing?.loveIds ?? []);
     setHateIds(editing?.hateIds ?? []);
-    setTags(editing?.tags ?? []);
+    setPosition(editing?.position ?? 'any');
     setIsManager(editing?.isManager ?? false);
     setError(null);
   }, [open, editing]);
@@ -80,7 +80,7 @@ export function PlayerFormModal({
       // חברות גוברת על השתיים; ובין אהבה לשנאה — השנאה גוברת
       loveIds: loveIds.filter((id) => !hateIds.includes(id) && !friendIds.includes(id)),
       hateIds: hateIds.filter((id) => !friendIds.includes(id)),
-      tags,
+      position,
       isManager,
     });
   };
@@ -145,6 +145,8 @@ export function PlayerFormModal({
           </div>
         </div>
 
+        <PositionPicker value={position} onChange={setPosition} />
+
         <PlayerMultiSelect
           label="חברים"
           hint="קשר דו-כיווני — מספיק לרשום פעם אחת, וזה יופיע אצל שניהם. אפשר לבחור כמה שרוצים."
@@ -179,8 +181,6 @@ export function PlayerFormModal({
           onChange={setHateIds}
           tone="rose"
         />
-
-        <TagPicker value={tags} onChange={setTags} />
 
         <label className="flex cursor-pointer items-start gap-3 rounded-xl border border-slate-800 bg-slate-950/40 p-3">
           <input
@@ -304,49 +304,48 @@ function PlayerMultiSelect({
   );
 }
 
-/* ------------------------------- תגיות ------------------------------- */
+/* ------------------------------- עמדה ------------------------------- */
 
-function TagPicker({ value, onChange }: { value: string[]; onChange: (next: string[]) => void }) {
-  const toggle = (tag: string) => {
-    if (value.includes(tag)) return onChange(value.filter((t) => t !== tag));
-    // "בכושר" ו"לא בכושר" לא יכולים לשבת יחד — בחירה באחד מורידה את השני
-    const clash = EXCLUSIVE_TAGS.find((group) => group.includes(tag)) ?? [];
-    onChange([...value.filter((t) => !clash.includes(t)), tag]);
-  };
-
+function PositionPicker({
+  value,
+  onChange,
+}: {
+  value: Position;
+  onChange: (next: Position) => void;
+}) {
   return (
     <div>
       <p className="label">
         <span className="inline-flex items-center gap-1.5">
-          <Tag size={13} className="text-amber-400" />
-          תגית
+          <MapPin size={13} className="text-amber-400" />
+          עמדה
         </span>
       </p>
 
-      <div className="flex flex-wrap gap-1.5">
-        {PLAYER_TAGS.map((tag) => {
-          const on = value.includes(tag);
+      <div className="flex flex-wrap gap-1.5" role="radiogroup" aria-label="עמדה">
+        {POSITIONS.map((pos) => {
+          const on = value === pos;
           return (
             <button
-              key={tag}
+              key={pos}
               type="button"
-              onClick={() => toggle(tag)}
-              aria-pressed={on}
+              role="radio"
+              aria-checked={on}
+              onClick={() => onChange(pos)}
               className={`rounded-lg border px-3 py-1.5 text-xs font-semibold transition ${
                 on
                   ? 'border-amber-500/50 bg-amber-500/20 text-amber-200'
                   : 'border-slate-700 bg-slate-800/60 text-slate-300 hover:border-amber-500/40'
               }`}
             >
-              {tag}
+              {POSITION_META[pos].emoji} {POSITION_META[pos].label}
             </button>
           );
         })}
       </div>
 
       <p className="mt-2 text-[11px] leading-relaxed text-slate-500">
-        התגית רק מפרידה בין מי שיש לו אותה תגית — למשל שלא כל השוערים ייפלו באותה קבוצה. היא לא
-        משנה את הדירוג.
+        ההגרלה מפזרת כל עמדה שווה בין הקבוצות. "כללי" = משחק איפה שצריך, ולא נספר בפיזור.
       </p>
     </div>
   );

@@ -5,9 +5,11 @@ import {
   emptyLineup,
   lineupTeams,
   membersOf,
+  POSITIONS,
   type DrawConstraint,
   type Lineup,
   type Player,
+  type Position,
   type TeamId,
 } from '../types';
 import {
@@ -60,8 +62,8 @@ export interface TeamStats {
   gameBonus: number;
   /** דירוג + שני הבונוסים — האומדן ה"אמיתי" לחוזק הקבוצה */
   combined: number;
-  /** כמה שחקנים מכל תגית יש בקבוצה */
-  tagCounts: Record<string, number>;
+  /** כמה שחקנים מכל עמדה יש בקבוצה */
+  positionCounts: Record<Position, number>;
 }
 
 /** כמה נקודות דירוג שווה זוג חברים שמשחקים יחד. */
@@ -169,11 +171,13 @@ export function computeStats(
     const members = membersOf(lineup, t);
     const total = members.reduce((s, id) => s + (byId.get(id)?.rating ?? 0), 0);
 
-    const tagCounts: Record<string, number> = {};
+    const positionCounts = Object.fromEntries(POSITIONS.map((pos) => [pos, 0])) as Record<
+      Position,
+      number
+    >;
     for (const id of members) {
-      for (const tag of byId.get(id)?.tags ?? []) {
-        tagCounts[tag] = (tagCounts[tag] ?? 0) + 1;
-      }
+      const position = byId.get(id)?.position;
+      if (position) positionCounts[position]++;
     }
 
     teams[t] = {
@@ -184,7 +188,7 @@ export function computeStats(
       chemistryBonus: 0,
       gameBonus: round1(gameChemistryBonus(members, pairEffects)),
       combined: round1(total),
-      tagCounts,
+      positionCounts,
     };
   }
 

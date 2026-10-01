@@ -18,6 +18,7 @@ import {
   recordLineup,
   squadOnly,
   teamsIn,
+  withCurrentNames,
   type Filler,
   type Lineup,
   type MatchRecord,
@@ -93,7 +94,7 @@ function buildDemoPlayers(): Player[] {
       friendIds: p.friendOfIndex != null ? [ids[p.friendOfIndex]] : [],
       loveIds: p.loveIndex != null ? [ids[p.loveIndex]] : [],
       hateIds: p.hateIndex != null ? [ids[p.hateIndex]] : [],
-      tags: p.tags ?? [],
+      position: p.position ?? 'any',
     })),
   );
 }
@@ -169,7 +170,13 @@ export default function App() {
   );
 
   const players = demoPlayers ?? migratedPlayers;
-  const history = isDemo ? demoHistory : realHistory;
+  // שמות לפי המאגר של היום — רק השמות, כדי ששינוי דירוג לא יבנה את ההיסטוריה מחדש
+  const namesKey = JSON.stringify(players.map((p) => [p.id, p.name]));
+  const rawHistory = isDemo ? demoHistory : realHistory;
+  const history = useMemo(() => {
+    const names = (JSON.parse(namesKey) as [string, string][]).map(([id, name]) => ({ id, name }));
+    return withCurrentNames(rawHistory, names);
+  }, [rawHistory, namesKey]);
   const setHistory = isDemo ? setDemoHistory : setRealHistory;
   const draft = isDemo ? demoDraft : realDraft;
   const setDraft = isDemo ? setDemoDraft : setRealDraft;
@@ -309,7 +316,7 @@ export default function App() {
       friendIds: [],
       loveIds: [],
       hateIds: [],
-      tags: [],
+      position: 'any',
     }));
     applyToPlayers((prev) => [...prev, ...fresh]);
     notify(

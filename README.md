@@ -10,12 +10,13 @@ installable on a phone, and synced between devices.
 
 ## What it does
 
-- **Squad** — players with a 1–5 rating, friendships, "prefers with / without", and free-text tags.
+- **Squad** — players with a 1–5 rating, friendships, "prefers with / without", and a position
+  (goalkeeper, defence, midfield, attack, or general).
 - **Draw** — splits whoever showed up into 2 or 3 balanced teams. Team colours can be
   swapped after the draw, and an incomplete squad can be topped up with one-off
   "filler" players so the teams still come out even.
 - **Manual edits** — swap or move any player; the app explains what the edit broke —
-  friends separated, balance worsened, tags clumped — with one-click undo.
+  friends separated, balance worsened, positions clumped — with one-click undo.
 - **Share** — a clean text list or a generated image, ready to paste into WhatsApp.
   A list pasted back from the group chat is matched against the squad automatically.
 - **History and trends** — saved rounds, win/loss streaks, attendance over time, and
@@ -92,10 +93,10 @@ Five criteria are scored, each normalised to 0..1 so the weights stay comparable
 | Criterion | What it measures |
 | --- | --- |
 | `rating` | Average rating gap between teams |
+| `positions` | How many players would have to move for every position to be spread evenly |
 | `friends` | How many friend pairs were split up |
 | `gameChemistry` | Spread of learned pair effects across teams |
 | `affinity` | How many "prefers with / without" requests were violated |
-| `tags` | How evenly players sharing a tag are distributed |
 
 You set the priority order in the UI. Each rank is worth about 6× the one below
 it — enough for the top criterion to decide, without making the lower ones
@@ -110,9 +111,15 @@ win a lot with or without each other. Pairs that beat the expectation are treate
 as extra strength and spread *apart* — the goal is balance, so clustering them
 would achieve the opposite.
 
+Only wins and losses carry signal. A middle finish in a three-team evening means
+the pair both won and lost that night, so it is scored as exactly what was
+expected of them and counts as half an evening: it dilutes an effect but never
+creates one. A pair that only wins or only loses stands out; a pair of draws
+stays at zero.
+
 It is on by default and needs no setup, because it costs nothing until it has
 something to say: a pair enters the model only after three evenings on the same
-team, and with no qualifying pair the penalty is zero for every candidate split,
+team (a draw counts as half), and with no qualifying pair the penalty is zero for every candidate split,
 so the criterion cannot influence a draw it has no evidence for. With a stable
 squad the first pairs usually qualify around the fourth evening that has a result
 recorded. The trends screen shows each pair's own numbers — evenings together,

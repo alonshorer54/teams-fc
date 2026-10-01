@@ -90,28 +90,39 @@ export interface Player {
   loveIds: string[];
   /** מעדיף להיות בלעדיהם */
   hateIds: string[];
-  /** מתוך PLAYER_TAGS בלבד — ההגרלה מפזרת בין הקבוצות את מי שיש לו אותה תגית */
-  tags: string[];
+  /** העמדה במגרש — ההגרלה מפזרת כל עמדה שווה בין הקבוצות */
+  position: Position;
   /** מנהל הקבוצה — מי שסוגר את המגרש ואוסף את הכסף */
   isManager?: boolean;
   /** @deprecated שדה ישן מגרסה קודמת — מומר ל-friendIds בטעינה */
   friendOf?: string | null;
   /** @deprecated שדה ישן — ההערה הופכת לתגית בטעינה */
   notes?: string;
+  /** @deprecated התגיות הוחלפו בעמדה; "שוער" הופך לעמדת שוער בטעינה */
+  tags?: string[];
 }
 
 /**
- * התגיות היחידות שקיימות. פעם זה היה מלל חופשי, ותגיות כמו "רץ הרבה" רק בלבלו:
- * תגית לא משנה דירוג, היא רק מפרידה בין מי שיש לו אותה.
+ * העמדות. "כללי" הוא מי שמשחק איפה שצריך — הוא לא מפוזר, הוא ממלא את החסר.
+ * המפתחות באנגלית כדי שהנתונים השמורים לא יהיו תלויים בניסוח של התווית.
  */
-export const GOALKEEPER_TAG = 'שוער';
+export type Position = 'gk' | 'def' | 'mid' | 'att' | 'any';
 
-export const PLAYER_TAGS = ['בכושר', 'לא בכושר', GOALKEEPER_TAG] as const;
+export const POSITIONS: readonly Position[] = ['gk', 'def', 'mid', 'att', 'any'] as const;
 
-/** שתי תגיות שלא יכולות לשבת יחד על אותו שחקן */
-export const EXCLUSIVE_TAGS: readonly (readonly string[])[] = [['בכושר', 'לא בכושר']];
+/** העמדות שההגרלה מפזרת בין הקבוצות */
+export const SPREAD_POSITIONS: readonly Position[] = ['gk', 'def', 'mid', 'att'] as const;
 
-const isKnownTag = (tag: string) => (PLAYER_TAGS as readonly string[]).includes(tag);
+export const POSITION_META: Record<Position, { label: string; emoji: string }> = {
+  gk: { label: 'שוער', emoji: '🧤' },
+  def: { label: 'הגנה', emoji: '🛡️' },
+  mid: { label: 'קישור', emoji: '🔄' },
+  att: { label: 'התקפה', emoji: '⚡' },
+  any: { label: 'כללי', emoji: '⚽' },
+};
+
+const isPosition = (value: unknown): value is Position =>
+  (POSITIONS as readonly unknown[]).includes(value);
 
 /* --------------------------- שחקן משלים --------------------------- */
 
@@ -161,7 +172,7 @@ export const fillerAsPlayer = (filler: Filler): Player => ({
   friendIds: [],
   loveIds: [],
   hateIds: [],
-  tags: [],
+  position: 'any',
 });
 
 /**
@@ -174,10 +185,13 @@ export function normalizePlayers(raw: Player[]): Player[] {
     friendIds: [...new Set(p.friendIds ?? (p.friendOf ? [p.friendOf] : []))],
     loveIds: [...new Set(p.loveIds ?? [])],
     hateIds: [...new Set(p.hateIds ?? [])],
-    // שדה ההערה בוטל לטובת תגיות — ההערה הישנה נשמרת אם היא אחת מהתגיות הקבועות
-    tags: [...new Set([...(p.tags ?? []), ...(p.notes?.trim() ? [p.notes.trim()] : [])])].filter(
-      isKnownTag,
-    ),
+    // התגיות הוחלפו בעמדות. התגית היחידה שאומרת משהו על עמדה היא "שוער" — גם
+    // כשהגיעה מהערה ישנה; "בכושר" ו"לא בכושר" פשוט נעלמות
+    position: isPosition(p.position)
+      ? p.position
+      : [...(p.tags ?? []), p.notes?.trim()].includes('שוער')
+        ? ('gk' as const)
+        : ('any' as const),
   }));
 
   const byId = new Map(players.map((p) => [p.id, p]));
@@ -204,6 +218,7 @@ export function normalizePlayers(raw: Player[]): Player[] {
   for (const p of players) {
     delete p.friendOf;
     delete p.notes;
+    delete p.tags;
   }
   return players;
 }
@@ -296,6 +311,58 @@ export function squadOnly(record: MatchRecord, inSquad: (id: string) => boolean)
       ratingCheck: { changes: record.ratingCheck.changes.filter((c) => inSquad(c.playerId)) },
     }),
   };
+}
+
+/**
+ * ההיסטוריה עם השמות של היום. ברשומה נשמר השם שהיה לשחקן בערב ההוא, אז שחקן
+ * ששמו תוקן במאגר ("יונתן2" שהפך לשם המלא) הופיע בהיסטוריה בשם הישן. מי שנמחק
+ * מהמאגר שומר את השם מהרשומה — בשביל זה היא נשמרה. רשומה שלא השתנתה נשארת
+ * אותו אובייקט, כדי לא לבנות מחדש כל מה שתלוי בה.
+ */
+export function withCurrentNames(
+  history: MatchRecord[],
+  players: readonly { id: string; name: string }[],
+): MatchRecord[] {
+  const nameOf = new Map(players.map((p) => [p.id, p.name]));
+  const stale = (id: string, name: string) => {
+    const current = nameOf.get(id);
+    return current !== undefined && current !== name;
+  };
+  const fix = (p: HistoryPlayer): HistoryPlayer =>
+    stale(p.id, p.name) ? { ...p, name: nameOf.get(p.id)! } : p;
+
+  let changed = false;
+  const next = history.map((record) => {
+    const everyone = [
+      ...teamsIn(record.teams).flatMap((t) => record.teams[t] ?? []),
+      ...(record.cancelled ?? []),
+      ...(record.substitutions ?? []).flatMap((s) => [s.out, s.in]),
+    ];
+    const needsFix =
+      everyone.some((p) => stale(p.id, p.name)) ||
+      (record.ratingCheck?.changes ?? []).some((c) => stale(c.playerId, c.name));
+    if (!needsFix) return record;
+
+    changed = true;
+    return {
+      ...record,
+      teams: Object.fromEntries(
+        teamsIn(record.teams).map((t) => [t, (record.teams[t] ?? []).map(fix)]),
+      ),
+      ...(record.cancelled && { cancelled: record.cancelled.map(fix) }),
+      ...(record.substitutions && {
+        substitutions: record.substitutions.map((s) => ({ out: fix(s.out), in: fix(s.in) })),
+      }),
+      ...(record.ratingCheck && {
+        ratingCheck: {
+          changes: record.ratingCheck.changes.map((c) =>
+            stale(c.playerId, c.name) ? { ...c, name: nameOf.get(c.playerId)! } : c,
+          ),
+        },
+      }),
+    };
+  });
+  return changed ? next : history;
 }
 
 /** ההרכב של הגרלה שנשמרה, כמזהי שחקנים — כדי להשוות אותה להגרלות חדשות. */

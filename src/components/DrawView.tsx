@@ -191,7 +191,8 @@ export function DrawView({
   const unavailable = useMemo(() => {
     const map: Partial<Record<CriterionId, string>> = {};
     if (!pairEffects.size) map.gameChemistry = 'עוד אין מספיק היסטוריה עם תוצאות כדי ללמוד זוגות';
-    if (!players.some((p) => p.tags.length)) map.tags = 'עוד לא הוגדרו תגיות לשחקנים';
+    if (!players.some((p) => p.position !== 'any'))
+      map.positions = 'עוד לא הוגדרו עמדות לשחקנים';
     if (!players.some((p) => p.loveIds.length || p.hateIds.length))
       map.affinity = 'עוד לא הוגדרו העדפות "עם / בלי" לשחקנים';
     if (!players.some((p) => p.friendIds.length)) map.friends = 'עוד לא הוגדרו חברויות';

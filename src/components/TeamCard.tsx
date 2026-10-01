@@ -2,7 +2,8 @@ import { useState } from 'react';
 import { GripVertical, Link2, Palette, Unlink, Users } from 'lucide-react';
 import {
   ALL_TEAM_IDS,
-  GOALKEEPER_TAG,
+  POSITION_META,
+  SPREAD_POSITIONS,
   TEAM_META,
   type Lineup,
   type Player,
@@ -166,10 +167,9 @@ export function TeamCard({
                   <span className="truncate text-sm font-semibold text-slate-100">
                     {player.name}
                   </span>
-                  {/* התגית היחידה שמוצגת כאן — צריך לראות מיד לאיזו קבוצה יש שוער */}
-                  {player.tags.includes(GOALKEEPER_TAG) && (
+                  {player.position !== 'any' && (
                     <span className="shrink-0 rounded bg-amber-500/15 px-1.5 text-[10px] font-semibold text-amber-200">
-                      🧤 {GOALKEEPER_TAG}
+                      {POSITION_META[player.position].emoji} {POSITION_META[player.position].label}
                     </span>
                   )}
                 </span>
@@ -196,6 +196,21 @@ export function TeamCard({
           );
         })}
       </ul>
+
+      {stats.count > 0 && (
+        <div
+          className="flex items-center justify-center gap-3 border-t border-slate-800/70 bg-slate-950/30 px-2 py-1.5 text-[11px] text-slate-300"
+          title="כמה שחקנים מכל עמדה יש בקבוצה"
+        >
+          {SPREAD_POSITIONS.map((pos) => (
+            <span key={pos} className="inline-flex items-center gap-0.5">
+              {POSITION_META[pos].emoji}
+              <span className="font-mono font-bold tabular-nums">{stats.positionCounts[pos]}</span>
+              <span className="text-[10px] text-slate-500">{POSITION_META[pos].label}</span>
+            </span>
+          ))}
+        </div>
+      )}
 
       {stats.count > 0 && (
         <footer className="grid grid-cols-3 divide-x divide-x-reverse divide-slate-800/70 border-t border-slate-800/70 bg-slate-950/50 text-center">

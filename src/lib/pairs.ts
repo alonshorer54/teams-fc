@@ -1,6 +1,5 @@
 import {
   isFillerId,
-  placementPoints,
   recordPlacements,
   teamsIn,
   type MatchRecord,
@@ -13,10 +12,17 @@ import {
  * הרעיון: לכל זוג ששיחק יחד באותה קבוצה, משווים את אחוז הניצחון *שלהם יחד*
  * לאחוז הניצחון הממוצע של כל אחד בנפרד. אם הם מנצחים יותר ממה שהיה צפוי —
  * יש ביניהם משהו. ההפרש הזה נקרא כאן "אפקט".
+ *
+ * רק ניצחון והפסד מלמדים משהו. ערב שקול (באמצע) אומר שהזוג גם ניצח וגם הפסד
+ * באותו ערב, אז הוא לא דוחף את האפקט לשום כיוון — הוא נחשב כמו שהיה צפוי, נספר
+ * כחצי ערב, ורק מדלל. זוג שרק מנצח או רק מפסיד יבלוט; זוג של שקולים יישאר באפס.
  */
 
-/** מתחת לזה זה רעש ולא מגמה — לא מציגים בכלל */
+/** מתחת לזה זה רעש ולא מגמה — לא מציגים בכלל. נמדד בערבים שנספרו (שקול = חצי) */
 export const MIN_GAMES_TOGETHER = 3;
+
+/** כמה ערב שקול שווה מול ערב שהוכרע, בספירת המדגם */
+export const DRAW_WEIGHT = 0.5;
 
 /** הפרש קטן מזה בין המצוי לצפוי הוא עיגול, לא כימיה */
 export const EFFECT_THRESHOLD = 0.05;
@@ -28,12 +34,16 @@ export interface PairStat {
   bName: string;
   /** משחקים עם תוצאה מעודכנת שבהם היו באותה קבוצה */
   games: number;
+  /** הערבים שנספרו למדגם: ניצחון והפסד שלמים, שקול חצי */
+  counted: number;
   wins: number;
+  losses: number;
   draws: number;
+  /** אחוז הניצחון מתוך הערבים שהוכרעו */
   winRate: number;
   /** אחוז הניצחון שהיה צפוי לפי הביצועים האישיים שלהם */
   expected: number;
-  /** winRate פחות expected — כמה הם מוסיפים אחד לשני */
+  /** כמה הם מוסיפים אחד לשני — winRate פחות expected, מדולל בערבים השקולים */
   effect: number;
   confidence: 'low' | 'medium' | 'high';
 }
@@ -43,9 +53,10 @@ export interface PairProgress {
   aName: string;
   bName: string;
   games: number;
+  counted: number;
   wins: number;
   draws: number;
-  /** כמה ערבים משותפים חסרים עד שאפשר יהיה לקבוע עליו משהו */
+  /** כמה ערבים משותפים שהוכרעו חסרים עד שאפשר יהיה לקבוע עליו משהו */
   missing: number;
 }
 
@@ -66,8 +77,8 @@ export interface PairReport {
   closest: PairProgress[];
 }
 
-const confidenceOf = (games: number): PairStat['confidence'] =>
-  games >= 8 ? 'high' : games >= 5 ? 'medium' : 'low';
+const confidenceOf = (counted: number): PairStat['confidence'] =>
+  counted >= 8 ? 'high' : counted >= 5 ? 'medium' : 'low';
 
 export const CONFIDENCE_LABEL: Record<PairStat['confidence'], string> = {
   low: 'מדגם קטן',
@@ -94,9 +105,12 @@ export function computePairChemistry(history: MatchRecord[]): PairReport {
   const pendingMatches = history.length - resolved.length;
 
   // ביצועים אישיים — הבסיס להשוואה
-  const solo = new Map<string, { games: number; points: number; name: string }>();
+  const solo = new Map<string, { wins: number; losses: number; name: string }>();
   // תוצאות של זוגות
-  const pairs = new Map<string, { a: string; b: string; games: number; wins: number; draws: number }>();
+  const pairs = new Map<
+    string,
+    { a: string; b: string; games: number; wins: number; losses: number; draws: number }
+  >();
 
   for (const { record, placements } of resolved) {
     const teams = teamsIn(record.teams);
@@ -105,17 +119,15 @@ export function computePairChemistry(history: MatchRecord[]): PairReport {
       // משלימים הם שחקני דמה של ערב אחד — זוג איתם לא מלמד כלום
       const members = (record.teams[team] ?? []).filter((p) => !isFillerId(p.id));
       const place = placements[team] ?? teams.length;
-      const points = placementPoints(place, teams.length);
       const won = place <= 1;
       // "אמצע" — לא ניצחון ולא הפסד; עם 2 קבוצות אין מצב כזה
-      const drew = place > 1 && place < teams.length;
+      const lost = !won && place >= teams.length;
 
       for (const p of members) {
-        const entry = solo.get(p.id) ?? { games: 0, points: 0, name: p.name };
+        const entry = solo.get(p.id) ?? { wins: 0, losses: 0, name: p.name };
         entry.name = p.name;
-        entry.games++;
-        // מקום שני נספר כחצי ניצחון, כדי שהבסיס יהיה הוגן
-        entry.points += points;
+        if (won) entry.wins++;
+        if (lost) entry.losses++;
         solo.set(p.id, entry);
       }
 
@@ -123,19 +135,23 @@ export function computePairChemistry(history: MatchRecord[]): PairReport {
         for (let j = i + 1; j < members.length; j++) {
           const [a, b] = [members[i].id, members[j].id].sort();
           const key = `${a}|${b}`;
-          const entry = pairs.get(key) ?? { a, b, games: 0, wins: 0, draws: 0 };
+          const entry = pairs.get(key) ?? { a, b, games: 0, wins: 0, losses: 0, draws: 0 };
           entry.games++;
           if (won) entry.wins++;
-          if (drew) entry.draws++;
+          else if (lost) entry.losses++;
+          else entry.draws++;
           pairs.set(key, entry);
         }
       }
     }
   }
 
+  // גם הבסיס נמדד רק על ערבים שהוכרעו, כדי שהשוואה תהיה תפוח מול תפוח
+  const decisiveRate = (wins: number, losses: number) =>
+    wins + losses ? wins / (wins + losses) : 0.5;
   const soloRate = (id: string) => {
     const s = solo.get(id);
-    return s && s.games ? s.points / s.games : 0;
+    return s ? decisiveRate(s.wins, s.losses) : 0.5;
   };
 
   const nameOf = (id: string) => solo.get(id)?.name ?? '';
@@ -145,19 +161,22 @@ export function computePairChemistry(history: MatchRecord[]): PairReport {
   const belowThreshold: PairProgress[] = [];
 
   for (const entry of pairs.values()) {
-    if (entry.games < MIN_GAMES_TOGETHER) {
+    const decisive = entry.wins + entry.losses;
+    const counted = decisive + entry.draws * DRAW_WEIGHT;
+
+    if (counted < MIN_GAMES_TOGETHER) {
       belowThreshold.push({
         aName: nameOf(entry.a),
         bName: nameOf(entry.b),
         games: entry.games,
+        counted,
         wins: entry.wins,
         draws: entry.draws,
-        missing: MIN_GAMES_TOGETHER - entry.games,
+        missing: Math.ceil(MIN_GAMES_TOGETHER - counted),
       });
       continue;
     }
 
-    const winRate = (entry.wins + entry.draws * 0.5) / entry.games;
     const expected = (soloRate(entry.a) + soloRate(entry.b)) / 2;
 
     stats.push({
@@ -166,12 +185,15 @@ export function computePairChemistry(history: MatchRecord[]): PairReport {
       aName: nameOf(entry.a),
       bName: nameOf(entry.b),
       games: entry.games,
+      counted,
       wins: entry.wins,
+      losses: entry.losses,
       draws: entry.draws,
-      winRate,
+      winRate: decisiveRate(entry.wins, entry.losses),
       expected,
-      effect: winRate - expected,
-      confidence: confidenceOf(entry.games),
+      // ערב שקול נחשב כאילו יצא בדיוק כצפוי, אז הוא נכנס רק למכנה
+      effect: (entry.wins - expected * decisive) / counted,
+      confidence: confidenceOf(counted),
     });
   }
 
@@ -179,8 +201,8 @@ export function computePairChemistry(history: MatchRecord[]): PairReport {
   const weak = stats.filter((s) => s.effect < -EFFECT_THRESHOLD);
 
   return {
-    strong: strong.sort((a, b) => b.effect - a.effect || b.games - a.games).slice(0, 10),
-    weak: weak.sort((a, b) => a.effect - b.effect || b.games - a.games).slice(0, 10),
+    strong: strong.sort((a, b) => b.effect - a.effect || b.counted - a.counted).slice(0, 10),
+    weak: weak.sort((a, b) => a.effect - b.effect || b.counted - a.counted).slice(0, 10),
     resolvedMatches: resolved.length,
     pendingMatches,
     qualifiedPairs: stats.length,
@@ -189,8 +211,8 @@ export function computePairChemistry(history: MatchRecord[]): PairReport {
     closest: belowThreshold
       .sort(
         (a, b) =>
-          b.games - a.games ||
-          b.wins + b.draws * 0.5 - (a.wins + a.draws * 0.5) ||
+          b.counted - a.counted ||
+          b.wins - a.wins ||
           a.aName.localeCompare(b.aName, 'he'),
       )
       .slice(0, 6),

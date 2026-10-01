@@ -1,4 +1,6 @@
 import {
+  POSITION_META,
+  SPREAD_POSITIONS,
   TEAM_META,
   lineupTeams,
   membersOf,
@@ -206,13 +208,13 @@ export function compareLineups(
     });
   }
 
-  /* ריכוז תגיות */
-  const tags = [...new Set(pool.flatMap((p) => p.tags))];
-  for (const tag of tags) {
+  /* ריכוז עמדות */
+  for (const position of SPREAD_POSITIONS) {
     const countIn = (lineup: Lineup, t: TeamId) =>
-      membersOf(lineup, t).filter((id) => byId.get(id)?.tags.includes(tag)).length;
-    const holders = pool.filter((p) => p.tags.includes(tag)).length;
-    if (holders < 3) continue; // פחות מזה אין באמת מה לפזר
+      membersOf(lineup, t).filter((id) => byId.get(id)?.position === position).length;
+    const holders = pool.filter((p) => p.position === position).length;
+    // שני שוערים באותה קבוצה כבר בעיה; בשאר העמדות פחות משלושה אין באמת מה לפזר
+    if (holders < (position === 'gk' ? 2 : 3)) continue;
 
     const worstNow = Math.max(...lineupTeams(current).map((t) => countIn(current, t)), 0);
     const worstBefore = Math.max(...lineupTeams(baseline).map((t) => countIn(baseline, t)), 0);
@@ -220,7 +222,7 @@ export function compareLineups(
       const team = lineupTeams(current).find((t) => countIn(current, t) === worstNow)!;
       issues.push({
         kind: 'warn',
-        text: `${worstNow} שחקנים עם "${tag}" נמצאים עכשיו ב${TEAM_META[team].name}`,
+        text: `${worstNow} שחקני ${POSITION_META[position].label} נמצאים עכשיו ב${TEAM_META[team].name}`,
       });
     }
   }

@@ -5,14 +5,13 @@ import {
   Pencil,
   Search,
   ShieldCheck,
-  Tag,
   ThumbsDown,
   ThumbsUp,
   Trash2,
   UserPlus,
   Users,
 } from 'lucide-react';
-import type { Player } from '../types';
+import { POSITION_META, type Player } from '../types';
 import { ConfirmDialog, EmptyState, RatingBadge } from './ui';
 import { PlayerFormModal, type PlayerDraft } from './PlayerFormModal';
 
@@ -148,6 +147,11 @@ export function PlayersView({
                 <div className="min-w-0 flex-1 space-y-0.5">
                   <p className="flex items-center gap-1.5 truncate font-semibold text-slate-100">
                     <span className="truncate">{p.name}</span>
+                    {p.position !== 'any' && (
+                      <span className="shrink-0 rounded bg-amber-500/15 px-1.5 text-[10px] font-semibold text-amber-200">
+                        {POSITION_META[p.position].emoji} {POSITION_META[p.position].label}
+                      </span>
+                    )}
                     {p.isManager && (
                       <ShieldCheck size={13} className="shrink-0 text-amber-400" aria-label="מנהל קבוצה" />
                     )}
@@ -169,19 +173,6 @@ export function PlayersView({
                     <p className="flex items-center gap-1 truncate text-[11px] text-slate-400">
                       <ThumbsDown size={11} className="shrink-0 text-rose-400/80" />
                       <span className="truncate">מעדיף בלי {names(p.hateIds)}</span>
-                    </p>
-                  )}
-                  {p.tags.length > 0 && (
-                    <p className="flex flex-wrap items-center gap-1 pt-0.5">
-                      <Tag size={11} className="shrink-0 text-amber-400/80" />
-                      {p.tags.map((tag) => (
-                        <span
-                          key={tag}
-                          className="max-w-full rounded bg-amber-500/15 px-1.5 text-[10px] font-semibold break-words text-amber-200"
-                        >
-                          {tag}
-                        </span>
-                      ))}
                     </p>
                   )}
                 </div>

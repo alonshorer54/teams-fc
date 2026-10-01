@@ -14,6 +14,11 @@ export interface CancellerStats {
   /** בכמה מהשבועות שהוא הופיע ברשימה הוא ביטל */
   appearances: number;
   rate: number;
+  /**
+   * ביטולים רצופים מהשבוע האחרון שבו הופיע ברשימה אחורה. ערב שהגיע אליו סוגר
+   * את הרצף; שבוע שלא נרשם בכלל לא סוגר ולא מוסיף.
+   */
+  streak: number;
 }
 
 export interface PlayerRecord {
@@ -70,6 +75,8 @@ export function computeHistoryStats(history: MatchRecord[]): HistoryStats {
   const cancelMap = new Map<string, CancellerStats>();
   /** האם הרצף של השחקן עדיין "פתוח" לספירה */
   const streakOpen = new Map<string, boolean>();
+  /** מי כבר הגיע לערב חדש יותר — מכאן ואחורה הביטולים שלו כבר לא ברצף */
+  const cameSince = new Set<string>();
 
   let pending = 0;
   let lastResolved: HistoryStats['lastResolved'] = null;
@@ -97,14 +104,19 @@ export function computeHistoryStats(history: MatchRecord[]): HistoryStats {
         cancellations: 0,
         appearances: 0,
         rate: 0,
+        streak: 0,
       };
       entry.name = p.name;
       entry.appearances++;
       cancelMap.set(p.id, entry);
     }
     for (const p of record.cancelled ?? []) {
-      if (!isFillerId(p.id)) cancelMap.get(p.id)!.cancellations++;
+      if (isFillerId(p.id)) continue;
+      const entry = cancelMap.get(p.id)!;
+      entry.cancellations++;
+      if (!cameSince.has(p.id)) entry.streak++;
     }
+    for (const t of teams) for (const p of realMembers(record, t)) cameSince.add(p.id);
 
     if (!placements) continue;
 

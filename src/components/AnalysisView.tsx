@@ -4,6 +4,7 @@ import {
   CalendarX,
   Hourglass,
   Link2,
+  Repeat,
   Sparkles,
   TrendingDown,
   TrendingUp,
@@ -199,7 +200,8 @@ function PairSection({ report }: { report: ReturnType<typeof computePairChemistr
           כימיה משחקית — נלמדת מהתוצאות
         </h2>
         <p className="mt-0.5 text-[11px] text-slate-500">
-          כמה הזוג ניצח יחד, מול כמה שהיה צפוי ממנו. מ-{MIN_GAMES_TOGETHER} ערבים משותפים.
+          כמה הזוג ניצח יחד, מול כמה שהיה צפוי ממנו. מ-{MIN_GAMES_TOGETHER} ערבים משותפים · שקול
+          נספר כחצי ערב ולא מזיז את האחוז.
         </p>
       </div>
 
@@ -275,8 +277,8 @@ function PairEmptyState({ report }: { report: ReturnType<typeof computePairChemi
 function AlmostThere({ pairs }: { pairs: ReturnType<typeof computePairChemistry>['closest'] }) {
   // רק השורה הקדמית: ערבוב של 2/3 עם 1/3 באותה רשימה מטשטש בדיוק את מה
   // שהיא באה לומר — מי קרוב להיות ניתן להכרעה
-  const best = Math.max(0, ...pairs.map((p) => p.games));
-  const close = pairs.filter((p) => p.games === best && p.games > 0);
+  const best = Math.max(0, ...pairs.map((p) => p.counted));
+  const close = pairs.filter((p) => p.counted === best && p.counted > 0);
   if (close.length === 0) return null;
 
   return (
@@ -300,7 +302,7 @@ function AlmostThere({ pairs }: { pairs: ReturnType<typeof computePairChemistry>
               {p.draws > 0 && `, ${p.draws} שקול`}
             </span>
             <span className="shrink-0 font-mono text-[10px] font-bold text-sky-300 tabular-nums">
-              {p.games}/{MIN_GAMES_TOGETHER}
+              {p.counted}/{MIN_GAMES_TOGETHER}
             </span>
           </li>
         ))}
@@ -355,7 +357,7 @@ function PairList({
                 </span>
               </div>
               <p className="mt-0.5 pr-[19px] text-[10px] leading-relaxed text-slate-500">
-                {p.games} ערבים יחד · {p.wins} ניצחו
+                {p.games} ערבים יחד · {p.wins} ניצחו, {p.losses} הפסידו
                 {p.draws > 0 && `, ${p.draws} שקול`} ·{' '}
                 <span className="font-mono tabular-nums">
                   {Math.round(p.winRate * 100)}%
@@ -387,25 +389,34 @@ function CancellersSection({
       </h2>
       <ul className="space-y-1.5">
         {cancellers.slice(0, 8).map((c) => (
-          <li key={c.id} className="flex items-center gap-3 rounded-lg bg-slate-900/50 px-3 py-2 text-xs">
-            <span className="min-w-0 flex-1 truncate font-semibold text-slate-200">{c.name}</span>
-            <div className="h-1.5 w-20 overflow-hidden rounded-full bg-slate-800 sm:w-24">
-              <div
-                className="h-full rounded-full bg-rose-500/70"
-                style={{ width: `${Math.min(100, Math.round(c.rate * 100))}%` }}
-              />
+          <li key={c.id} className="rounded-lg bg-slate-900/50 px-3 py-2 text-xs">
+            <div className="flex items-center gap-3">
+              <span className="min-w-0 flex-1 truncate font-semibold text-slate-200">{c.name}</span>
+              <div className="h-1.5 w-20 overflow-hidden rounded-full bg-slate-800 sm:w-24">
+                <div
+                  className="h-full rounded-full bg-rose-500/70"
+                  style={{ width: `${Math.min(100, Math.round(c.rate * 100))}%` }}
+                />
+              </div>
+              <span className="shrink-0 font-mono text-slate-400 tabular-nums">
+                {c.cancellations}/{c.appearances}
+              </span>
+              <span className="w-10 shrink-0 text-left font-mono text-rose-300 tabular-nums">
+                {Math.round(c.rate * 100)}%
+              </span>
             </div>
-            <span className="shrink-0 font-mono text-slate-400 tabular-nums">
-              {c.cancellations}/{c.appearances}
-            </span>
-            <span className="w-10 shrink-0 text-left font-mono text-rose-300 tabular-nums">
-              {Math.round(c.rate * 100)}%
-            </span>
+            {c.streak >= 2 && (
+              <p className="mt-1 inline-flex items-center gap-1 rounded bg-rose-500/15 px-1.5 py-0.5 text-[10px] font-bold text-rose-300">
+                <Repeat size={10} />
+                {c.streak} ביטולים ברצף
+              </p>
+            )}
           </li>
         ))}
       </ul>
       <p className="mt-2 text-[10px] text-slate-500">
-        מספר הביטולים מתוך מספר השבועות שהשחקן הופיע ברשימה.
+        מספר הביטולים מתוך מספר השבועות שהשחקן הופיע ברשימה. "ברצף" = ביטל בשבועות האחרונים
+        שנרשם אליהם, בלי להגיע ביניהם.
       </p>
     </section>
   );
