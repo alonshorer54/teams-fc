@@ -1,6 +1,7 @@
 import { useEffect, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { X } from 'lucide-react';
+import { POSITION_META, type Position } from '../types';
 
 /* ---------------------------- מודאל בסיסי ---------------------------- */
 
@@ -130,6 +131,22 @@ export function EmptyState({
       {hint && <p className="max-w-sm text-sm leading-relaxed text-slate-400">{hint}</p>}
       {action}
     </div>
+  );
+}
+
+/* ------------------------------ עמדה ------------------------------ */
+
+/** "כללי" באפור: הוא ברירת המחדל, וצריך לראות שיש עמדה בלי שזה יתחרה בעמדות האמיתיות */
+export function PositionChip({ position }: { position: Position }) {
+  const { emoji, label } = POSITION_META[position];
+  return (
+    <span
+      className={`shrink-0 rounded px-1.5 text-[10px] font-semibold ${
+        position === 'any' ? 'bg-slate-700/40 text-slate-400' : 'bg-amber-500/15 text-amber-200'
+      }`}
+    >
+      {emoji} {label}
+    </span>
   );
 }
 

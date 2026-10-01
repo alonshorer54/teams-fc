@@ -2,15 +2,15 @@ import { useState } from 'react';
 import { GripVertical, Link2, Palette, Unlink, Users } from 'lucide-react';
 import {
   ALL_TEAM_IDS,
+  POSITIONS,
   POSITION_META,
-  SPREAD_POSITIONS,
   TEAM_META,
   type Lineup,
   type Player,
   type TeamId,
 } from '../types';
 import { CHEMISTRY_BONUS_PER_BOND, bondStatus, type TeamStats } from '../lib/balance';
-import { RatingBadge } from './ui';
+import { PositionChip, RatingBadge } from './ui';
 
 export function TeamCard({
   teamId,
@@ -167,11 +167,7 @@ export function TeamCard({
                   <span className="truncate text-sm font-semibold text-slate-100">
                     {player.name}
                   </span>
-                  {player.position !== 'any' && (
-                    <span className="shrink-0 rounded bg-amber-500/15 px-1.5 text-[10px] font-semibold text-amber-200">
-                      {POSITION_META[player.position].emoji} {POSITION_META[player.position].label}
-                    </span>
-                  )}
+                  <PositionChip position={player.position} />
                 </span>
                 {/* שורת החברים נשמרת גם למי שאין לו חבר בבריכה. בלי זה השורה
                     נמוכה ב-12 פיקסלים, והשחקנים בשלוש הקבוצות מפסיקים להיות
@@ -199,10 +195,10 @@ export function TeamCard({
 
       {stats.count > 0 && (
         <div
-          className="flex items-center justify-center gap-3 border-t border-slate-800/70 bg-slate-950/30 px-2 py-1.5 text-[11px] text-slate-300"
+          className="flex flex-wrap items-center justify-center gap-x-2.5 gap-y-0.5 border-t border-slate-800/70 bg-slate-950/30 px-2 py-1.5 text-[11px] text-slate-300"
           title="כמה שחקנים מכל עמדה יש בקבוצה"
         >
-          {SPREAD_POSITIONS.map((pos) => (
+          {POSITIONS.map((pos) => (
             <span key={pos} className="inline-flex items-center gap-0.5">
               {POSITION_META[pos].emoji}
               <span className="font-mono font-bold tabular-nums">{stats.positionCounts[pos]}</span>

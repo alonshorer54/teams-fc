@@ -11,8 +11,8 @@ import {
   UserPlus,
   Users,
 } from 'lucide-react';
-import { POSITION_META, type Player } from '../types';
-import { ConfirmDialog, EmptyState, RatingBadge } from './ui';
+import type { Player } from '../types';
+import { ConfirmDialog, EmptyState, PositionChip, RatingBadge } from './ui';
 import { PlayerFormModal, type PlayerDraft } from './PlayerFormModal';
 
 type SortKey = 'name' | 'rating';
@@ -147,11 +147,7 @@ export function PlayersView({
                 <div className="min-w-0 flex-1 space-y-0.5">
                   <p className="flex items-center gap-1.5 truncate font-semibold text-slate-100">
                     <span className="truncate">{p.name}</span>
-                    {p.position !== 'any' && (
-                      <span className="shrink-0 rounded bg-amber-500/15 px-1.5 text-[10px] font-semibold text-amber-200">
-                        {POSITION_META[p.position].emoji} {POSITION_META[p.position].label}
-                      </span>
-                    )}
+                    <PositionChip position={p.position} />
                     {p.isManager && (
                       <ShieldCheck size={13} className="shrink-0 text-amber-400" aria-label="מנהל קבוצה" />
                     )}
