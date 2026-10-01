@@ -231,7 +231,7 @@ function PositionStats({ players }: { players: Player[] }) {
   return (
     <div className="card col-span-2 grid grid-cols-5 px-2 py-3 text-center">
       {POSITIONS.map((pos) => (
-        <div key={pos} title={`כמה שחקנים יכולים לשחק ${POSITION_META[pos].label}`}>
+        <div key={pos} title={`כמה שחקנים רשומים ב${POSITION_META[pos].label}`}>
           <p className="font-mono text-xl font-bold text-emerald-300 tabular-nums">
             {players.filter((p) => p.positions.includes(pos)).length}
           </p>

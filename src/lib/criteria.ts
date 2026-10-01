@@ -377,10 +377,14 @@ export function misplacedPositions(lineup: Lineup, pool: Player[]): number {
     return byPosition;
   });
 
+  // חלקים של שליש מצטברים ל-2.9999999999999996, ואז floor ו-ceil טועים בשחקן שלם
+  const exact = (n: number) => Math.round(n * 1e6) / 1e6;
+
   let misplaced = 0;
   for (const position of SPREAD_POSITIONS) {
     let holders = 0;
     for (const team of counts) holders += team[position] ?? 0;
+    holders = exact(holders);
     if (!holders) continue;
 
     const low = Math.floor(holders / active.length);
@@ -388,7 +392,7 @@ export function misplacedPositions(lineup: Lineup, pool: Player[]): number {
     let over = 0;
     let under = 0;
     for (const team of counts) {
-      const c = team[position] ?? 0;
+      const c = exact(team[position] ?? 0);
       over += Math.max(0, c - high);
       under += Math.max(0, low - c);
     }

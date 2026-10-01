@@ -211,8 +211,9 @@ export function compareLineups(
   /* ריכוז עמדות */
   for (const position of SPREAD_POSITIONS) {
     const countIn = (lineup: Lineup, t: TeamId) =>
-      membersOf(lineup, t).filter((id) => byId.get(id)?.positions.includes(position)).length;
-    const holders = pool.filter((p) => p.positions.includes(position)).length;
+      membersOf(lineup, t).filter((id) => byId.get(id)?.positions.join() === position).length;
+    // רק מי שזו העמדה היחידה שלו: שחקן גמיש ממלא את מה שחסר, אז הוא לא "מצטופף"
+    const holders = pool.filter((p) => p.positions.join() === position).length;
     // שני שוערים באותה קבוצה כבר בעיה; בשאר העמדות פחות משלושה אין באמת מה לפזר
     if (holders < (position === 'gk' ? 2 : 3)) continue;
 
