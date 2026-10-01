@@ -62,8 +62,26 @@ export interface TeamStats {
   gameBonus: number;
   /** דירוג + שני הבונוסים — האומדן ה"אמיתי" לחוזק הקבוצה */
   combined: number;
-  /** כמה שחקנים מכל עמדה יש בקבוצה */
+  /** כמה שחקנים מכל עמדה יש בקבוצה — כל שחקן פעם אחת, אז הסכום הוא גודל הקבוצה */
   positionCounts: Record<Position, number>;
+}
+
+/**
+ * איך קבוצה מסתדרת על המגרש: כל שחקן נספר בעמדה אחת בלבד. מי שיש לו עמדה אחת
+ * נספר בה; מי שיש לו כמה עובר לזו שהקבוצה הכי צריכה — הכי מעט שחקנים בה כרגע.
+ * הגמישים ביותר משובצים אחרונים, כשכבר ברור מה חסר.
+ */
+export function teamPositions(members: Position[][]): Record<Position, number> {
+  const counts = Object.fromEntries(POSITIONS.map((pos) => [pos, 0])) as Record<Position, number>;
+  const flexible = members.filter((positions) => positions.length > 1);
+  for (const positions of members) if (positions.length === 1) counts[positions[0]]++;
+
+  for (const positions of [...flexible].sort((a, b) => a.length - b.length)) {
+    // בשוויון — לפי סדר העמדות, כך ששוער חסר תמיד ימולא ראשון
+    const pick = positions.reduce((best, pos) => (counts[pos] < counts[best] ? pos : best));
+    counts[pick]++;
+  }
+  return counts;
 }
 
 /** כמה נקודות דירוג שווה זוג חברים שמשחקים יחד. */
@@ -171,14 +189,7 @@ export function computeStats(
     const members = membersOf(lineup, t);
     const total = members.reduce((s, id) => s + (byId.get(id)?.rating ?? 0), 0);
 
-    const positionCounts = Object.fromEntries(POSITIONS.map((pos) => [pos, 0])) as Record<
-      Position,
-      number
-    >;
-    // שחקן של כמה עמדות נספר בכל אחת מהן: "3 הגנה" = שלושה שיכולים לשחק בהגנה
-    for (const id of members) {
-      for (const position of byId.get(id)?.positions ?? []) positionCounts[position]++;
-    }
+    const positionCounts = teamPositions(members.map((id) => byId.get(id)?.positions ?? ['any']));
 
     teams[t] = {
       count: members.length,

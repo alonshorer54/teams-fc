@@ -196,7 +196,7 @@ export function TeamCard({
       {stats.count > 0 && (
         <div
           className="flex flex-wrap items-center justify-center gap-x-2.5 gap-y-0.5 border-t border-slate-800/70 bg-slate-950/30 px-2 py-1.5 text-[11px] text-slate-300"
-          title="כמה שחקנים מכל עמדה יש בקבוצה"
+          title="כמה שחקנים מכל עמדה יש בקבוצה. שחקן של כמה עמדות נספר בזו שהקבוצה הכי צריכה"
         >
           {POSITIONS.map((pos) => (
             <span key={pos} className="inline-flex items-center gap-0.5">
