@@ -56,6 +56,31 @@ export function placementMeta(place: Placement, teamCount: number): {
 }
 
 /**
+ * תיאור הערב, מכל הדירוג ולא רק מהמקום הראשון — ביטוי לכל מקום.
+ *
+ * "שקול" נכון רק כשכל הקבוצות באותו מקום. כששתיים חולקות מקום והשלישית מעליהן
+ * או מתחתיהן, השתיים שקולות ביניהן — "שחור וצבעוני שקולים · לבן הפסידו". ולכן
+ * גם מנצחת לא מסתירה את השאר: "לבן ניצחו · שחור וצבעוני שקולים" הוא ערב אחר
+ * לגמרי מ"לבן ניצחו · שחור וצבעוני הפסידו".
+ */
+export function describePlacements(placements: Placements, teams: readonly TeamId[]): string[] {
+  const places = [...new Set(teams.map((t) => placements[t] ?? teams.length))].sort((a, b) => a - b);
+  if (places.length <= 1) return ['ערב שקול'];
+
+  return places
+    .map((place, index) => {
+      const group = teams.filter((t) => (placements[t] ?? teams.length) === place);
+      const names = group.map((t) => TEAM_META[t].name);
+      const who =
+        names.length > 1 ? `${names.slice(0, -1).join(', ')} ו${names[names.length - 1]}` : names[0];
+      // ניצחון והפסד רק למי שסומן בקצה; כל השאר באמצע, ושתיים באמצע שקולות ביניהן
+      if (index === 0 && place <= 1) return `${who} ניצחו`;
+      if (index === places.length - 1 && place >= teams.length) return `${who} הפסידו`;
+      return group.length > 1 ? `${who} שקולים` : `${who} באמצע`;
+    });
+}
+
+/**
  * מחזיר את דירוג המקומות של הגרלה, כולל המרה מהפורמט הישן.
  * null = התוצאה עדיין לא עודכנה.
  */

@@ -14,6 +14,7 @@ import {
 } from 'lucide-react';
 import {
   TEAM_META,
+  describePlacements,
   isFillerId,
   placementMeta,
   recordPlacements,
@@ -117,7 +118,6 @@ export function HistoryView({
         );
         const cancelled = record.cancelled ?? [];
         const placements = recordPlacements(record);
-        const winners = placements ? teams.filter((t) => placements[t] === 1) : [];
 
         return (
           <article key={record.id} className="card overflow-hidden">
@@ -146,11 +146,15 @@ export function HistoryView({
                       </span>
                     )}
                     {placements ? (
-                      <span className="inline-flex items-center gap-1 rounded bg-amber-500/15 px-1.5 py-0.5 font-semibold text-amber-300">
+                      <span className="inline-flex flex-wrap items-center gap-x-1 rounded bg-amber-500/15 px-1.5 py-0.5 font-semibold text-amber-300">
                         <Trophy size={9} />
-                        {winners.length === 0 || winners.length === teams.length
-                          ? 'ערב שקול'
-                          : `${winners.map((t) => TEAM_META[t].name).join(' + ')} ניצחו`}
+                        {/* שבירת שורה רק בין ביטויים, לא באמצע "שחור באמצע" */}
+                        {describePlacements(placements, teams).map((part, i) => (
+                          <span key={part} className="whitespace-nowrap">
+                            {i > 0 && '· '}
+                            {part}
+                          </span>
+                        ))}
                       </span>
                     ) : (
                       <span className="rounded bg-slate-700/60 px-1.5 py-0.5 font-semibold text-slate-300">
