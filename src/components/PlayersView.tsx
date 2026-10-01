@@ -11,7 +11,7 @@ import {
   UserPlus,
   Users,
 } from 'lucide-react';
-import type { Player } from '../types';
+import { POSITIONS, POSITION_META, type Player } from '../types';
 import { ConfirmDialog, EmptyState, PositionChip, RatingBadge } from './ui';
 import { PlayerFormModal, type PlayerDraft } from './PlayerFormModal';
 
@@ -94,13 +94,10 @@ export function PlayersView({
 
       {/* סיכום מאגר */}
       {players.length > 0 && (
-        <div className="grid grid-cols-3 gap-3">
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
           <Stat label="שחקנים במאגר" value={String(players.length)} />
           <Stat label="דירוג ממוצע" value={avg.toFixed(2)} />
-          <Stat
-            label="קשרי חברות"
-            value={String(players.reduce((s, p) => s + p.friendIds.length, 0) / 2)}
-          />
+          <PositionStats players={players} />
         </div>
       )}
 
@@ -225,6 +222,24 @@ export function PlayersView({
           setPendingDelete(null);
         }}
       />
+    </div>
+  );
+}
+
+/** כמה שחקנים בכל עמדה. מי שרשום על כמה עמדות נספר בכל אחת, אז הסכום יכול לעבור את המאגר */
+function PositionStats({ players }: { players: Player[] }) {
+  return (
+    <div className="card col-span-2 grid grid-cols-5 px-2 py-3 text-center">
+      {POSITIONS.map((pos) => (
+        <div key={pos} title={`כמה שחקנים יכולים לשחק ${POSITION_META[pos].label}`}>
+          <p className="font-mono text-xl font-bold text-emerald-300 tabular-nums">
+            {players.filter((p) => p.positions.includes(pos)).length}
+          </p>
+          <p className="mt-0.5 text-[11px] text-slate-400">
+            {POSITION_META[pos].emoji} {POSITION_META[pos].label}
+          </p>
+        </div>
+      ))}
     </div>
   );
 }
