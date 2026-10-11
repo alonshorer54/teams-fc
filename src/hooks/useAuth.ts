@@ -24,6 +24,8 @@ export function useAuth() {
   const [ready, setReady] = useState(!isCloudConfigured);
   /** Bumped after invites were turned into memberships, so the squad list reloads */
   const [claimedAt, setClaimedAt] = useState(0);
+  /** The user whose invites have been looked at — until then their squads aren't known */
+  const [claimedFor, setClaimedFor] = useState<string | null>(null);
 
   useEffect(() => {
     const client = supabase;
@@ -55,6 +57,7 @@ export function useAuth() {
     supabase.rpc('kohot_claim_invites').then(({ data, error }) => {
       // Before supabase-sharing.sql has run the function doesn't exist; sharing just stays off
       if (!error && data) setClaimedAt(Date.now());
+      setClaimedFor(userId);
     });
   }, [userId]);
 
@@ -77,6 +80,8 @@ export function useAuth() {
     email: session?.user.email ?? null,
     ready,
     claimedAt,
+    /** Invites are settled, so the squad list can be trusted */
+    claimReady: !userId || claimedFor === userId,
     signInWithGoogle,
     signOut,
   };

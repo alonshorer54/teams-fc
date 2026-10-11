@@ -18,15 +18,10 @@ export const supabase: SupabaseClient | null = isCloudConfigured
 /** שם הטבלה שמחזיקה את מסמך הנתונים של כל משתמש. */
 export const TABLE = 'kohot_data';
 
-/** תרגום שגיאות Supabase הנפוצות להודעות בעברית. */
+/** Sign-in errors the user can act on, in Hebrew. Sign-in is Google-only. */
 export function translateAuthError(message: string): string {
   const m = message.toLowerCase();
-  if (m.includes('invalid login credentials')) return 'אימייל או סיסמה שגויים';
-  if (m.includes('user already registered')) return 'כתובת האימייל כבר רשומה — נסו להתחבר';
-  if (m.includes('password should be at least')) return 'הסיסמה חייבת להכיל לפחות 6 תווים';
-  if (m.includes('unable to validate email') || m.includes('invalid email'))
-    return 'כתובת האימייל אינה תקינה';
-  if (m.includes('email not confirmed')) return 'צריך לאשר את האימייל לפני ההתחברות';
+  if (m.includes('provider is not enabled')) return 'הכניסה עם גוגל לא מופעלת בשרת';
   if (m.includes('failed to fetch') || m.includes('network'))
     return 'אין חיבור לשרת — בדקו את האינטרנט';
   return message;

@@ -174,6 +174,13 @@ begin
     raise exception 'helpers cannot move a squad' using errcode = '42501';
   end if;
 
+  -- A second entry with an existing id would pass the per-player check below on the
+  -- untouched original, and smuggle in an edited copy
+  if (select count(*) from pg_catalog.jsonb_array_elements(new.players))
+     <> (select count(distinct value ->> 'id') from pg_catalog.jsonb_array_elements(new.players)) then
+    raise exception 'helpers cannot edit existing players (duplicate id)' using errcode = '42501';
+  end if;
+
   for v_old in select value from pg_catalog.jsonb_array_elements(old.players) loop
     select value into v_new
     from pg_catalog.jsonb_array_elements(new.players)

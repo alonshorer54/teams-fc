@@ -111,10 +111,10 @@ const SQUAD_KEY = 'kohot.squad.v1';
  */
 export default function App() {
   const auth = useAuth();
-  const { squads, helping, ready } = useSquads(auth.userId, auth.claimedAt);
+  const { squads, helping, ready } = useSquads(auth.claimReady ? auth.userId : null, auth.claimedAt);
   const [chosen, setChosen] = useLocalStorage<string | null>(SQUAD_KEY, null);
 
-  if (!auth.ready || !ready) {
+  if (!auth.ready || !auth.claimReady || !ready) {
     return (
       <div className="flex min-h-screen items-center justify-center text-sm text-slate-400">
         טוען...

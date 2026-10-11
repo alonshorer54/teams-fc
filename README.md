@@ -24,6 +24,9 @@ installable on a phone, and synced between devices.
 - **Self-correcting ratings** — a player who keeps winning whatever team they land in
   is rated too low, so the app nudges them up a tenth of a point at a time.
 - **Payments** — who paid for the week and who still owes.
+- **Helpers** — the owner invites someone by Gmail to run the evening: draw, record
+  results and payments, and add new players from a pasted list. Existing players —
+  ratings, positions, friendships — stay the owner's; the database enforces that.
 
 ## How the draw works
 
@@ -173,6 +176,18 @@ Access is enforced by Postgres row-level security, so the rule lives in the
 database rather than in client code that anyone can read. The `anon` key is public
 by design; without a signed-in account it cannot read or write anything.
 
+**Google sign-in only.** Email and password were removed. The project's database
+policies also require the session to come from Google *and* the user to have exactly
+one Google identity: with email confirmation off, a password sign-up opened on
+someone's Gmail could otherwise be auto-linked to their later Google sign-in.
+
+**Helpers** are rows in `kohot_members`, created when an invited Gmail address signs
+in (`kohot_claim_invites()`). A helper reads and updates the owner's row — never
+inserts or deletes it — and a trigger rejects any helper write that removes or edits
+an existing player beyond one automatic 0.1 rating step. Saves are conditional on the
+row's `updated_at`, so an owner and a helper saving at the same moment can't silently
+overwrite each other; the second one reloads and is told to redo the change.
+
 **One document per user.** All of a user's data sits in a single row as JSONB, which
 is why tags, per-player preferences and the round format could all be added later
 without a single schema migration. The trade-off is that cross-user queries are
@@ -217,11 +232,16 @@ Scripts: `npm run dev`, `npm run build`, `npm run preview`, `npm run lint`.
 <summary>Connecting your own Supabase project (only needed for cross-device sync)</summary>
 
 1. Create a free project at [supabase.com](https://supabase.com).
-2. Run [`supabase-setup.sql`](./supabase-setup.sql) in the SQL Editor — it creates
-   the table, enables row-level security and turns on realtime.
-3. Copy `.env.example` to `.env.local` and fill in the project URL and anon key
+2. Run [`supabase-setup.sql`](./supabase-setup.sql), then
+   [`supabase-sharing.sql`](./supabase-sharing.sql) and
+   [`supabase-google-only.sql`](./supabase-google-only.sql) in the SQL Editor — the
+   table, row-level security, realtime, helpers, and Google-only access.
+   [`supabase-sharing-test.sql`](./supabase-sharing-test.sql) checks the helper rules.
+3. Enable the Google provider under Authentication → Sign In / Providers (a Google
+   Cloud OAuth client whose redirect URI is `https://<project>.supabase.co/auth/v1/callback`).
+4. Copy `.env.example` to `.env.local` and fill in the project URL and anon key
    from Project Settings → API.
-4. Restart the dev server, sign up once, and use the same account on your phone.
+5. Restart the dev server, sign in with Google, and use the same account on your phone.
 
 </details>
 
@@ -233,7 +253,8 @@ environment variables, and `sw.js` is served with `no-store` so a phone can't ge
 stuck on a stale build.
 
 The site origin has to be listed under Supabase → Authentication → URL
-Configuration, or sign-up confirmation and password-reset links get rejected.
+Configuration → Redirect URLs, or Google sign-in returns to the project's Site URL
+instead of the app.
 
 ## License
 

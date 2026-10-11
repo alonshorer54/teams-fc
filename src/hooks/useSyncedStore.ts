@@ -48,6 +48,27 @@ export function useSyncedStore(userId: string | null, isOwner = true) {
   const hydrated = useRef(false);
   const saveTimer = useRef<number | undefined>(undefined);
   const supportsSettings = useRef(true);
+  /**
+   * The row's updated_at as this device last saw it. A save only goes through if the row
+   * still carries it — otherwise someone else (the owner or a helper) saved in between, and
+   * writing the whole document now would silently wipe their change.
+   */
+  const cloudUpdatedAt = useRef<string | null>(null);
+
+  /** Replaces local state with what the database holds, after a refused or conflicting save. */
+  const adoptCloud = useCallback(async (): Promise<boolean> => {
+    const client = supabase;
+    if (!client || !userId) return false;
+    const { data } = await client.from(TABLE).select('*').eq('user_id', userId).maybeSingle();
+    if (!data) return false;
+    const cloudSettings = normalizeSettings((data.settings ?? {}) as Partial<AppSettings>);
+    cloudFingerprint.current = fingerprint(data.players ?? [], data.history ?? [], cloudSettings);
+    cloudUpdatedAt.current = data.updated_at ?? null;
+    setPlayers((data.players ?? []) as Player[]);
+    setHistory((data.history ?? []) as MatchRecord[]);
+    setSettings(cloudSettings);
+    return true;
+  }, [userId, setPlayers, setHistory, setSettings]);
 
   /* ------------------------- טעינה ראשונית מהענן ------------------------- */
 
@@ -99,6 +120,7 @@ export function useSyncedStore(userId: string | null, isOwner = true) {
         if (hasSettingsColumn && data.settings) setSettings(cloudSettings);
 
         cloudFingerprint.current = fingerprint(cloudPlayers, cloudHistory, cloudSettings);
+        cloudUpdatedAt.current = data.updated_at ?? null;
         setLastSyncedAt(data.updated_at ?? new Date().toISOString());
       } else if (!isOwner) {
         // A helper never creates a squad; a missing row means access was removed
@@ -107,7 +129,7 @@ export function useSyncedStore(userId: string | null, isOwner = true) {
         return;
       } else {
         // התחברות ראשונה — מעלים את מה שכבר קיים במכשיר
-        const ok = await upsertRow(client, userId, players, history, settings, supportsSettings, isOwner);
+        const ok = await upsertRow(client, userId, players, history, settings, supportsSettings, isOwner, null);
         if (cancelled) return;
         if (!ok.success) {
           setError(ok.message ?? 'שמירה ראשונית נכשלה');
@@ -115,6 +137,7 @@ export function useSyncedStore(userId: string | null, isOwner = true) {
           return;
         }
         cloudFingerprint.current = fingerprint(players, history, settings);
+        cloudUpdatedAt.current = ok.updatedAt;
         setLastSyncedAt(new Date().toISOString());
       }
 
@@ -141,33 +164,34 @@ export function useSyncedStore(userId: string | null, isOwner = true) {
     setStatus('saving');
     window.clearTimeout(saveTimer.current);
     saveTimer.current = window.setTimeout(async () => {
-      const result = await upsertRow(client, userId, players, history, settings, supportsSettings, isOwner);
+      const result = await upsertRow(
+        client,
+        userId,
+        players,
+        history,
+        settings,
+        supportsSettings,
+        isOwner,
+        cloudUpdatedAt.current,
+      );
       if (!result.success) {
         setError(result.message ?? 'השמירה נכשלה');
         setStatus('error');
-        // A helper's refused change would otherwise be retried with every later edit and
-        // block them for good; go back to what the database holds instead
-        if (!isOwner) {
-          const { data } = await client.from(TABLE).select('*').eq('user_id', userId).maybeSingle();
-          if (data) {
-            const cloudSettings = normalizeSettings((data.settings ?? {}) as Partial<AppSettings>);
-            cloudFingerprint.current = fingerprint(data.players ?? [], data.history ?? [], cloudSettings);
-            setPlayers((data.players ?? []) as Player[]);
-            setHistory((data.history ?? []) as MatchRecord[]);
-            setSettings(cloudSettings);
-          }
-        }
+        // A conflicting or refused change would otherwise be retried with every later edit;
+        // take what the database holds, so the next edit starts from the real squad
+        if ((result.conflict || !isOwner) && !(await adoptCloud())) setError('אין גישה לקבוצה הזו');
         return;
       }
       setSettingsSynced(supportsSettings.current);
       cloudFingerprint.current = current;
+      cloudUpdatedAt.current = result.updatedAt;
       setLastSyncedAt(result.updatedAt);
       setError(null);
       setStatus('synced');
     }, SAVE_DEBOUNCE_MS);
 
     return () => window.clearTimeout(saveTimer.current);
-  }, [players, history, settings, userId, isOwner, setPlayers, setHistory, setSettings]);
+  }, [players, history, settings, userId, isOwner, adoptCloud]);
 
   /* ------------------- האזנה לשינויים ממכשירים אחרים ------------------- */
 
@@ -188,6 +212,7 @@ export function useSyncedStore(userId: string | null, isOwner = true) {
             updated_at?: string;
           };
           if (!row?.players) return;
+          cloudUpdatedAt.current = row.updated_at ?? cloudUpdatedAt.current;
 
           const nextSettings: AppSettings = row.settings
             ? normalizeSettings(row.settings)
@@ -228,13 +253,18 @@ export function useSyncedStore(userId: string | null, isOwner = true) {
         settings,
         supportsSettings,
         isOwner,
+        cloudUpdatedAt.current,
       );
-      if (!result.success) return;
+      if (!result.success) {
+        if (result.conflict) await adoptCloud();
+        return;
+      }
       cloudFingerprint.current = fingerprint(nextPlayers, nextHistory, settings);
+      cloudUpdatedAt.current = result.updatedAt;
       setLastSyncedAt(result.updatedAt);
       setStatus('synced');
     },
-    [userId, isOwner, settings, setPlayers, setHistory],
+    [userId, isOwner, settings, setPlayers, setHistory, adoptCloud],
   );
 
   return {
@@ -268,9 +298,20 @@ const helperMessage = (message: string) =>
     ? 'עוזר לא יכול לשנות או למחוק שחקן קיים — השינוי לא נשמר'
     : message;
 
+const CONFLICT_MESSAGE = 'הקבוצה עודכנה באותו רגע ממכשיר אחר — השינוי האחרון שלך לא נשמר. אפשר לעשות אותו שוב';
+
+const isMissingSettings = (error: { code?: string; message: string }) =>
+  error.code === MISSING_COLUMN || /settings/i.test(error.message);
+
+type SaveResult = { success: boolean; updatedAt: string; message?: string; conflict?: boolean };
+
 /**
- * כותב את השורה, ואם עמודת ההגדרות חסרה — מנסה שוב בלעדיה
- * ומסמן שההגדרות נשארות מקומיות.
+ * Writes the document. When the row is already known (`expected` is the updated_at this
+ * device last saw), it is a conditional update: it only lands if nobody saved in between,
+ * which matters now that an owner and a helper can edit the same squad. Without a known
+ * row (the owner's first sign-in) it's the original upsert.
+ *
+ * If the settings column is missing, retries without it and marks settings as local-only.
  */
 async function upsertRow(
   client: Client,
@@ -279,29 +320,45 @@ async function upsertRow(
   history: MatchRecord[],
   settings: AppSettings,
   supportsSettings: { current: boolean },
-  isOwner = true,
-): Promise<{ success: boolean; updatedAt: string; message?: string }> {
+  isOwner: boolean,
+  expected: string | null,
+): Promise<SaveResult> {
   const updatedAt = new Date().toISOString();
-  const base = { user_id: userId, players, history, updated_at: updatedAt };
 
-  // A helper may only update the owner's row: an upsert would also need INSERT rights
-  if (!isOwner) {
-    const { data, error } = await client
-      .from(TABLE)
-      .update({ players, history, settings, updated_at: updatedAt })
-      .eq('user_id', userId)
-      .select('user_id');
-    if (error) return { success: false, updatedAt, message: helperMessage(error.message) };
-    if (!data?.length) return { success: false, updatedAt, message: 'אין גישה לקבוצה הזו' };
+  if (expected) {
+    const write = (withSettings: boolean) =>
+      client
+        .from(TABLE)
+        .update(
+          withSettings
+            ? { players, history, settings, updated_at: updatedAt }
+            : { players, history, updated_at: updatedAt },
+        )
+        .eq('user_id', userId)
+        .eq('updated_at', expected)
+        .select('user_id');
+
+    let { data, error } = await write(supportsSettings.current);
+    if (error && supportsSettings.current && isMissingSettings(error)) {
+      supportsSettings.current = false;
+      ({ data, error } = await write(false));
+    }
+    if (error) {
+      return { success: false, updatedAt, message: isOwner ? error.message : helperMessage(error.message) };
+    }
+    // Nothing matched: the row moved on since this device last saw it (or access is gone)
+    if (!data?.length) return { success: false, updatedAt, conflict: true, message: CONFLICT_MESSAGE };
     return { success: true, updatedAt };
   }
 
+  // A helper never creates the owner's row
+  if (!isOwner) return { success: false, updatedAt, message: 'אין גישה לקבוצה הזו' };
+
+  const base = { user_id: userId, players, history, updated_at: updatedAt };
   if (supportsSettings.current) {
     const { error } = await client.from(TABLE).upsert({ ...base, settings });
     if (!error) return { success: true, updatedAt };
-
-    const missing = error.code === MISSING_COLUMN || /settings/i.test(error.message);
-    if (!missing) return { success: false, updatedAt, message: error.message };
+    if (!isMissingSettings(error)) return { success: false, updatedAt, message: error.message };
     supportsSettings.current = false; // ננסה שוב בלי ההגדרות
   }
 
