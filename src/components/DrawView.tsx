@@ -345,12 +345,15 @@ export function DrawView({
           setLastChange(null);
         }}
         onToggle={(id) =>
-          setDraft((p) => ({
-            ...p,
-            selectedIds: p.selectedIds.includes(id)
-              ? p.selectedIds.filter((x) => x !== id)
-              : [...p.selectedIds, id],
-          }))
+          setDraft((p) => {
+            const leaving = p.selectedIds.includes(id);
+            return {
+              ...p,
+              selectedIds: leaving ? p.selectedIds.filter((x) => x !== id) : [...p.selectedIds, id],
+              // A replacement who isn't coming any more isn't replacing anyone either
+              substitutions: leaving ? p.substitutions.filter((s) => s.inId !== id) : p.substitutions,
+            };
+          })
         }
         onCancel={(id) =>
           setDraft((p) => ({
@@ -358,6 +361,8 @@ export function DrawView({
             cancelledIds: p.cancelledIds.includes(id) ? p.cancelledIds : [...p.cancelledIds, id],
             // מי שביטל יורד אוטומטית מרשימת המשחקים
             selectedIds: p.selectedIds.filter((x) => x !== id),
+            // and if he was replacing someone, that replacement is off too
+            substitutions: p.substitutions.filter((s) => s.inId !== id),
           }))
         }
         onUncancel={(id) =>
