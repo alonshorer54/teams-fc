@@ -455,6 +455,7 @@ function SquadApp({
       ...prev,
       selectedIds: prev.selectedIds.filter((x) => x !== id),
       cancelledIds: prev.cancelledIds.filter((x) => x !== id),
+      substitutions: prev.substitutions.filter((s) => s.inId !== id && s.outId !== id),
       lineup: prev.lineup ? removeFromLineup(prev.lineup, id) : null,
     }));
     notify('השחקן נמחק');
