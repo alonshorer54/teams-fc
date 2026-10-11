@@ -1,22 +1,15 @@
 import { useState } from 'react';
 import {
-  ArrowRight,
   BarChart3,
   CloudOff,
   FlaskConical,
-  KeyRound,
   ListOrdered,
-  LogIn,
-  MailCheck,
   Share2,
   Shuffle,
   Smartphone,
-  UserPlus,
   Wallet,
 } from 'lucide-react';
 import { InstallButton } from './InstallButton';
-
-type Screen = 'intro' | 'signin' | 'signup' | 'forgot';
 
 const FEATURES = [
   {
@@ -51,339 +44,88 @@ const FEATURES = [
   },
 ];
 
-/**
- * מסך הפתיחה של האפליקציה: הסבר קצר למי שנכנס בפעם הראשונה,
- * ומשם הרשמה, התחברות או שחזור סיסמה.
- */
-export function AuthGate({
-  onSignIn,
-  onSignUp,
-  onForgotPassword,
-  onTryDemo,
-  notify,
-}: {
-  onSignIn: (email: string, password: string) => Promise<string | null>;
-  onSignUp: (email: string, password: string) => Promise<string | null>;
-  onForgotPassword: (email: string) => Promise<string | null>;
-  /** נכנסים לאפליקציה עם נתוני דוגמה, בלי חשבון ובלי לשמור כלום */
-  onTryDemo: () => void;
-  notify: (msg: string) => void;
-}) {
-  const [screen, setScreen] = useState<Screen>('intro');
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [notice, setNotice] = useState<string | null>(null);
-
-  const reset = (next: Screen) => {
-    setScreen(next);
-    setError(null);
-    setNotice(null);
-  };
-
-  const submit = async () => {
-    if (!email.trim()) {
-      setError('צריך למלא אימייל');
-      return;
-    }
-    if (screen !== 'forgot' && !password) {
-      setError('צריך למלא סיסמה');
-      return;
-    }
-
-    setBusy(true);
-    setError(null);
-    setNotice(null);
-
-    const err =
-      screen === 'signin'
-        ? await onSignIn(email.trim(), password)
-        : screen === 'signup'
-          ? await onSignUp(email.trim(), password)
-          : await onForgotPassword(email.trim());
-
-    setBusy(false);
-    if (err) {
-      setError(err);
-      return;
-    }
-    if (screen === 'signup') {
-      setNotice('החשבון נוצר. אם נדרש אישור אימייל — בדקו את תיבת הדואר ואז התחברו.');
-      setScreen('signin');
-    } else if (screen === 'forgot') {
-      setNotice('אם הכתובת רשומה אצלנו, נשלח אליה קישור לאיפוס הסיסמה. בדקו גם בספאם.');
-    }
-  };
-
-  /* ------------------------------ מסך פתיחה ------------------------------ */
-
-  if (screen === 'intro') {
-    return (
-      <div className="mx-auto min-h-screen max-w-4xl px-4 py-10 sm:px-6">
-        <header className="text-center">
-          <div className="mx-auto mb-4 w-fit rounded-3xl bg-emerald-500/15 p-4 text-4xl leading-none">
-            ⚽
-          </div>
-          <h1 className="text-3xl font-extrabold tracking-tight text-slate-50 sm:text-4xl">
-            Teams FC
-          </h1>
-          <p className="mx-auto mt-3 max-w-xl text-sm leading-relaxed text-slate-400 sm:text-base">
-            מחלקים קבוצות לכדורגל השבועי בלי ויכוחים. בוחרים מי משחק, לוחצים על הגרלה, ומקבלים
-            חלוקה מאוזנת — מוכנה לשליחה לקבוצה.
-          </p>
-
-          <div className="mt-7 flex flex-wrap justify-center gap-2">
-            <button className="btn-primary px-6" onClick={onTryDemo}>
-              <FlaskConical size={16} />
-              מצב דוגמה
-            </button>
-            <button className="btn-ghost px-6" onClick={() => reset('signup')}>
-              <UserPlus size={16} />
-              יצירת חשבון
-            </button>
-            <button className="btn-ghost px-6" onClick={() => reset('signin')}>
-              <LogIn size={16} />
-              כבר יש לי חשבון
-            </button>
-          </div>
-
-          <p className="mx-auto mt-3 max-w-md text-[12px] leading-relaxed text-slate-400">
-            נכנסים בלי הרשמה ובלי אימייל — 21 שחקנים מומצאים, הגרלה אמיתית וכל שאר המסכים.
-            שום דבר לא נשמר.
-          </p>
-
-          <div className="mt-4 flex justify-center">
-            <InstallButton notify={notify} />
-          </div>
-        </header>
-
-        <ul className="mt-10 grid gap-3 sm:grid-cols-2">
-          {FEATURES.map(({ icon: Icon, title, text }) => (
-            <li key={title} className="card flex items-start gap-3 p-4">
-              <span className="rounded-xl bg-slate-800/70 p-2 text-emerald-400">
-                <Icon size={18} />
-              </span>
-              <span>
-                <span className="block text-sm font-bold text-slate-100">{title}</span>
-                <span className="mt-0.5 block text-[12px] leading-relaxed text-slate-400">
-                  {text}
-                </span>
-              </span>
-            </li>
-          ))}
-        </ul>
-
-        <p className="mt-8 text-center text-[11px] leading-relaxed text-slate-500">
-          עם חשבון הנתונים פרטיים לכם בלבד ומסתנכרנים בין הטלפון למחשב.
-        </p>
-      </div>
-    );
-  }
-
-  /* --------------------------- טפסי התחברות --------------------------- */
-
-  const titles: Record<Exclude<Screen, 'intro'>, string> = {
-    signin: 'התחברות',
-    signup: 'יצירת חשבון',
-    forgot: 'שחזור סיסמה',
-  };
-
+function GoogleMark() {
   return (
-    <div className="flex min-h-screen items-center justify-center px-4 py-8">
-      <div className="card w-full max-w-md p-7">
-        <button
-          className="mb-4 inline-flex items-center gap-1.5 text-xs font-semibold text-slate-400 transition hover:text-slate-200"
-          onClick={() => reset('intro')}
-        >
-          <ArrowRight size={13} />
-          חזרה
-        </button>
-
-        <div className="mb-6 text-center">
-          <div className="mx-auto mb-3 w-fit rounded-2xl bg-emerald-500/15 p-3 text-3xl leading-none">
-            ⚽
-          </div>
-          <h1 className="text-2xl font-extrabold text-slate-50">{titles[screen]}</h1>
-          <p className="mt-1 text-xs text-slate-400">
-            {screen === 'forgot'
-              ? 'נשלח אליכם קישור לקביעת סיסמה חדשה'
-              : 'אותו חשבון בטלפון ובמחשב — אותם נתונים'}
-          </p>
-        </div>
-
-        <div className="space-y-4">
-          <div>
-            <label className="label" htmlFor="auth-email">
-              אימייל
-            </label>
-            <input
-              id="auth-email"
-              type="email"
-              dir="ltr"
-              autoComplete="email"
-              className="input text-left"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && submit()}
-            />
-          </div>
-
-          {screen !== 'forgot' && (
-            <div>
-              <label className="label" htmlFor="auth-password">
-                סיסמה
-              </label>
-              <input
-                id="auth-password"
-                type="password"
-                dir="ltr"
-                autoComplete={screen === 'signin' ? 'current-password' : 'new-password'}
-                className="input text-left"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && submit()}
-              />
-              {screen === 'signup' && (
-                <p className="mt-1.5 text-[11px] text-slate-500">לפחות 6 תווים.</p>
-              )}
-            </div>
-          )}
-
-          {error && (
-            <p className="rounded-lg bg-rose-500/10 px-3 py-2 text-xs font-semibold text-rose-300">
-              {error}
-            </p>
-          )}
-          {notice && (
-            <p className="flex items-start gap-2 rounded-lg bg-emerald-500/10 px-3 py-2 text-xs leading-relaxed font-semibold text-emerald-300">
-              <MailCheck size={14} className="mt-0.5 shrink-0" />
-              {notice}
-            </p>
-          )}
-
-          <button className="btn-primary w-full" onClick={submit} disabled={busy}>
-            {screen === 'signin' ? (
-              <LogIn size={16} />
-            ) : screen === 'signup' ? (
-              <UserPlus size={16} />
-            ) : (
-              <KeyRound size={16} />
-            )}
-            {busy ? 'רגע...' : screen === 'forgot' ? 'שליחת קישור' : titles[screen]}
-          </button>
-        </div>
-
-        <div className="mt-5 flex flex-wrap justify-center gap-x-4 gap-y-2 border-t border-slate-800 pt-4 text-[11px] font-semibold">
-          {screen !== 'signin' && (
-            <button className="text-slate-400 hover:text-slate-200" onClick={() => reset('signin')}>
-              יש לי כבר חשבון
-            </button>
-          )}
-          {screen !== 'signup' && (
-            <button className="text-slate-400 hover:text-slate-200" onClick={() => reset('signup')}>
-              יצירת חשבון חדש
-            </button>
-          )}
-          {screen !== 'forgot' && (
-            <button className="text-slate-400 hover:text-slate-200" onClick={() => reset('forgot')}>
-              שכחתי סיסמה
-            </button>
-          )}
-        </div>
-      </div>
-    </div>
+    <svg width="18" height="18" viewBox="0 0 48 48" aria-hidden>
+      <path fill="#FFC107" d="M43.6 20.5H42V20H24v8h11.3C33.7 32.7 29.2 36 24 36c-6.6 0-12-5.4-12-12s5.4-12 12-12c3.1 0 5.8 1.2 7.9 3.1l5.7-5.7C34 6.1 29.3 4 24 4 12.9 4 4 12.9 4 24s8.9 20 20 20 20-8.9 20-20c0-1.3-.1-2.4-.4-3.5z" />
+      <path fill="#FF3D00" d="M6.3 14.7l6.6 4.8C14.7 15.1 19 12 24 12c3.1 0 5.8 1.2 7.9 3.1l5.7-5.7C34 6.1 29.3 4 24 4 16.3 4 9.7 8.3 6.3 14.7z" />
+      <path fill="#4CAF50" d="M24 44c5.2 0 9.9-2 13.4-5.2l-6.2-5.2C29.2 35.1 26.7 36 24 36c-5.2 0-9.6-3.3-11.3-7.9l-6.5 5C9.5 39.6 16.2 44 24 44z" />
+      <path fill="#1976D2" d="M43.6 20.5H42V20H24v8h11.3c-.8 2.2-2.2 4.2-4.1 5.6l6.2 5.2C37 39.2 44 34 44 24c0-1.3-.1-2.4-.4-3.5z" />
+    </svg>
   );
 }
 
-/* ------------------------ קביעת סיסמה חדשה ------------------------ */
-
-export function PasswordRecovery({
-  onSubmit,
-  onCancel,
+/** The opening screen: what the app does, the demo, and Google sign-in. */
+export function AuthGate({
+  onGoogle,
+  onTryDemo,
+  notify,
 }: {
-  onSubmit: (password: string) => Promise<string | null>;
-  onCancel: () => void;
+  onGoogle: () => Promise<string | null>;
+  /** Opens the app with sample data, no account, nothing saved */
+  onTryDemo: () => void;
+  notify: (msg: string) => void;
 }) {
-  const [password, setPassword] = useState('');
-  const [confirm, setConfirm] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const submit = async () => {
-    if (password.length < 6) {
-      setError('הסיסמה חייבת להכיל לפחות 6 תווים');
-      return;
-    }
-    if (password !== confirm) {
-      setError('שתי הסיסמאות אינן זהות');
-      return;
-    }
-    setBusy(true);
-    const err = await onSubmit(password);
-    setBusy(false);
-    if (err) setError(err);
-  };
-
   return (
-    <div className="flex min-h-screen items-center justify-center px-4">
-      <div className="card w-full max-w-md p-7">
-        <div className="mb-6 text-center">
-          <div className="mx-auto mb-3 w-fit rounded-2xl bg-emerald-500/15 p-3 text-emerald-400">
-            <KeyRound size={26} />
-          </div>
-          <h1 className="text-2xl font-extrabold text-slate-50">סיסמה חדשה</h1>
-          <p className="mt-1 text-xs text-slate-400">בחרו סיסמה חדשה לחשבון</p>
+    <div className="mx-auto min-h-screen max-w-4xl px-4 py-10 sm:px-6">
+      <header className="text-center">
+        <div className="mx-auto mb-4 w-fit rounded-3xl bg-emerald-500/15 p-4 text-4xl leading-none">
+          ⚽
         </div>
+        <h1 className="text-3xl font-extrabold tracking-tight text-slate-50 sm:text-4xl">Teams FC</h1>
+        <p className="mx-auto mt-3 max-w-xl text-sm leading-relaxed text-slate-400 sm:text-base">
+          מחלקים קבוצות לכדורגל השבועי בלי ויכוחים. בוחרים מי משחק, לוחצים על הגרלה, ומקבלים
+          חלוקה מאוזנת — מוכנה לשליחה לקבוצה.
+        </p>
 
-        <div className="space-y-4">
-          <div>
-            <label className="label" htmlFor="new-pass">
-              סיסמה חדשה
-            </label>
-            <input
-              id="new-pass"
-              type="password"
-              dir="ltr"
-              autoComplete="new-password"
-              className="input text-left"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-            />
-          </div>
-          <div>
-            <label className="label" htmlFor="new-pass2">
-              שוב, לאימות
-            </label>
-            <input
-              id="new-pass2"
-              type="password"
-              dir="ltr"
-              autoComplete="new-password"
-              className="input text-left"
-              value={confirm}
-              onChange={(e) => setConfirm(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && submit()}
-            />
-          </div>
-
-          {error && (
-            <p className="rounded-lg bg-rose-500/10 px-3 py-2 text-xs font-semibold text-rose-300">
-              {error}
-            </p>
-          )}
-
-          <button className="btn-primary w-full" onClick={submit} disabled={busy}>
-            {busy ? 'שומר...' : 'שמירת הסיסמה'}
-          </button>
+        <div className="mx-auto mt-7 flex max-w-sm flex-col gap-2">
           <button
-            className="w-full text-center text-[11px] font-semibold text-slate-500 hover:text-slate-300"
-            onClick={onCancel}
+            className="flex w-full cursor-pointer items-center justify-center gap-3 rounded-xl bg-white px-4 py-3 text-sm font-semibold text-slate-800 shadow transition hover:bg-slate-100 active:scale-[0.98] disabled:opacity-50"
+            disabled={busy}
+            onClick={async () => {
+              setBusy(true);
+              setError(null);
+              const err = await onGoogle();
+              // On success the browser is already on its way to Google
+              if (err) {
+                setError(err);
+                setBusy(false);
+              }
+            }}
           >
-            ביטול
+            <GoogleMark />
+            המשך עם גוגל
           </button>
+          <button className="btn-ghost w-full py-3" onClick={onTryDemo}>
+            <FlaskConical size={16} />
+            מצב דוגמה
+          </button>
+          {error && (
+            <p className="rounded-lg bg-rose-500/10 px-3 py-2 text-xs font-semibold text-rose-300">{error}</p>
+          )}
         </div>
-      </div>
+
+        <div className="mt-4 flex justify-center">
+          <InstallButton notify={notify} />
+        </div>
+      </header>
+
+      <ul className="mt-10 grid gap-3 sm:grid-cols-2">
+        {FEATURES.map(({ icon: Icon, title, text }) => (
+          <li key={title} className="card flex items-start gap-3 p-4">
+            <span className="rounded-xl bg-slate-800/70 p-2 text-emerald-400">
+              <Icon size={18} />
+            </span>
+            <span>
+              <span className="block text-sm font-bold text-slate-100">{title}</span>
+              <span className="mt-0.5 block text-[12px] leading-relaxed text-slate-400">{text}</span>
+            </span>
+          </li>
+        ))}
+      </ul>
     </div>
   );
 }

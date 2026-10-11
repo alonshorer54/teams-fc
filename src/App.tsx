@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   BarChart3,
   Database,
+  Handshake,
   FlaskConical,
   History,
   Shuffle,
@@ -38,6 +39,7 @@ import {
 import { isCloudConfigured } from './lib/supabase';
 import { useLocalStorage } from './hooks/useLocalStorage';
 import { useAuth } from './hooks/useAuth';
+import { useSquads, type Squad } from './hooks/useSquads';
 import { useSyncedStore } from './hooks/useSyncedStore';
 import { formatHebrewDate, rollRoundDate, todayISO } from './lib/format';
 import { computeHistoryStats, streakByPlayer } from './lib/stats';
@@ -63,7 +65,8 @@ import { AnalysisView } from './components/AnalysisView';
 import { PaymentsView } from './components/PaymentsView';
 import { InstallButton } from './components/InstallButton';
 import { BackupCard } from './components/BackupCard';
-import { AuthGate, CloudNotConfigured, PasswordRecovery } from './components/AuthGate';
+import { AuthGate, CloudNotConfigured } from './components/AuthGate';
+import { SharingCard } from './components/SharingCard';
 import { SyncBadge } from './components/SyncBadge';
 import { Toast } from './components/ui';
 import type { PlayerDraft } from './components/PlayerFormModal';
@@ -99,12 +102,59 @@ function buildDemoPlayers(): Player[] {
   );
 }
 
+const SQUAD_KEY = 'kohot.squad.v1';
+
+/**
+ * Signs in and picks the squad, then mounts the app for that squad. The app is keyed by the
+ * squad, so switching squads starts it fresh: nothing synced for one squad — local cache,
+ * pending saves — can leak into another.
+ */
 export default function App() {
   const auth = useAuth();
-  const store = useSyncedStore(auth.userId);
+  const { squads, helping, ready } = useSquads(auth.userId, auth.claimedAt);
+  const [chosen, setChosen] = useLocalStorage<string | null>(SQUAD_KEY, null);
+
+  if (!auth.ready || !ready) {
+    return (
+      <div className="flex min-h-screen items-center justify-center text-sm text-slate-400">
+        טוען...
+      </div>
+    );
+  }
+
+  // Someone who helps a squad and hasn't chosen yet most likely came to help
+  const active = squads.find((s) => s.ownerId === chosen) ?? helping[0] ?? squads[0] ?? null;
+
+  return (
+    <SquadApp
+      key={active?.ownerId ?? 'signed-out'}
+      auth={auth}
+      squad={active}
+      squads={squads}
+      onSelectSquad={setChosen}
+    />
+  );
+}
+
+function SquadApp({
+  auth,
+  squad,
+  squads,
+  onSelectSquad,
+}: {
+  auth: ReturnType<typeof useAuth>;
+  /** null when signed out (the opening screen, or the demo) */
+  squad: Squad | null;
+  squads: Squad[];
+  onSelectSquad: (ownerId: string) => void;
+}) {
+  const isOwner = squad?.isOwner ?? true;
+  const store = useSyncedStore(squad?.ownerId ?? null, isOwner);
   const { players: realPlayers, setPlayers, history: realHistory, setHistory: setRealHistory } = store;
 
-  const [tab, setTab] = useState<Tab>('players');
+  // A helper has no players tab: existing players are the owner's to edit
+  const tabs = isOwner ? TABS : TABS.filter((t) => t.id !== 'players');
+  const [tab, setTab] = useState<Tab>(isOwner ? 'players' : 'draw');
 
   /**
    * מצב דוגמה: שחקנים ותוצאות חיים בזיכרון בלבד ולא נוגעים בנתונים האמיתיים
@@ -183,12 +233,12 @@ export default function App() {
   // העברה חד-פעמית של מחזור שנשמר מקומית לפני שהסנכרון הופעל
   const migratedRound = useRef(false);
   useEffect(() => {
-    if (migratedRound.current || isDemo || store.status === 'loading') return;
+    if (migratedRound.current || isDemo || !isOwner || store.status === 'loading') return;
     if (!legacyDraft?.selectedIds?.length || settings.round.matchDate) return;
     migratedRound.current = true;
     setRealDraft(() => normalizeDraft(legacyDraft, legacyDraft.matchDate || todayISO()));
     setLegacyDraft(null);
-  }, [legacyDraft, settings.round.matchDate, isDemo, store.status, setRealDraft, setLegacyDraft]);
+  }, [legacyDraft, settings.round.matchDate, isDemo, isOwner, store.status, setRealDraft, setLegacyDraft]);
 
   /** במצב דוגמה סופרים את כל ההיסטוריה המומצאת, אחרת אין מה להדגים */
   const driftSince = isDemo ? undefined : settings.ratingDriftSince;
@@ -208,7 +258,8 @@ export default function App() {
    */
   const replayedFor = useRef<string | null | undefined>(undefined);
   useEffect(() => {
-    if (isDemo || store.status === 'loading' || store.status === 'error') return;
+    // Rewriting every rating is the owner's call, not something a helper's device does
+    if (isDemo || !isOwner || store.status === 'loading' || store.status === 'error') return;
     if (replayedFor.current === auth.userId) return;
     if (settings.ratingDriftSince === DRIFT_FROM_START) return;
     replayedFor.current = auth.userId;
@@ -233,6 +284,7 @@ export default function App() {
     if (countedRounds(realHistory).length) setReplaySummary(moved);
   }, [
     isDemo,
+    isOwner,
     store,
     auth.userId,
     settings.ratingDriftSince,
@@ -573,31 +625,11 @@ export default function App() {
 
   /* -------------------------------- UI -------------------------------- */
 
-  // ממתינים לבדיקת ההתחברות כדי לא להבהב בין מסך הכניסה לאפליקציה
-  if (!auth.ready) {
-    return (
-      <div className="flex min-h-screen items-center justify-center text-sm text-slate-400">
-        טוען...
-      </div>
-    );
-  }
-
-  // הגיע דרך קישור שחזור — קודם קובעים סיסמה חדשה
-  if (isCloudConfigured && auth.recovering) {
-    return <PasswordRecovery onSubmit={auth.setNewPassword} onCancel={auth.signOut} />;
-  }
-
   // מצב דוגמה חי כולו בזיכרון ולא נוגע בענן, ולכן הוא לא דורש חשבון.
   // מי שלא נרשם רואה את מסך הפתיחה עד שהוא בוחר להיכנס לניסיון.
   if (isCloudConfigured && !auth.userId && !isDemo) {
     return (
-      <AuthGate
-        onSignIn={auth.signIn}
-        onSignUp={auth.signUp}
-        onForgotPassword={auth.requestPasswordReset}
-        onTryDemo={enterDemo}
-        notify={notify}
-      />
+      <AuthGate onGoogle={auth.signInWithGoogle} onTryDemo={enterDemo} notify={notify} />
     );
   }
 
@@ -613,6 +645,26 @@ export default function App() {
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
+          {!isDemo && squads.length > 1 && squad && (
+            <select
+              className="input w-auto max-w-[14rem] py-1.5 text-xs font-semibold"
+              value={squad.ownerId}
+              onChange={(e) => onSelectSquad(e.target.value)}
+              aria-label="קבוצה"
+            >
+              {squads.map((s) => (
+                <option key={s.ownerId} value={s.ownerId}>
+                  {s.label}
+                </option>
+              ))}
+            </select>
+          )}
+          {!isDemo && !isOwner && (
+            <span className="inline-flex items-center gap-1.5 rounded-xl border border-sky-500/30 bg-sky-500/10 px-2.5 py-1.5 text-[11px] font-semibold text-sky-200">
+              <Handshake size={13} />
+              עוזר
+            </span>
+          )}
           <InstallButton notify={notify} />
           {!isGuest && (
             <SyncBadge
@@ -663,7 +715,7 @@ export default function App() {
       )}
 
       <nav className="mb-5 flex gap-0.5 rounded-2xl border border-slate-800/80 bg-slate-900/50 p-1.5 backdrop-blur sm:gap-1">
-        {TABS.map(({ id, label, icon: Icon }) => (
+        {tabs.map(({ id, label, icon: Icon }) => (
           <button
             key={id}
             onClick={() => setTab(id)}
@@ -689,6 +741,9 @@ export default function App() {
               onUpdate={updatePlayer}
               onDelete={deletePlayer}
             />
+            {!isDemo && squad && (
+              <SharingCard ownerId={squad.ownerId} ownerEmail={auth.email} notify={notify} />
+            )}
             {!isDemo && (
               <BackupCard
                 players={players}

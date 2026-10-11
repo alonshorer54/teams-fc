@@ -29,13 +29,13 @@ const fingerprint = (players: Player[], history: MatchRecord[], settings: AppSet
  * עמודת `settings` נוספה אחרי שהטבלה כבר הייתה בשימוש. אם היא חסרה,
  * ההגדרות פשוט נשארות מקומיות והאפליקציה ממשיכה לעבוד כרגיל.
  */
-export function useSyncedStore(userId: string | null) {
-  const [players, setPlayers] = useLocalStorage<Player[]>(STORAGE_KEYS.players, []);
-  const [history, setHistory] = useLocalStorage<MatchRecord[]>(STORAGE_KEYS.history, []);
-  const [settings, setSettings] = useLocalStorage<AppSettings>(
-    STORAGE_KEYS.settings,
-    defaultSettings(),
-  );
+export function useSyncedStore(userId: string | null, isOwner = true) {
+  // Someone else's squad (as a helper) gets its own local cache, so it never mixes with
+  // the helper's own squad under the original keys. The component remounts per squad.
+  const keys = isOwner || !userId ? STORAGE_KEYS : helperKeys(userId);
+  const [players, setPlayers] = useLocalStorage<Player[]>(keys.players, []);
+  const [history, setHistory] = useLocalStorage<MatchRecord[]>(keys.history, []);
+  const [settings, setSettings] = useLocalStorage<AppSettings>(keys.settings, defaultSettings());
 
   const [status, setStatus] = useState<SyncStatus>(isCloudConfigured ? 'loading' : 'local');
   const [lastSyncedAt, setLastSyncedAt] = useState<string | null>(null);
@@ -100,9 +100,14 @@ export function useSyncedStore(userId: string | null) {
 
         cloudFingerprint.current = fingerprint(cloudPlayers, cloudHistory, cloudSettings);
         setLastSyncedAt(data.updated_at ?? new Date().toISOString());
+      } else if (!isOwner) {
+        // A helper never creates a squad; a missing row means access was removed
+        setError('אין גישה לקבוצה הזו');
+        setStatus('error');
+        return;
       } else {
         // התחברות ראשונה — מעלים את מה שכבר קיים במכשיר
-        const ok = await upsertRow(client, userId, players, history, settings, supportsSettings);
+        const ok = await upsertRow(client, userId, players, history, settings, supportsSettings, isOwner);
         if (cancelled) return;
         if (!ok.success) {
           setError(ok.message ?? 'שמירה ראשונית נכשלה');
@@ -136,10 +141,22 @@ export function useSyncedStore(userId: string | null) {
     setStatus('saving');
     window.clearTimeout(saveTimer.current);
     saveTimer.current = window.setTimeout(async () => {
-      const result = await upsertRow(client, userId, players, history, settings, supportsSettings);
+      const result = await upsertRow(client, userId, players, history, settings, supportsSettings, isOwner);
       if (!result.success) {
         setError(result.message ?? 'השמירה נכשלה');
         setStatus('error');
+        // A helper's refused change would otherwise be retried with every later edit and
+        // block them for good; go back to what the database holds instead
+        if (!isOwner) {
+          const { data } = await client.from(TABLE).select('*').eq('user_id', userId).maybeSingle();
+          if (data) {
+            const cloudSettings = normalizeSettings((data.settings ?? {}) as Partial<AppSettings>);
+            cloudFingerprint.current = fingerprint(data.players ?? [], data.history ?? [], cloudSettings);
+            setPlayers((data.players ?? []) as Player[]);
+            setHistory((data.history ?? []) as MatchRecord[]);
+            setSettings(cloudSettings);
+          }
+        }
         return;
       }
       setSettingsSynced(supportsSettings.current);
@@ -150,7 +167,7 @@ export function useSyncedStore(userId: string | null) {
     }, SAVE_DEBOUNCE_MS);
 
     return () => window.clearTimeout(saveTimer.current);
-  }, [players, history, settings, userId]);
+  }, [players, history, settings, userId, isOwner, setPlayers, setHistory, setSettings]);
 
   /* ------------------- האזנה לשינויים ממכשירים אחרים ------------------- */
 
@@ -210,13 +227,14 @@ export function useSyncedStore(userId: string | null) {
         nextHistory,
         settings,
         supportsSettings,
+        isOwner,
       );
       if (!result.success) return;
       cloudFingerprint.current = fingerprint(nextPlayers, nextHistory, settings);
       setLastSyncedAt(result.updatedAt);
       setStatus('synced');
     },
-    [userId, settings, setPlayers, setHistory],
+    [userId, isOwner, settings, setPlayers, setHistory],
   );
 
   return {
@@ -238,6 +256,18 @@ export function useSyncedStore(userId: string | null) {
 
 type Client = NonNullable<typeof supabase>;
 
+const helperKeys = (ownerId: string) => ({
+  players: `${STORAGE_KEYS.players}@${ownerId}`,
+  history: `${STORAGE_KEYS.history}@${ownerId}`,
+  settings: `${STORAGE_KEYS.settings}@${ownerId}`,
+});
+
+/** What the database's helper rule says, in words a helper can act on */
+const helperMessage = (message: string) =>
+  /existing players|remove players/.test(message)
+    ? 'עוזר לא יכול לשנות או למחוק שחקן קיים — השינוי לא נשמר'
+    : message;
+
 /**
  * כותב את השורה, ואם עמודת ההגדרות חסרה — מנסה שוב בלעדיה
  * ומסמן שההגדרות נשארות מקומיות.
@@ -249,9 +279,22 @@ async function upsertRow(
   history: MatchRecord[],
   settings: AppSettings,
   supportsSettings: { current: boolean },
+  isOwner = true,
 ): Promise<{ success: boolean; updatedAt: string; message?: string }> {
   const updatedAt = new Date().toISOString();
   const base = { user_id: userId, players, history, updated_at: updatedAt };
+
+  // A helper may only update the owner's row: an upsert would also need INSERT rights
+  if (!isOwner) {
+    const { data, error } = await client
+      .from(TABLE)
+      .update({ players, history, settings, updated_at: updatedAt })
+      .eq('user_id', userId)
+      .select('user_id');
+    if (error) return { success: false, updatedAt, message: helperMessage(error.message) };
+    if (!data?.length) return { success: false, updatedAt, message: 'אין גישה לקבוצה הזו' };
+    return { success: true, updatedAt };
+  }
 
   if (supportsSettings.current) {
     const { error } = await client.from(TABLE).upsert({ ...base, settings });
