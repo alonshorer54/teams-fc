@@ -56,6 +56,11 @@ create table if not exists public.kohot_invites (
   primary key (owner_id, email)
 );
 
+-- An invite becomes a membership only once the invited person accepts it in the app;
+-- until then it grants nothing. Without this anyone could make any Gmail a "helper" of
+-- their squad, and that squad would open by default on the victim's next sign-in.
+alter table public.kohot_members add column if not exists accepted boolean not null default false;
+
 create index if not exists kohot_members_user on public.kohot_members (user_id);
 create index if not exists kohot_invites_email on public.kohot_invites (email);
 
@@ -72,7 +77,7 @@ as $$
   select public.kohot_google_session()
     and exists (
       select 1 from public.kohot_members m
-      where m.owner_id = owner and m.user_id = auth.uid()
+      where m.owner_id = owner and m.user_id = auth.uid() and m.accepted
     )
 $$;
 
@@ -129,10 +134,17 @@ alter table public.kohot_invites enable row level security;
 -- Rows are only ever added by kohot_claim_invites().
 drop policy if exists "kohot read members"   on public.kohot_members;
 drop policy if exists "kohot remove members" on public.kohot_members;
+drop policy if exists "kohot accept invite"  on public.kohot_members;
 create policy "kohot read members" on public.kohot_members for select to authenticated
   using (public.kohot_google_session() and (owner_id = auth.uid() or user_id = auth.uid()));
 create policy "kohot remove members" on public.kohot_members for delete to authenticated
   using (public.kohot_google_session() and (owner_id = auth.uid() or user_id = auth.uid()));
+-- The invited person accepts (or un-accepts) their own membership — and only that column
+create policy "kohot accept invite" on public.kohot_members for update to authenticated
+  using (public.kohot_google_session() and user_id = auth.uid())
+  with check (public.kohot_google_session() and user_id = auth.uid());
+revoke update on public.kohot_members from anon, authenticated;
+grant update (accepted) on public.kohot_members to authenticated;
 
 -- Invites: the owner only.
 drop policy if exists "kohot owner invites" on public.kohot_invites;
@@ -172,6 +184,24 @@ begin
 
   if new.user_id is distinct from old.user_id then
     raise exception 'helpers cannot move a squad' using errcode = '42501';
+  end if;
+
+  -- The anchor that makes the owner's app recompute every rating from the whole history.
+  -- If a helper could reset it, the owner's own device would replay whatever corrections
+  -- the helper wrote into history — and save the result with the owner's rights.
+  if (new.settings -> 'ratingDriftSince') is distinct from (old.settings -> 'ratingDriftSince') then
+    raise exception 'helpers cannot change how ratings are recomputed' using errcode = '42501';
+  end if;
+
+  -- A recorded correction is always one step. A bigger one in history would let the owner's
+  -- "undo result" move a rating by however much the helper wrote.
+  if exists (
+    select 1
+    from pg_catalog.jsonb_array_elements(new.history) as r,
+         pg_catalog.jsonb_array_elements(coalesce(r -> 'ratingCheck' -> 'changes', '[]'::jsonb)) as c
+    where abs((c ->> 'to')::numeric - (c ->> 'from')::numeric) > 0.1001
+  ) then
+    raise exception 'helpers cannot edit existing players (correction too large)' using errcode = '42501';
   end if;
 
   -- A second entry with an existing id would pass the per-player check below on the

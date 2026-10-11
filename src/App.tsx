@@ -3,6 +3,7 @@ import {
   BarChart3,
   Database,
   Handshake,
+  LogOut,
   FlaskConical,
   History,
   Shuffle,
@@ -39,7 +40,7 @@ import {
 import { isCloudConfigured } from './lib/supabase';
 import { useLocalStorage } from './hooks/useLocalStorage';
 import { useAuth } from './hooks/useAuth';
-import { useSquads, type Squad } from './hooks/useSquads';
+import { answerInvitation, useSquads, type Squad } from './hooks/useSquads';
 import { useSyncedStore } from './hooks/useSyncedStore';
 import { formatHebrewDate, rollRoundDate, todayISO } from './lib/format';
 import { computeHistoryStats, streakByPlayer } from './lib/stats';
@@ -68,7 +69,7 @@ import { BackupCard } from './components/BackupCard';
 import { AuthGate, CloudNotConfigured } from './components/AuthGate';
 import { SharingCard } from './components/SharingCard';
 import { SyncBadge } from './components/SyncBadge';
-import { Toast } from './components/ui';
+import { ConfirmDialog, Toast } from './components/ui';
 import type { PlayerDraft } from './components/PlayerFormModal';
 import type { NewPlayerDraft } from './components/PasteListModal';
 
@@ -111,13 +112,60 @@ const SQUAD_KEY = 'kohot.squad.v1';
  */
 export default function App() {
   const auth = useAuth();
-  const { squads, helping, ready } = useSquads(auth.claimReady ? auth.userId : null, auth.claimedAt);
+  const { squads, helping, invitations, ready, reload } = useSquads(
+    auth.claimReady ? auth.userId : null,
+    auth.claimedAt,
+  );
   const [chosen, setChosen] = useLocalStorage<string | null>(SQUAD_KEY, null);
+  const [answerError, setAnswerError] = useState<string | null>(null);
 
   if (!auth.ready || !auth.claimReady || !ready) {
     return (
       <div className="flex min-h-screen items-center justify-center text-sm text-slate-400">
         טוען...
+      </div>
+    );
+  }
+
+  // An invitation is answered before anything else opens: nobody becomes a helper of a
+  // squad, or lands in one, without saying yes
+  const invitation = invitations[0];
+  if (invitation && auth.userId) {
+    const answer = async (accept: boolean) => {
+      const err = await answerInvitation(invitation.ownerId, auth.userId!, accept);
+      if (err) {
+        setAnswerError(err);
+        return;
+      }
+      setAnswerError(null);
+      if (accept) setChosen(invitation.ownerId);
+      reload();
+    };
+    return (
+      <div className="flex min-h-screen items-center justify-center px-4">
+        <div className="card w-full max-w-md p-7 text-center">
+          <div className="mx-auto mb-3 w-fit rounded-2xl bg-sky-500/15 p-3 text-sky-300">
+            <Handshake size={28} />
+          </div>
+          <h1 className="text-xl font-extrabold text-slate-50">הזמנה לעזור בניהול קבוצה</h1>
+          <p className="mt-2 text-sm text-slate-300">
+            <span dir="ltr" className="font-semibold">
+              {invitation.label}
+            </span>{' '}
+            הזמין אותך לעזור: הגרלות, תוצאות ותשלומים.
+          </p>
+          {answerError && (
+            <p className="mt-3 rounded-lg bg-rose-500/10 px-3 py-2 text-xs text-rose-300">{answerError}</p>
+          )}
+          <div className="mt-6 flex gap-2">
+            <button className="btn-primary flex-1" onClick={() => answer(true)}>
+              הצטרפות
+            </button>
+            <button className="btn-ghost flex-1" onClick={() => answer(false)}>
+              לא, תודה
+            </button>
+          </div>
+        </div>
       </div>
     );
   }
@@ -132,6 +180,10 @@ export default function App() {
       squad={active}
       squads={squads}
       onSelectSquad={setChosen}
+      onLeftSquad={() => {
+        setChosen(auth.userId);
+        reload();
+      }}
     />
   );
 }
@@ -141,13 +193,17 @@ function SquadApp({
   squad,
   squads,
   onSelectSquad,
+  onLeftSquad,
 }: {
   auth: ReturnType<typeof useAuth>;
   /** null when signed out (the opening screen, or the demo) */
   squad: Squad | null;
   squads: Squad[];
   onSelectSquad: (ownerId: string) => void;
+  /** A helper stopped helping this squad */
+  onLeftSquad: () => void;
 }) {
+  const [confirmLeave, setConfirmLeave] = useState(false);
   const isOwner = squad?.isOwner ?? true;
   const store = useSyncedStore(squad?.ownerId ?? null, isOwner);
   const { players: realPlayers, setPlayers, history: realHistory, setHistory: setRealHistory } = store;
@@ -663,6 +719,14 @@ function SquadApp({
             <span className="inline-flex items-center gap-1.5 rounded-xl border border-sky-500/30 bg-sky-500/10 px-2.5 py-1.5 text-[11px] font-semibold text-sky-200">
               <Handshake size={13} />
               עוזר
+              <button
+                className="ms-1 cursor-pointer rounded p-0.5 text-sky-300 hover:bg-sky-500/20 hover:text-white"
+                title="יציאה מהקבוצה"
+                aria-label="יציאה מהקבוצה"
+                onClick={() => setConfirmLeave(true)}
+              >
+                <LogOut size={12} />
+              </button>
             </span>
           )}
           <InstallButton notify={notify} />
@@ -816,6 +880,26 @@ function SquadApp({
           title="תיקון הדירוגים — על כל ההיסטוריה"
           changes={replaySummary}
           onClose={() => setReplaySummary(null)}
+        />
+      )}
+
+      {squad && !isOwner && (
+        <ConfirmDialog
+          open={confirmLeave}
+          title="יציאה מהקבוצה"
+          confirmLabel="יציאה"
+          message={
+            <>
+              להפסיק לעזור בקבוצה של <span dir="ltr">{squad.label}</span>? כדי לחזור צריך הזמנה חדשה.
+            </>
+          }
+          onCancel={() => setConfirmLeave(false)}
+          onConfirm={async () => {
+            setConfirmLeave(false);
+            const err = auth.userId ? await answerInvitation(squad.ownerId, auth.userId, false) : null;
+            if (err) notify(`⚠️ ${err}`);
+            else onLeftSquad();
+          }}
         />
       )}
 

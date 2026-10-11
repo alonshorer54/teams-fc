@@ -238,8 +238,19 @@ export const revertChanges = (players: Player[], changes: RatingChange[]): Playe
   const byId = new Map(changes.map((c) => [c.playerId, c]));
   return players.map((p) => {
     const c = byId.get(p.id);
-    return c ? { ...p, rating: clampRating(p.rating - (c.to - c.from)) } : p;
+    return c ? { ...p, rating: clampRating(p.rating - stepOf(c)) } : p;
   });
+};
+
+/**
+ * The size of one recorded correction, never more than a single step. A correction is
+ * always ±RATING_STEP; anything larger in the history didn't come from this app (a helper
+ * can write history), and undoing it must not rewrite a rating wholesale.
+ */
+const stepOf = (c: RatingChange): number => {
+  const delta = Number(c.to) - Number(c.from);
+  if (!Number.isFinite(delta)) return 0;
+  return Math.max(-RATING_STEP, Math.min(RATING_STEP, delta));
 };
 
 /**

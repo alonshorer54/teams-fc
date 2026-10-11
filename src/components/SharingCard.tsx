@@ -5,6 +5,8 @@ import { supabase } from '../lib/supabase';
 interface Helper {
   userId: string;
   email: string;
+  /** Signed in but hasn't said yes yet */
+  accepted: boolean;
 }
 
 const isEmail = (s: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(s.trim());
@@ -33,14 +35,20 @@ export function SharingCard({
     const client = supabase;
     if (!client) return;
     const [m, i] = await Promise.all([
-      client.from('kohot_members').select('user_id, email').eq('owner_id', ownerId).order('email'),
+      client.from('kohot_members').select('user_id, email, accepted').eq('owner_id', ownerId).order('email'),
       client.from('kohot_invites').select('email').eq('owner_id', ownerId).order('email'),
     ]);
     if (m.error || i.error) {
       setUnavailable(true);
       return;
     }
-    setHelpers((m.data ?? []).map((x: { user_id: string; email: string }) => ({ userId: x.user_id, email: x.email })));
+    setHelpers(
+      (m.data ?? []).map((x: { user_id: string; email: string; accepted: boolean }) => ({
+        userId: x.user_id,
+        email: x.email,
+        accepted: x.accepted,
+      })),
+    );
     setInvites((i.data ?? []).map((x: { email: string }) => x.email));
   }, [ownerId]);
 
@@ -124,6 +132,7 @@ export function SharingCard({
               <span className="flex-1 truncate text-slate-200" dir="ltr">
                 {h.email}
               </span>
+              {!h.accepted && <span className="shrink-0 text-[11px] text-amber-300">ממתין לאישור שלו</span>}
               <button
                 className="rounded-lg p-1.5 text-slate-500 hover:bg-rose-500/15 hover:text-rose-300"
                 title="הסרה"
