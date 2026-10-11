@@ -65,7 +65,8 @@ export function checkEmail(raw: string): EmailCheck {
   // A near miss of a well-known provider is almost certainly a typo — checked before the
   // shape, so "walla.co.l" gets a suggestion rather than a bare "invalid"
   if (/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email) && !POPULAR_DOMAINS.includes(domain)) {
-    const near = POPULAR_DOMAINS.find((d) => distance(domain, d) <= 2);
+    // Only long names: two letters off "me.com" or "aol.com" is usually another real domain
+    const near = POPULAR_DOMAINS.find((d) => d.length >= 9 && distance(domain, d) <= 2);
     if (near) return { ok: false, error: `התכוונת ל-${local}@${near}?` };
   }
 
