@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Mail, MessageCircle, Trash2, UserPlus, Users } from 'lucide-react';
+import { checkEmail, unlinkedEmail } from '../lib/emails';
 import { supabase } from '../lib/supabase';
 
 interface Helper {
@@ -9,7 +10,6 @@ interface Helper {
   accepted: boolean;
 }
 
-const isEmail = (s: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(s.trim());
 
 /**
  * The owner's sharing panel: invite a helper by Gmail, see who helps, remove them.
@@ -29,6 +29,8 @@ export function SharingCard({
   const [invites, setInvites] = useState<string[]>([]);
   const [email, setEmail] = useState('');
   const [lastInvited, setLastInvited] = useState<string | null>(null);
+  /** The address is checked once the field is left or the invite is sent, not mid-typing */
+  const [checked, setChecked] = useState(false);
   const [unavailable, setUnavailable] = useState(false);
 
   const load = useCallback(async () => {
@@ -69,8 +71,9 @@ export function SharingCard({
 
   if (!supabase || unavailable) return null;
   const client = supabase;
-  const to = email.trim().toLowerCase();
-  const self = to === ownerEmail?.toLowerCase();
+  const check = checkEmail(email);
+  const self = check.ok && check.email === ownerEmail?.toLowerCase();
+  const problem = !check.ok ? check.error : self ? 'זו הכתובת שלך' : '';
 
   return (
     <section className="card p-4 sm:p-5">
@@ -83,7 +86,9 @@ export function SharingCard({
         className="flex gap-2"
         onSubmit={async (e) => {
           e.preventDefault();
-          if (!isEmail(to) || self) return;
+          setChecked(true);
+          if (!check.ok || self) return;
+          const to = check.email;
           const ok = await run(
             () => client.from('kohot_invites').upsert({ email: to }),
             'ההזמנה נשמרה',
@@ -91,6 +96,7 @@ export function SharingCard({
           if (ok) {
             setLastInvited(to);
             setEmail('');
+            setChecked(false);
           }
         }}
       >
@@ -101,18 +107,20 @@ export function SharingCard({
           placeholder="name@gmail.com"
           value={email}
           onChange={(e) => setEmail(e.target.value)}
+          onBlur={() => email.trim() && setChecked(true)}
         />
-        <button className="btn-primary shrink-0" disabled={!isEmail(to) || self}>
+        <button className="btn-primary shrink-0" disabled={!email.trim() || (checked && !!problem)}>
           <UserPlus size={15} />
           הזמנה
         </button>
       </form>
+      {checked && problem && <p className="mt-2 text-xs font-semibold text-amber-300">{problem}</p>}
 
       {lastInvited && (
         <a
           className="btn-ghost mt-3 w-full text-xs"
           href={`https://wa.me/?text=${encodeURIComponent(
-            `הוזמנת לעזור בניהול הקבוצה ב-Teams FC.\nנכנסים עם חשבון הגוגל ${lastInvited}:\n${window.location.origin}`,
+            `הוזמנת לעזור בניהול הקבוצה ב-Teams FC.\nנכנסים עם חשבון הגוגל ${unlinkedEmail(lastInvited)}:\n${window.location.origin}`,
           )}`}
           target="_blank"
           rel="noreferrer"
