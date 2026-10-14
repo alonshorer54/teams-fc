@@ -626,10 +626,11 @@ function SquadApp({
   const setResult = (recordId: string, placements: Placements | null) => {
     const record = history.find((r) => r.id === recordId);
 
-    // ניקוי תוצאה מבטל את התיקונים שהמחזור הזה גרר — אחרת הדירוג נשאר מזוהם
-    // מראיה שכבר נמחקה, ואין שום דרך לדעת את זה בדיעבד
-    const undone = !placements ? (record?.ratingCheck?.changes ?? []) : [];
-    if (undone.length) applyToPlayers((prev) => revertChanges(prev, undone));
+    // כל שינוי בתוצאה — גם ניקוי וגם עדכון — מבטל קודם את התיקונים שהמחזור הזה
+    // כבר גרר. בעדכון זה קריטי: המסך שולח תוצאה בכל לחיצה על קבוצה, ובלי הביטול
+    // כל לחיצה הזיזה את אותם שחקנים שוב, על גבי הדירוג שכבר זז (14.10: עלייה כפולה)
+    const undone = record?.ratingCheck?.changes ?? [];
+    const base = undone.length ? revertChanges(players, undone) : players;
 
     const nextHistory = history.map((r) => {
       if (r.id !== recordId) return r;
@@ -646,18 +647,35 @@ function SquadApp({
     const canCheck = isDemo || !!settings.ratingDriftSince;
     const changes =
       placements && canCheck && isCheckpoint(nextHistory, recordId, driftSince)
-        ? runCheck(players, nextHistory, driftSince, recordId)
+        ? runCheck(base, nextHistory, driftSince, recordId)
         : null;
 
-    if (changes) {
-      if (changes.length) applyToPlayers((prev) => applyChanges(prev, changes));
-      setHistory(() =>
-        nextHistory.map((r) => (r.id === recordId ? { ...r, ratingCheck: { changes } } : r)),
+    const withCheck = (h: MatchRecord[]) =>
+      changes ? h.map((r) => (r.id === recordId ? { ...r, ratingCheck: { changes } } : r)) : h;
+
+    // עוזר מוגבל במסד ל-0.1 לשחקן בכל שמירה. כשתוצאה מתוקנת הופכת תיקון (+0.1 ← -0.1)
+    // ההפרש הוא 0.2 והשמירה נדחית — אז שולחים קודם את הביטול, ורק אחריו את הבדיקה
+    const flips =
+      !isOwner &&
+      !isDemo &&
+      !!changes?.some((c) =>
+        undone.some(
+          (u) => u.playerId === c.playerId && Math.sign(u.to - u.from) !== Math.sign(c.to - c.from),
+        ),
       );
-      setRatingCheck({ recordId, changes });
-    } else {
-      setHistory(() => nextHistory);
-      if (undone.length) notify('התיקונים לדירוג בוטלו יחד עם התוצאה');
+    if (flips) {
+      void store.flush(normalizePlayers(base), nextHistory).then(() => {
+        applyToPlayers((prev) => applyChanges(prev, changes ?? []));
+        setHistory((prev) => withCheck(prev));
+      });
+    } else if (undone.length || changes?.length) {
+      // ביטול והחלה באותו עדכון, כדי שאף שמירה לא תתפוס את הדירוג באמצע
+      applyToPlayers((prev) => applyChanges(revertChanges(prev, undone), changes ?? []));
+    }
+    if (!flips) setHistory(() => withCheck(nextHistory));
+    if (changes) setRatingCheck({ recordId, changes });
+    else if (undone.length) {
+      notify(placements ? 'התיקונים לדירוג של המחזור הזה בוטלו' : 'התיקונים לדירוג בוטלו יחד עם התוצאה');
     }
 
     // הערב נגמר ויש לו תוצאה — המחזור מתנקה לקראת הבא. רק כשהחלוקה שעל המסך
