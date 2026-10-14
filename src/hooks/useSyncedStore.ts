@@ -54,6 +54,8 @@ export function useSyncedStore(userId: string | null, isOwner = true) {
    * writing the whole document now would silently wipe their change.
    */
   const cloudUpdatedAt = useRef<string | null>(null);
+  /** שמירה מקומית ממתינה או בדרך — שינוי מקומי שעוד לא הגיע לענן */
+  const savePending = useRef(false);
 
   /** Replaces local state with what the database holds, after a refused or conflicting save. */
   const adoptCloud = useCallback(async (): Promise<boolean> => {
@@ -162,6 +164,7 @@ export function useSyncedStore(userId: string | null, isOwner = true) {
     if (current === cloudFingerprint.current) return; // אין שינוי אמיתי
 
     setStatus('saving');
+    savePending.current = true;
     window.clearTimeout(saveTimer.current);
     saveTimer.current = window.setTimeout(async () => {
       const result = await upsertRow(
@@ -174,6 +177,7 @@ export function useSyncedStore(userId: string | null, isOwner = true) {
         isOwner,
         cloudUpdatedAt.current,
       );
+      savePending.current = false;
       if (!result.success) {
         setError(result.message ?? 'השמירה נכשלה');
         setStatus('error');
@@ -190,7 +194,11 @@ export function useSyncedStore(userId: string | null, isOwner = true) {
       setStatus('synced');
     }, SAVE_DEBOUNCE_MS);
 
-    return () => window.clearTimeout(saveTimer.current);
+    return () => {
+      window.clearTimeout(saveTimer.current);
+      // שינוי שבוטל לפני שנשלח לא ישאיר את הדגל דלוק לתמיד; שינוי חדש ידליק אותו שוב
+      savePending.current = false;
+    };
   }, [players, history, settings, userId, isOwner, adoptCloud]);
 
   /* ------------------- האזנה לשינויים ממכשירים אחרים ------------------- */
@@ -211,7 +219,24 @@ export function useSyncedStore(userId: string | null, isOwner = true) {
             settings?: AppSettings;
             updated_at?: string;
           };
-          if (!row?.players) return;
+          if (!row) return;
+          if (!row.players) {
+            // מעל 1MB ה-Realtime שולח את השורה בלי העמודות הגדולות. במקום לפספס את
+            // השינוי בשקט — מביאים את השורה עצמה (אלא אם זה ההד של השמירה שלנו)
+            // שמירה מקומית ממתינה תיתקל בהתנגשות ותאמץ את הענן בעצמה — כאן היא רק הייתה נמחקת
+            if (
+              row.updated_at &&
+              row.updated_at !== cloudUpdatedAt.current &&
+              !savePending.current
+            ) {
+              void adoptCloud().then((ok) => {
+                if (!ok) return;
+                setLastSyncedAt(row.updated_at ?? new Date().toISOString());
+                setStatus('synced');
+              });
+            }
+            return;
+          }
           cloudUpdatedAt.current = row.updated_at ?? cloudUpdatedAt.current;
 
           const nextSettings: AppSettings = row.settings
@@ -235,7 +260,7 @@ export function useSyncedStore(userId: string | null, isOwner = true) {
     };
     // settings מכוון להישאר מחוץ לתלויות — הוא נקרא רק כברירת מחדל בתוך ה-callback
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [userId, setPlayers, setHistory, setSettings]);
+  }, [userId, setPlayers, setHistory, setSettings, adoptCloud]);
 
   /** דחיפה מיידית לענן — לשימוש אחרי ייבוא גיבוי. */
   const flush = useCallback(

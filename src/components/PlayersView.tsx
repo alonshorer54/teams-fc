@@ -153,6 +153,7 @@ export function PlayersView({
                   photo={p.photo}
                   size={40}
                   removable={false}
+                  viewFirst
                   onChange={(next) => next && onSetPhoto(p.id, next)}
                 />
 

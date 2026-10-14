@@ -1,10 +1,12 @@
 import { MAX_PHOTO_LENGTH } from '../types';
 
 /**
- * הצלע של התמונה השמורה. מוצגת עד כ-72 פיקסלים, אז 128 נשאר חד גם במסך רטינה
- * — ועדיין רק כמה KB, כי התמונות נשמרות בתוך מסמך השחקנים שמסתנכרן בכל שינוי.
+ * הצלע של התמונה השמורה: מספיק כדי שהגדלה בלחיצה (כמו בוואטסאפ) תישאר חדה.
+ * באיכות JPEG בינונית זה בערך 8KB לתמונה — כמו 128 פיקסלים באיכות גבוהה. זה
+ * חשוב כי כל התמונות יושבות במסמך השחקנים, ו-Supabase מפסיק להעביר בזמן אמת
+ * שורה מעל 1MB.
  */
-const SIDE = 128;
+const SIDE = 224;
 
 /**
  * תמונת מקור מוקטנת לזה לפני החיתוך: צילום של 12MP היה תופס עשרות MB בזיכרון
@@ -100,7 +102,7 @@ export function encodePhoto(src: HTMLCanvasElement, crop: Crop): string {
   drawCrop(ctx, src, clampCrop(src, crop), SIDE);
 
   // תמונה עשירה בפרטים יכולה לצאת גדולה מהצפוי — מורידים איכות עד שהיא נכנסת
-  for (const quality of [0.88, 0.75, 0.6]) {
+  for (const quality of [0.7, 0.6, 0.5]) {
     const url = canvas.toDataURL('image/jpeg', quality);
     if (url.length <= MAX_PHOTO_LENGTH) return url;
   }

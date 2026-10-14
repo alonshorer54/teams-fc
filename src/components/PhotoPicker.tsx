@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import { Camera, Crop as CropIcon, X } from 'lucide-react';
 import { defaultCrop, encodePhoto, loadPhoto, type Crop } from '../lib/photo';
-import { Avatar, Modal } from './ui';
+import { isPlayerPhoto } from '../types';
+import { Avatar, Modal, PhotoViewer } from './ui';
 import { PhotoCropper } from './PhotoCropper';
 
 /**
@@ -14,6 +15,7 @@ export function PhotoPicker({
   onChange,
   size = 46,
   removable = true,
+  viewFirst = false,
 }: {
   name: string;
   photo: string | undefined;
@@ -21,6 +23,8 @@ export function PhotoPicker({
   size?: number;
   /** ברשימת השחקנים אין כפתור הסרה: לחיצה מקרית הייתה מוחקת תמונה בלי ביטול */
   removable?: boolean;
+  /** לחיצה על תמונה קיימת מגדילה אותה (כמו בוואטסאפ), וההחלפה היא כפתור בחלון */
+  viewFirst?: boolean;
 }) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
@@ -28,6 +32,7 @@ export function PhotoPicker({
   const [error, setError] = useState<string | null>(null);
   /** התמונה שנבחרה, בזמן שמכוונים איזה חלק ממנה נכנס לעיגול */
   const [editing, setEditing] = useState<{ source: HTMLCanvasElement; crop: Crop } | null>(null);
+  const [viewing, setViewing] = useState(false);
   // המודאל נסגר באמצע העיבוד? התוצאה לא שייכת לאף טופס — אחרת היא נוחתת על
   // השחקן הבא שנפתח
   const alive = useRef(true);
@@ -48,11 +53,17 @@ export function PhotoPicker({
     <div className="relative shrink-0">
       <button
         type="button"
-        onClick={() => inputRef.current?.click()}
+        onClick={() =>
+          viewFirst && isPlayerPhoto(photo) ? setViewing(true) : inputRef.current?.click()
+        }
         disabled={busy}
         className="group relative block rounded-full"
-        title="בחירת תמונה מהגלריה — למשל תמונת הפרופיל שלו מוואטסאפ, אחרי ששמרתם אותה"
-        aria-label={photo ? 'החלפת התמונה' : 'הוספת תמונה'}
+        title={
+          viewFirst && photo
+            ? 'הגדלת התמונה'
+            : 'בחירת תמונה מהגלריה — למשל תמונת הפרופיל שלו מוואטסאפ ווב'
+        }
+        aria-label={viewFirst && photo ? 'הגדלת התמונה' : photo ? 'החלפת התמונה' : 'הוספת תמונה'}
       >
         <Avatar name={name || '?'} photo={photo} size={size} />
         {/* ברשימה המצלמה רק אצל מי שעוד אין לו תמונה — עשרים מצלמות ירוקות היו רק רעש */}
@@ -100,6 +111,24 @@ export function PhotoPicker({
             if (alive.current) setBusy(false);
           }
         }}
+      />
+
+      <PhotoViewer
+        name={name}
+        photo={viewing ? photo : undefined}
+        onClose={() => setViewing(false)}
+        action={
+          <button
+            className="btn-ghost w-full"
+            onClick={() => {
+              setViewing(false);
+              inputRef.current?.click();
+            }}
+          >
+            <Camera size={15} />
+            החלפת תמונה
+          </button>
+        }
       />
 
       <Modal

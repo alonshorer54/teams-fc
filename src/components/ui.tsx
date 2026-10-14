@@ -1,4 +1,4 @@
-import { useEffect, useRef, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 
 /**
  * המודאלים הפתוחים, מהתחתון לעליון. חלון בתוך חלון (חיתוך תמונה מתוך טופס
@@ -188,15 +188,19 @@ export function Avatar({
   name,
   photo,
   size = 28,
+  zoomable = false,
 }: {
   name: string;
   photo?: string;
   size?: number;
+  /** לחיצה מגדילה את התמונה, כמו בוואטסאפ. רק כשיש תמונה */
+  zoomable?: boolean;
 }) {
   const style = { width: size, height: size };
+  const [viewing, setViewing] = useState(false);
 
   if (isPlayerPhoto(photo)) {
-    return (
+    const img = (
       <img
         src={photo}
         alt=""
@@ -204,6 +208,24 @@ export function Avatar({
         className="shrink-0 rounded-full object-cover ring-1 ring-white/10"
         draggable={false}
       />
+    );
+    if (!zoomable) return img;
+    return (
+      <>
+        <button
+          type="button"
+          className="shrink-0 cursor-zoom-in rounded-full"
+          aria-label={`התמונה של ${name}`}
+          // בכרטיס הקבוצה לחיצה על השורה בוחרת שחקן להחלפה — לחיצה על התמונה רק מגדילה
+          onClick={(e) => {
+            e.stopPropagation();
+            setViewing(true);
+          }}
+        >
+          {img}
+        </button>
+        <PhotoViewer name={name} photo={viewing ? photo : undefined} onClose={() => setViewing(false)} />
+      </>
     );
   }
 
@@ -218,6 +240,43 @@ export function Avatar({
       aria-hidden
     >
       {name.trim().charAt(0)}
+    </span>
+  );
+}
+
+/**
+ * תמונה בגדול עם השם — נפתח בלחיצה על תמונה קטנה. `action` הוא כפתור נוסף
+ * מתחת לתמונה, למשל "החלפת תמונה" ברשימת השחקנים.
+ */
+export function PhotoViewer({
+  name,
+  photo,
+  onClose,
+  action,
+}: {
+  name: string;
+  /** undefined = סגור */
+  photo: string | undefined;
+  onClose: () => void;
+  action?: ReactNode;
+}) {
+  // החלון יושב ב-body, אבל אירועי React עדיין מבעבעים לפי עץ הרכיבים — בלי זה
+  // סגירת התמונה הייתה גם "לוחצת" על שורת השחקן בכרטיס ובוחרת אותו להחלפה
+  return (
+    <span className="contents" onClick={(e) => e.stopPropagation()}>
+      <Modal open={isPlayerPhoto(photo)} onClose={onClose} title={name} maxWidth="max-w-xs">
+        {isPlayerPhoto(photo) && (
+          <div className="space-y-4">
+            <img
+              src={photo}
+              alt={name}
+              className="mx-auto aspect-square w-full max-w-[280px] rounded-2xl object-cover"
+              draggable={false}
+            />
+            {action}
+          </div>
+        )}
+      </Modal>
     </span>
   );
 }
