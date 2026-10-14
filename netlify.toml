@@ -6,7 +6,7 @@
   # Vite 8 and TypeScript 6 need a modern Node.
   NODE_VERSION = "22"
 
-# A photo shared from WhatsApp is posted here. The service worker normally catches
+# A photo shared to the app from the phone's gallery is posted here. The service worker normally catches
 # it; this is for the minutes after a deploy when a phone still runs the old one.
 [[redirects]]
   from = "/share-photo"

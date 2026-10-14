@@ -1,6 +1,7 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import {
   ArrowDownUp,
+  Images,
   Link2,
   Pencil,
   Search,
@@ -15,6 +16,8 @@ import { POSITIONS, POSITION_META, type Player } from '../types';
 import { ConfirmDialog, EmptyState, PositionChip, RatingBadge } from './ui';
 import { PlayerFormModal, type PlayerDraft } from './PlayerFormModal';
 import { PhotoPicker } from './PhotoPicker';
+import { PhotoAssignModal } from './PhotoAssignModal';
+import { photoFromFile } from '../lib/photo';
 
 type SortKey = 'name' | 'rating';
 
@@ -24,6 +27,7 @@ export function PlayersView({
   onUpdate,
   onDelete,
   onSetPhoto,
+  notify,
 }: {
   players: Player[];
   onCreate: (draft: PlayerDraft) => void;
@@ -31,6 +35,7 @@ export function PlayersView({
   onDelete: (id: string) => void;
   /** לחיצה על העיגול ברשימה — תמונה בלי לפתוח את טופס העריכה */
   onSetPhoto: (id: string, photo: string) => void;
+  notify: (msg: string) => void;
 }) {
   const [query, setQuery] = useState('');
   // ברירת מחדל לפי א"ב — הכי נוח למצוא שחקן מסוים
@@ -83,6 +88,8 @@ export function PlayersView({
           <ArrowDownUp size={16} />
           {sortKey === 'rating' ? 'מסודר לפי דירוג' : 'מסודר לפי שם'}
         </button>
+
+        <BulkPhotosButton players={players} onAssign={onSetPhoto} notify={notify} />
 
         <button
           className="btn-primary"
@@ -259,5 +266,76 @@ function Stat({ label, value }: { label: string; value: string }) {
       <p className="font-mono text-xl font-bold text-emerald-300 tabular-nums">{value}</p>
       <p className="mt-0.5 text-[11px] text-slate-400">{label}</p>
     </div>
+  );
+}
+
+/* ------------------------- הוספת כמה תמונות ------------------------- */
+
+/**
+ * בוחרים כמה תמונות בבת אחת (למשל תמונות פרופיל ששמרתם מוואטסאפ ווב), ואז
+ * לכל אחת לוחצים על השחקן שלה.
+ */
+function BulkPhotosButton({
+  players,
+  onAssign,
+  notify,
+}: {
+  players: Player[];
+  onAssign: (id: string, photo: string) => void;
+  notify: (msg: string) => void;
+}) {
+  const inputRef = useRef<HTMLInputElement>(null);
+  const [busy, setBusy] = useState(false);
+  const [queue, setQueue] = useState<string[]>([]);
+
+  return (
+    <>
+      <button
+        className="btn-ghost"
+        disabled={busy}
+        onClick={() => inputRef.current?.click()}
+        title="בחירת כמה תמונות בבת אחת, ושיוך כל אחת לשחקן שלה"
+      >
+        <Images size={16} />
+        {busy ? 'טוען תמונות...' : 'הוספת תמונות'}
+      </button>
+
+      <input
+        ref={inputRef}
+        type="file"
+        accept="image/*"
+        multiple
+        className="hidden"
+        onChange={async (e) => {
+          const files = [...(e.target.files ?? [])];
+          e.target.value = '';
+          if (!files.length) return;
+          setBusy(true);
+          const photos: string[] = [];
+          for (const file of files) {
+            try {
+              photos.push(await photoFromFile(file));
+            } catch {
+              // תמונה שלא נקראת פשוט לא נכנסת לתור — מדווחים כמה בסוף
+            }
+          }
+          setBusy(false);
+          const failed = files.length - photos.length;
+          if (failed) notify(failed === 1 ? 'תמונה אחת לא נקראה ודולגה' : `${failed} תמונות לא נקראו ודולגו`);
+          setQueue(photos);
+        }}
+      />
+
+      <PhotoAssignModal
+        photos={queue}
+        players={players}
+        onAssign={onAssign}
+        onDone={(remaining) => {
+          setQueue([]);
+          if (remaining)
+            notify(remaining === 1 ? 'תמונה אחת לא שויכה' : `${remaining} תמונות לא שויכו`);
+        }}
+      />
+    </>
   );
 }

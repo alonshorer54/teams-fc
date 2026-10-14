@@ -813,6 +813,7 @@ function SquadApp({
               onUpdate={updatePlayer}
               onDelete={deletePlayer}
               onSetPhoto={setPlayerPhoto}
+              notify={notify}
             />
             {!isDemo && squad && (
               <SharingCard ownerId={squad.ownerId} ownerEmail={auth.email} notify={notify} />
@@ -912,7 +913,7 @@ function SquadApp({
         />
       )}
 
-      {/* מחוץ למצב דוגמה: תמונה ששותפה מוואטסאפ שייכת לשחקן אמיתי */}
+      {/* מחוץ למצב דוגמה: תמונה ששותפה לאפליקציה שייכת לשחקן אמיתי */}
       {!isDemo && (
         <SharedPhotoModal
           players={players}
