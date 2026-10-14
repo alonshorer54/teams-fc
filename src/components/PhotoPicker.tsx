@@ -155,7 +155,7 @@ export function PhotoPicker({
                 className="btn-primary flex-1"
                 onClick={() => {
                   try {
-                    onChange(encodePhoto(editing.source, editing.crop), encodeFull(editing.source));
+                    onChange(encodePhoto(editing.source, editing.crop), encodeFull(editing.source, editing.crop));
                   } catch (err) {
                     setError(err instanceof Error ? err.message : 'לא הצלחנו לשמור את התמונה');
                   }

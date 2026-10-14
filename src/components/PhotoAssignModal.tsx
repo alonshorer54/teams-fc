@@ -109,7 +109,7 @@ export function PhotoAssignModal({
                       className="flex w-full items-center gap-2 rounded-xl border border-slate-700 bg-slate-800/50 px-2 py-1.5 text-start text-sm font-semibold text-slate-100 transition hover:border-emerald-500/50"
                       onClick={() => {
                         try {
-                          onAssign(p.id, encodePhoto(photo, currentCrop), encodeFull(photo));
+                          onAssign(p.id, encodePhoto(photo, currentCrop), encodeFull(photo, currentCrop));
                           next();
                         } catch (err) {
                           setError(err instanceof Error ? err.message : 'לא הצלחנו לשמור את התמונה');
