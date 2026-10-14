@@ -70,6 +70,8 @@ import { AuthGate, CloudNotConfigured } from './components/AuthGate';
 import { SharingCard } from './components/SharingCard';
 import { SyncBadge } from './components/SyncBadge';
 import { ConfirmDialog, Toast } from './components/ui';
+import { FullPhotoContext } from './lib/fullPhotoContext';
+import { deleteFullPhoto, loadFullPhoto, saveFullPhoto } from './lib/fullPhotos';
 import { SharedPhotoModal } from './components/SharedPhotoModal';
 import type { PlayerDraft } from './components/PlayerFormModal';
 import type { NewPlayerDraft } from './components/PasteListModal';
@@ -410,8 +412,27 @@ function SquadApp({
     else setPlayers(wrapped);
   };
 
+  /** של מי התמונות המלאות בענן. במצב דוגמה — רק בזיכרון של הדף */
+  const photoOwner = isDemo ? null : (squad?.ownerId ?? null);
+  const loadFull = useCallback(
+    (playerId: string, small: string | undefined) => loadFullPhoto(photoOwner, playerId, small),
+    [photoOwner],
+  );
+
+  /** התמונה המלאה (להגדלה) נשמרת בטבלה נפרדת, אחרי שהעיגול כבר אצל השחקן */
+  const storeFullPhoto = (id: string, small: string | undefined, full: string | undefined) => {
+    if (!full || !small) return;
+    void saveFullPhoto(photoOwner, id, full, small).then((ok) => {
+      if (!ok) notify('⚠️ התמונה נשמרה, אבל הגרסה המלאה להגדלה לא נשמרה בענן');
+    });
+  };
+
   const createPlayer = (d: PlayerDraft) => {
-    applyToPlayers((prev) => [...prev, { id: newId(), ...d }]);
+    // התמונה המלאה לא נכנסת לשחקן עצמו — היא גדולה מדי למסמך שמסתנכרן
+    const { photoFull, ...draft } = d;
+    const id = newId();
+    applyToPlayers((prev) => [...prev, { id, ...draft }]);
+    storeFullPhoto(id, draft.photo, photoFull);
     notify(`${d.name} נוסף${isDemo ? ' (מצב דוגמה)' : ' למאגר'}`);
   };
 
@@ -436,9 +457,12 @@ function SquadApp({
   };
 
   const updatePlayer = (id: string, d: PlayerDraft) => {
+    const { photoFull, ...draft } = d;
+    if (!draft.photo && players.find((p) => p.id === id)?.photo) void deleteFullPhoto(photoOwner, id);
+    else storeFullPhoto(id, draft.photo, photoFull);
     applyToPlayers((prev) =>
       prev.map((p) => {
-        if (p.id === id) return { ...p, ...d };
+        if (p.id === id) return { ...p, ...draft };
         // מי שהוסר מרשימת החברים צריך לאבד את הקשר גם מהצד שלו
         if (!d.friendIds.includes(p.id) && p.friendIds.includes(id)) {
           return { ...p, friendIds: p.friendIds.filter((x) => x !== id) };
@@ -449,13 +473,15 @@ function SquadApp({
     notify('הפרטים עודכנו');
   };
 
-  const setPlayerPhoto = (id: string, photo: string) => {
+  const setPlayerPhoto = (id: string, photo: string, full?: string) => {
     applyToPlayers((prev) => prev.map((p) => (p.id === id ? { ...p, photo } : p)));
+    storeFullPhoto(id, photo, full);
     const name = players.find((p) => p.id === id)?.name;
     notify(name ? `התמונה של ${name} נשמרה` : 'התמונה נשמרה');
   };
 
   const deletePlayer = (id: string) => {
+    if (players.find((p) => p.id === id)?.photo) void deleteFullPhoto(photoOwner, id);
     // normalizePlayers מנקה לבד הפניות לשחקן שנמחק
     applyToPlayers((prev) => prev.filter((p) => p.id !== id));
     setDraft((prev) => ({
@@ -698,6 +724,7 @@ function SquadApp({
   }
 
   return (
+    <FullPhotoContext.Provider value={loadFull}>
     <div className="mx-auto min-h-screen max-w-7xl px-4 pb-16 sm:px-6">
       <header className="flex flex-col gap-4 py-6 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-center gap-3">
@@ -925,5 +952,6 @@ function SquadApp({
 
       <Toast message={toast} />
     </div>
+    </FullPhotoContext.Provider>
   );
 }

@@ -62,7 +62,26 @@ export function PhotoCropper({
         <canvas
           ref={viewRef}
           style={{ width: VIEW, height: VIEW, touchAction: 'none' }}
-          className="cursor-grab rounded-2xl active:cursor-grabbing"
+          className="cursor-grab rounded-2xl outline-none focus-visible:ring-2 focus-visible:ring-emerald-400 active:cursor-grabbing"
+          tabIndex={0}
+          aria-label="מיקום התמונה בעיגול — חיצים מזיזים, פלוס ומינוס מגדילים"
+          // במחשב אפשר לכוון גם במקלדת: חץ מזיז 2% מהעיגול, עם Shift — 10%
+          onKeyDown={(e) => {
+            const step = cropSide(source, crop.zoom) * (e.shiftKey ? 0.1 : 0.02);
+            const moves: Record<string, [number, number]> = {
+              ArrowLeft: [step, 0],
+              ArrowRight: [-step, 0],
+              ArrowUp: [0, step],
+              ArrowDown: [0, -step],
+            };
+            if (moves[e.key]) {
+              const [dx, dy] = moves[e.key];
+              onChange(clampCrop(source, { ...crop, cx: crop.cx + dx, cy: crop.cy + dy }));
+            } else if (e.key === '+' || e.key === '=') setZoom(crop.zoom * 1.1);
+            else if (e.key === '-') setZoom(crop.zoom / 1.1);
+            else return;
+            e.preventDefault();
+          }}
           onPointerDown={(e) => {
             if (drag.current) return;
             e.currentTarget.setPointerCapture(e.pointerId);

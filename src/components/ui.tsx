@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { useContext, useEffect, useRef, useState, type ReactNode } from 'react';
+import { FullPhotoContext } from '../lib/fullPhotoContext';
 
 /**
  * המודאלים הפתוחים, מהתחתון לעליון. חלון בתוך חלון (חיתוך תמונה מתוך טופס
@@ -171,6 +172,7 @@ export function PositionChip({ positions }: { positions: Position[] }) {
 
 /* ------------------------------ תמונת שחקן ------------------------------ */
 
+
 const AVATAR_COLORS = [
   'bg-emerald-600/40 text-emerald-100',
   'bg-sky-600/40 text-sky-100',
@@ -189,12 +191,15 @@ export function Avatar({
   photo,
   size = 28,
   zoomable = false,
+  playerId,
 }: {
   name: string;
   photo?: string;
   size?: number;
   /** לחיצה מגדילה את התמונה, כמו בוואטסאפ. רק כשיש תמונה */
   zoomable?: boolean;
+  /** בהגדלה — לטעון את התמונה המלאה של השחקן הזה */
+  playerId?: string;
 }) {
   const style = { width: size, height: size };
   const [viewing, setViewing] = useState(false);
@@ -224,7 +229,12 @@ export function Avatar({
         >
           {img}
         </button>
-        <PhotoViewer name={name} photo={viewing ? photo : undefined} onClose={() => setViewing(false)} />
+        <PhotoViewer
+          name={name}
+          playerId={playerId}
+          photo={viewing ? photo : undefined}
+          onClose={() => setViewing(false)}
+        />
       </>
     );
   }
@@ -253,26 +263,58 @@ export function PhotoViewer({
   photo,
   onClose,
   action,
+  playerId,
 }: {
   name: string;
-  /** undefined = סגור */
+  /** העיגול. undefined = סגור */
   photo: string | undefined;
   onClose: () => void;
   action?: ReactNode;
+  /** כשידוע — נטענת התמונה המלאה, והעיגול מוצג רק עד שהיא מגיעה */
+  playerId?: string;
 }) {
+  const loadFull = useContext(FullPhotoContext);
+  const open = isPlayerPhoto(photo);
+  const [full, setFull] = useState<{ id: string; small: string | undefined; photo: string } | null>(
+    null,
+  );
+
+  useEffect(() => {
+    if (!open || !playerId || !loadFull) return;
+    let cancelled = false;
+    void loadFull(playerId, photo).then((p) => {
+      if (!cancelled) setFull(p ? { id: playerId, small: photo, photo: p } : null);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [open, playerId, photo, loadFull]);
+
+  const shown = full && full.id === playerId && full.small === photo ? full.photo : null;
+
   // החלון יושב ב-body, אבל אירועי React עדיין מבעבעים לפי עץ הרכיבים — בלי זה
   // סגירת התמונה הייתה גם "לוחצת" על שורת השחקן בכרטיס ובוחרת אותו להחלפה
   return (
     <span className="contents" onClick={(e) => e.stopPropagation()}>
-      <Modal open={isPlayerPhoto(photo)} onClose={onClose} title={name} maxWidth="max-w-xs">
+      <Modal open={open} onClose={onClose} title={name} maxWidth="max-w-md">
         {isPlayerPhoto(photo) && (
           <div className="space-y-4">
-            <img
-              src={photo}
-              alt={name}
-              className="mx-auto aspect-square w-full max-w-[280px] rounded-2xl object-cover"
-              draggable={false}
-            />
+            {/* התמונה המלאה בפרופורציה שלה, כמו בוואטסאפ; עד שהיא נטענת — העיגול */}
+            {shown ? (
+              <img
+                src={shown}
+                alt={name}
+                className="mx-auto max-h-[70vh] w-full rounded-2xl object-contain"
+                draggable={false}
+              />
+            ) : (
+              <img
+                src={photo}
+                alt={name}
+                className="mx-auto aspect-square w-full max-w-[280px] rounded-2xl object-cover"
+                draggable={false}
+              />
+            )}
             {action}
           </div>
         )}

@@ -17,7 +17,7 @@ export function SharedPhotoModal({
   players: Player[];
   /** עוזרים לא יכולים לשנות שחקנים קיימים — המסד ידחה את השמירה */
   canEdit: boolean;
-  onAssign: (id: string, photo: string) => void;
+  onAssign: (id: string, photo: string, full: string) => void;
   notify: (msg: string) => void;
 }) {
   const [photo, setPhoto] = useState<HTMLCanvasElement | null>(null);

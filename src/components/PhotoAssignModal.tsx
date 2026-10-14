@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { ImageDown, SkipForward } from 'lucide-react';
 import type { Player } from '../types';
-import { defaultCrop, encodePhoto, type Crop } from '../lib/photo';
+import { defaultCrop, encodeFull, encodePhoto, type Crop } from '../lib/photo';
 import { Avatar, Modal } from './ui';
 import { PhotoCropper } from './PhotoCropper';
 
@@ -22,7 +22,8 @@ export function PhotoAssignModal({
   players: Player[];
   /** עוזרים לא יכולים לשנות שחקנים קיימים — המסד ידחה את השמירה */
   canEdit?: boolean;
-  onAssign: (id: string, photo: string) => void;
+  /** photo = העיגול החתוך, full = התמונה המלאה שמוצגת בהגדלה */
+  onAssign: (id: string, photo: string, full: string) => void;
   /** נקרא כשהתמונות נגמרו, או כשסוגרים באמצע — עם מספר התמונות שלא טופלו */
   onDone: (remaining: number) => void;
 }) {
@@ -108,7 +109,7 @@ export function PhotoAssignModal({
                       className="flex w-full items-center gap-2 rounded-xl border border-slate-700 bg-slate-800/50 px-2 py-1.5 text-start text-sm font-semibold text-slate-100 transition hover:border-emerald-500/50"
                       onClick={() => {
                         try {
-                          onAssign(p.id, encodePhoto(photo, currentCrop));
+                          onAssign(p.id, encodePhoto(photo, currentCrop), encodeFull(photo));
                           next();
                         } catch (err) {
                           setError(err instanceof Error ? err.message : 'לא הצלחנו לשמור את התמונה');

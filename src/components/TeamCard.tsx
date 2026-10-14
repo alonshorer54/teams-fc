@@ -160,7 +160,7 @@ export function TeamCard({
                 {index + 1}
               </span>
 
-              <Avatar name={player.name} photo={player.photo} size={30} zoomable />
+              <Avatar name={player.name} photo={player.photo} size={30} zoomable playerId={player.id} />
 
               <span className="min-w-0 flex-1">
                 <span className="flex min-w-0 items-center gap-1.5">

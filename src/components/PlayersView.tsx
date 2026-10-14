@@ -34,7 +34,7 @@ export function PlayersView({
   onUpdate: (id: string, draft: PlayerDraft) => void;
   onDelete: (id: string) => void;
   /** לחיצה על העיגול ברשימה — תמונה בלי לפתוח את טופס העריכה */
-  onSetPhoto: (id: string, photo: string) => void;
+  onSetPhoto: (id: string, photo: string, full?: string) => void;
   notify: (msg: string) => void;
 }) {
   const [query, setQuery] = useState('');
@@ -154,7 +154,8 @@ export function PlayersView({
                   size={40}
                   removable={false}
                   viewFirst
-                  onChange={(next) => next && onSetPhoto(p.id, next)}
+                  playerId={p.id}
+                  onChange={(next, full) => next && onSetPhoto(p.id, next, full)}
                 />
 
                 <div className="min-w-0 flex-1 space-y-0.5">
@@ -282,7 +283,7 @@ function BulkPhotosButton({
   notify,
 }: {
   players: Player[];
-  onAssign: (id: string, photo: string) => void;
+  onAssign: (id: string, photo: string, full?: string) => void;
   notify: (msg: string) => void;
 }) {
   const inputRef = useRef<HTMLInputElement>(null);

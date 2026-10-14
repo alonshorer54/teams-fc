@@ -22,6 +22,8 @@ export interface PlayerDraft {
   isManager: boolean;
   /** undefined = בלי תמונה; כך גם הסרה דורסת את התמונה הקודמת */
   photo: string | undefined;
+  /** התמונה המלאה להגדלה, כשנבחרה תמונה חדשה בטופס. לא נשמרת בתוך השחקן */
+  photoFull?: string;
 }
 
 const clampRating = (n: number) => Math.min(5, Math.max(1, Math.round(n * 10) / 10));
@@ -48,6 +50,7 @@ export function PlayerFormModal({
   const [positions, setPositions] = useState<Position[]>(['any']);
   const [isManager, setIsManager] = useState(false);
   const [photo, setPhoto] = useState<string | undefined>(undefined);
+  const [photoFull, setPhotoFull] = useState<string | undefined>(undefined);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -60,6 +63,7 @@ export function PlayerFormModal({
     setPositions(editing?.positions ?? ['any']);
     setIsManager(editing?.isManager ?? false);
     setPhoto(editing?.photo);
+    setPhotoFull(undefined);
     setError(null);
   }, [open, editing]);
 
@@ -88,6 +92,7 @@ export function PlayerFormModal({
       positions,
       isManager,
       photo,
+      photoFull: photo ? photoFull : undefined,
     });
   };
 
@@ -107,7 +112,15 @@ export function PlayerFormModal({
     >
       <div className="space-y-5">
         <div className="flex items-end gap-3">
-          <PhotoPicker name={name} photo={photo} onChange={setPhoto} />
+          <PhotoPicker
+            name={name}
+            photo={photo}
+            playerId={editing?.id}
+            onChange={(next, full) => {
+              setPhoto(next);
+              setPhotoFull(full);
+            }}
+          />
           <div className="min-w-0 flex-1">
             <label className="label" htmlFor="player-name">
               שם השחקן

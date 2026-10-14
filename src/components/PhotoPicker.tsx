@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { Camera, Crop as CropIcon, X } from 'lucide-react';
-import { defaultCrop, encodePhoto, loadPhoto, type Crop } from '../lib/photo';
+import { defaultCrop, encodeFull, encodePhoto, loadPhoto, type Crop } from '../lib/photo';
 import { isPlayerPhoto } from '../types';
 import { Avatar, Modal, PhotoViewer } from './ui';
 import { PhotoCropper } from './PhotoCropper';
@@ -16,10 +16,14 @@ export function PhotoPicker({
   size = 46,
   removable = true,
   viewFirst = false,
+  playerId,
 }: {
   name: string;
   photo: string | undefined;
-  onChange: (next: string | undefined) => void;
+  /** next = העיגול החתוך; full = התמונה המלאה להגדלה (רק כשנבחרה תמונה חדשה) */
+  onChange: (next: string | undefined, full?: string) => void;
+  /** כדי שההגדלה תטען את התמונה המלאה של השחקן הזה */
+  playerId?: string;
   size?: number;
   /** ברשימת השחקנים אין כפתור הסרה: לחיצה מקרית הייתה מוחקת תמונה בלי ביטול */
   removable?: boolean;
@@ -115,6 +119,7 @@ export function PhotoPicker({
 
       <PhotoViewer
         name={name}
+        playerId={playerId}
         photo={viewing ? photo : undefined}
         onClose={() => setViewing(false)}
         action={
@@ -150,7 +155,7 @@ export function PhotoPicker({
                 className="btn-primary flex-1"
                 onClick={() => {
                   try {
-                    onChange(encodePhoto(editing.source, editing.crop));
+                    onChange(encodePhoto(editing.source, editing.crop), encodeFull(editing.source));
                   } catch (err) {
                     setError(err instanceof Error ? err.message : 'לא הצלחנו לשמור את התמונה');
                   }
