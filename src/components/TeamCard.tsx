@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { GripVertical, Link2, Palette, Unlink, Users } from 'lucide-react';
+import { Link2, Palette, Unlink, Users } from 'lucide-react';
 import {
   ALL_TEAM_IDS,
   POSITIONS,
@@ -10,7 +10,7 @@ import {
   type TeamId,
 } from '../types';
 import { CHEMISTRY_BONUS_PER_BOND, bondStatus, type TeamStats } from '../lib/balance';
-import { PositionChip, RatingBadge } from './ui';
+import { Avatar, PositionChip, RatingBadge } from './ui';
 
 export function TeamCard({
   teamId,
@@ -156,11 +156,11 @@ export function TeamCard({
               }`}
               title="לחצו לבחירה, ואז לחצו על שחקן אחר כדי להחליף ביניהם"
             >
-              <GripVertical size={14} className="shrink-0 text-slate-600" />
-
               <span className="w-4 shrink-0 text-center font-mono text-[11px] text-slate-500 tabular-nums">
                 {index + 1}
               </span>
+
+              <Avatar name={player.name} photo={player.photo} size={30} />
 
               <span className="min-w-0 flex-1">
                 <span className="flex min-w-0 items-center gap-1.5">

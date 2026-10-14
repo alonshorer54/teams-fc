@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { AlertTriangle, ArrowLeft, CheckCircle2, Undo2, X } from 'lucide-react';
+import { AlertTriangle, ArrowLeft, Link2, Undo2, X } from 'lucide-react';
 import { TEAM_META } from '../types';
 import { scoreMeta } from '../lib/criteria';
 import type { LineupDiff } from '../lib/diff';
@@ -24,8 +24,8 @@ export function ChangePopup({
     return () => window.removeEventListener('keydown', onKey);
   }, [onClose]);
 
-  const warnings = diff.issues.filter((i) => i.kind === 'warn');
-  const improvements = diff.issues.filter((i) => i.kind === 'good');
+  const warnings = diff.issues.filter((i) => !i.minor);
+  const minor = diff.issues.filter((i) => i.minor);
   const deltas = diff.criteria.filter((c) => Math.abs(c.delta) >= 1);
   const clean = warnings.length === 0;
 
@@ -93,19 +93,16 @@ export function ChangePopup({
             </p>
           ))}
 
-          {improvements.map((issue, i) => (
-            <p
-              key={`g${i}`}
-              className="flex items-start gap-2 rounded-lg border border-emerald-500/25 bg-emerald-500/10 px-3 py-2 text-xs leading-relaxed text-emerald-200"
-            >
-              <CheckCircle2 size={13} className="mt-0.5 shrink-0" />
+          {minor.map((issue, i) => (
+            <p key={`m${i}`} className="flex items-start gap-2 px-1 text-[11px] text-slate-400">
+              <Link2 size={11} className="mt-0.5 shrink-0" />
               {issue.text}
             </p>
           ))}
 
-          {warnings.length === 0 && improvements.length === 0 && (
+          {diff.issues.length === 0 && (
             <p className="px-1 text-xs text-slate-400">
-              לא נשברו קשרים והאיזון כמעט לא זז.
+              לא נוצרו בעיות משמעותיות.
             </p>
           )}
 

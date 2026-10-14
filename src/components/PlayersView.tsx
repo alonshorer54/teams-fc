@@ -12,7 +12,7 @@ import {
   Users,
 } from 'lucide-react';
 import { POSITIONS, POSITION_META, type Player } from '../types';
-import { ConfirmDialog, EmptyState, PositionChip, RatingBadge } from './ui';
+import { Avatar, ConfirmDialog, EmptyState, PositionChip, RatingBadge } from './ui';
 import { PlayerFormModal, type PlayerDraft } from './PlayerFormModal';
 
 type SortKey = 'name' | 'rating';
@@ -137,9 +137,7 @@ export function PlayersView({
                 key={p.id}
                 className="card flex items-start gap-3 p-3.5 transition hover:border-slate-700"
               >
-                <div className="pt-0.5">
-                  <RatingBadge rating={p.rating} />
-                </div>
+                <Avatar name={p.name} photo={p.photo} size={40} />
 
                 <div className="min-w-0 flex-1 space-y-0.5">
                   <p className="flex items-center gap-1.5 truncate font-semibold text-slate-100">
@@ -170,7 +168,8 @@ export function PlayersView({
                   )}
                 </div>
 
-                <div className="flex shrink-0 gap-1">
+                <div className="flex shrink-0 items-center gap-1">
+                  <RatingBadge rating={p.rating} />
                   <button
                     className="rounded-lg p-2 text-slate-400 transition hover:bg-slate-800 hover:text-emerald-300"
                     title="עריכה"

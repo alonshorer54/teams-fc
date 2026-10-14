@@ -1,7 +1,7 @@
 import { useEffect, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { X } from 'lucide-react';
-import { POSITION_META, type Position } from '../types';
+import { POSITION_META, isPlayerPhoto, type Position } from '../types';
 
 /* ---------------------------- מודאל בסיסי ---------------------------- */
 
@@ -150,6 +150,59 @@ export function PositionChip({ positions }: { positions: Position[] }) {
     >
       {positions.map((p) => POSITION_META[p].emoji).join('')}{' '}
       {positions.map((p) => POSITION_META[p].label).join('/')}
+    </span>
+  );
+}
+
+/* ------------------------------ תמונת שחקן ------------------------------ */
+
+const AVATAR_COLORS = [
+  'bg-emerald-600/40 text-emerald-100',
+  'bg-sky-600/40 text-sky-100',
+  'bg-violet-600/40 text-violet-100',
+  'bg-amber-600/40 text-amber-100',
+  'bg-rose-600/40 text-rose-100',
+  'bg-teal-600/40 text-teal-100',
+] as const;
+
+/**
+ * התמונה של השחקן, ובלעדיה — האות הראשונה של שמו על צבע קבוע לפי השם,
+ * כך שגם בלי תמונה כל שחקן נראה קצת אחרת מהשכן שלו.
+ */
+export function Avatar({
+  name,
+  photo,
+  size = 28,
+}: {
+  name: string;
+  photo?: string;
+  size?: number;
+}) {
+  const style = { width: size, height: size };
+
+  if (isPlayerPhoto(photo)) {
+    return (
+      <img
+        src={photo}
+        alt=""
+        style={style}
+        className="shrink-0 rounded-full object-cover ring-1 ring-white/10"
+        draggable={false}
+      />
+    );
+  }
+
+  let hash = 0;
+  for (const ch of name) hash = (hash * 31 + ch.charCodeAt(0)) >>> 0;
+  return (
+    <span
+      style={{ ...style, fontSize: Math.round(size * 0.42) }}
+      className={`inline-flex shrink-0 items-center justify-center rounded-full font-bold ${
+        AVATAR_COLORS[hash % AVATAR_COLORS.length]
+      }`}
+      aria-hidden
+    >
+      {name.trim().charAt(0)}
     </span>
   );
 }

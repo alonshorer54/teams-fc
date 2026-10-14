@@ -140,6 +140,12 @@ export interface Player {
   positions: Position[];
   /** מנהל הקבוצה — מי שסוגר את המגרש ואוסף את הכסף */
   isManager?: boolean;
+  /**
+   * תמונה קטנה (data URL של JPEG, כמה KB), כדי לזהות שחקן גם בלי לקרוא שם.
+   * נשמרת בתוך מסמך השחקנים עצמו ולא באחסון קבצים נפרד — כך היא מסתנכרנת
+   * ונכנסת לגיבוי בלי שום הגדרה נוספת ב-Supabase.
+   */
+  photo?: string;
   /** @deprecated שדה ישן מגרסה קודמת — מומר ל-friendIds בטעינה */
   friendOf?: string | null;
   /** @deprecated שדה ישן — ההערה הופכת לתגית בטעינה */
@@ -168,6 +174,17 @@ export const POSITION_META: Record<Position, { label: string; emoji: string }> =
   att: { label: 'התקפה', emoji: '⚡' },
   any: { label: 'כללי', emoji: '⚽' },
 };
+
+/**
+ * רק תמונה שנוצרה כאן עוברת: data URL של תמונה רסטרית בגודל סביר. כך תמונה
+ * מקובץ גיבוי או מהענן לא יכולה להיות קישור חיצוני (שמדליף מי צפה בה) או
+ * SVG עם קוד, ולא מנפחת את המסמך שמסתנכרן לכל המכשירים.
+ */
+export const MAX_PHOTO_LENGTH = 40_000;
+export const isPlayerPhoto = (value: unknown): value is string =>
+  typeof value === 'string' &&
+  value.length <= MAX_PHOTO_LENGTH &&
+  /^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+/]+=*$/.test(value);
 
 const isPosition = (value: unknown): value is Position =>
   (POSITIONS as readonly unknown[]).includes(value);
@@ -275,6 +292,7 @@ export function normalizePlayers(raw: Player[]): Player[] {
   }
 
   for (const p of players) {
+    if (p.photo !== undefined && !isPlayerPhoto(p.photo)) delete p.photo;
     delete p.friendOf;
     delete p.notes;
     delete p.tags;
@@ -511,13 +529,9 @@ export const TEAM_META: Record<TeamId, TeamMeta> = {
 export const teamGridClass = (count: number): string =>
   `grid gap-4 ${count === 2 ? 'lg:grid-cols-2' : 'lg:grid-cols-3'}`;
 
-/** אותה פריסה בגרסה צפופה — לכרטיסי ההיסטוריה ולפס האיזון. */
+/** אותה פריסה בגרסה צפופה — לכרטיסי ההיסטוריה. */
 export const teamGridTight = (count: number): string =>
   `grid gap-3 ${count === 2 ? 'sm:grid-cols-2' : 'sm:grid-cols-3'}`;
-
-/** פס האיזון: תא לכל קבוצה, תמיד בשורה אחת. */
-export const teamStatsGridClass = (count: number): string =>
-  `grid gap-2 ${count === 2 ? 'grid-cols-2' : 'grid-cols-3'}`;
 
 /* ------------------------------------------------------------------ */
 /*  שינוי הצבעים של הרכב קיים                                          */

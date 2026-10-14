@@ -21,12 +21,13 @@ import {
   membersOf,
   recolorTeam,
   teamGridClass,
-  teamStatsGridClass,
   type Lineup,
   type Player,
   type TeamId,
 } from '../types';
 import {
+  BALANCE_GRADES,
+  balanceLevel,
   computeStats,
   describeBonds,
   findTeamOf,
@@ -534,8 +535,12 @@ export function DrawView({
             />
           )}
 
-          <BalanceBar stats={stats} teamIds={teamIds} gameChemistry={!!gameChemistryOn} />
-          <CriteriaScores breakdown={breakdown} unavailable={unavailable} tiers={tiersScore} />
+          <CriteriaScores
+            breakdown={breakdown}
+            unavailable={unavailable}
+            tiers={tiersScore}
+            stats={stats}
+          />
           {bonds.length > 0 && <BondsPanel bonds={bonds} />}
 
           {selectedName && (
@@ -568,11 +573,6 @@ export function DrawView({
               />
             ))}
           </div>
-
-          <p className="text-center text-[11px] leading-relaxed text-slate-500">
-            לחיצה על שני שחקנים מחליפה ביניהם, ולחיצה על שחקן ואז על כותרת קבוצה מעבירה אליה.
-            <span className="hidden sm:inline"> במחשב אפשר גם לגרור.</span>
-          </p>
         </>
       )}
 
@@ -594,168 +594,98 @@ export function DrawView({
 
 /* --------------------- ציון לכל קריטריון בהגרלה --------------------- */
 
-const scoreTone = (score: number) =>
-  score >= 90
-    ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-300'
-    : score >= 70
-      ? 'border-sky-500/30 bg-sky-500/10 text-sky-300'
-      : 'border-amber-500/30 bg-amber-500/10 text-amber-300';
+const SCORE_TONES = [
+  { min: 90, label: '90–100 מצוין', chip: 'border-emerald-500/30 bg-emerald-500/10 text-emerald-300', dot: 'bg-emerald-400' },
+  { min: 70, label: '70–89 סביר', chip: 'border-sky-500/30 bg-sky-500/10 text-sky-300', dot: 'bg-sky-400' },
+  { min: 0, label: 'מתחת ל-70 חלש', chip: 'border-amber-500/30 bg-amber-500/10 text-amber-300', dot: 'bg-amber-400' },
+] as const;
 
+const scoreTone = (score: number) => SCORE_TONES.find((t) => score >= t.min)!.chip;
+
+/**
+ * שורת הסיכום מעל הקבוצות: האיזון וציון לכל קריטריון.
+ * הסכומים לכל קבוצה כבר בכרטיסי הקבוצות עצמם, ולכן לא חוזרים כאן.
+ */
 function CriteriaScores({
   breakdown,
   unavailable,
   tiers,
+  stats,
 }: {
   breakdown: ReturnType<typeof penaltyBreakdown>;
   unavailable: Partial<Record<CriterionId, string>>;
   /** ציון פיזור הרמות — תמיד פעיל, ולכן בלי מספר עדיפות */
   tiers: number;
+  stats: ReturnType<typeof computeStats>;
 }) {
   const active = breakdown.filter((b) => b.enabled && !unavailable[b.id]);
 
-  return (
-    <div className="card flex flex-wrap items-center gap-2 px-4 py-3">
-      <span className="text-[11px] font-bold text-slate-400">עמידה בקריטריונים:</span>
-      <span
-        className={`inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-[11px] font-semibold ${scoreTone(tiers)}`}
-        title={TIERS_META.help}
-      >
-        {TIERS_META.emoji} {TIERS_META.label}
-        <span dir="ltr" className="font-mono tabular-nums">
-          {tiers}
-        </span>
-      </span>
-      {active.map((b) => {
-        const meta = CRITERION_META[b.id];
-        const tone = scoreTone(b.score);
-
-        return (
-          <span
-            key={b.id}
-            className={`inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-[11px] font-semibold ${tone}`}
-            title={`${meta.help} — עדיפות ${b.rank + 1}`}
-          >
-            <span className="font-mono text-[10px] opacity-70">{b.rank + 1}</span>
-            {meta.emoji} {meta.label}
-            <span dir="ltr" className="font-mono tabular-nums">
-              {b.score}
-            </span>
-          </span>
-        );
-      })}
-    </div>
-  );
-}
-
-/* --------------------------- פס איזון עליון --------------------------- */
-
-function BalanceBar({
-  stats,
-  teamIds,
-  gameChemistry,
-}: {
-  stats: ReturnType<typeof computeStats>;
-  teamIds: TeamId[];
-  gameChemistry: boolean;
-}) {
   // כשהקבוצות לא באותו גודל, השוואת סכומים תמיד תיראה גרועה — הקבוצה הקטנה
   // תמיד תצבור פחות. במקרה כזה מודדים לפי הממוצע, שזה גם מה שהאלגוריתם ממטב.
-  const sizes = teamIds.map((id) => stats.teams[id]?.count ?? 0).filter((c) => c > 0);
+  const sizes = Object.values(stats.teams)
+    .map((t) => t?.count ?? 0)
+    .filter((c) => c > 0);
   const equalSizes = new Set(sizes).size <= 1;
-
-  const quality =
-    stats.spread <= 0.1
-      ? { label: 'איזון מצוין', tone: 'text-emerald-300 bg-emerald-500/15 border-emerald-500/30' }
-      : stats.spread <= 0.25
-        ? { label: 'איזון טוב', tone: 'text-sky-300 bg-sky-500/15 border-sky-500/30' }
-        : { label: 'איזון בינוני', tone: 'text-amber-300 bg-amber-500/15 border-amber-500/30' };
+  const level = balanceLevel(stats.spread);
 
   return (
-    <div className="card space-y-3 p-4">
-      <div className={teamStatsGridClass(teamIds.length)}>
-        {teamIds.map((id) => {
-          const t = stats.teams[id];
-          if (!t) return null;
+    <div className="card space-y-2 px-4 py-3">
+      <div className="flex flex-wrap items-center gap-2">
+        <span
+          className={`inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-[11px] font-semibold ${SCORE_TONES[level].chip}`}
+          title={
+            equalSizes
+              ? 'ההפרש בסכום הדירוגים בין הקבוצה החזקה לחלשה'
+              : `הקבוצות לא באותו גודל (${sizes.join('/')}), לכן ההשוואה היא לפי דירוג ממוצע לשחקן`
+          }
+        >
+          ⚖️ איזון {BALANCE_GRADES[level]}
+          <span className="opacity-80">
+            · {equalSizes ? 'פער' : 'פער לשחקן'}{' '}
+            <span dir="ltr" className="font-mono tabular-nums">
+              {equalSizes ? stats.totalSpread.toFixed(1) : stats.spread.toFixed(2)}
+            </span>
+          </span>
+        </span>
+
+        <span
+          className={`inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-[11px] font-semibold ${scoreTone(tiers)}`}
+          title={TIERS_META.help}
+        >
+          {TIERS_META.emoji} {TIERS_META.label}
+          <span dir="ltr" className="font-mono tabular-nums">
+            {tiers}
+          </span>
+        </span>
+        {active.map((b) => {
+          const meta = CRITERION_META[b.id];
+
           return (
-            <div
-              key={id}
-              className={`rounded-xl border px-2 py-2 text-center sm:px-3 sm:py-2.5 sm:text-right ${TEAM_META[id].chip}`}
-              title={
-                `${t.count} שחקנים · דירוג ${t.total.toFixed(1)} + חברויות ${t.chemistryBonus.toFixed(1)}` +
-                (gameChemistry ? ` + כימיה משחקית ${t.gameBonus.toFixed(1)}` : '')
-              }
+            <span
+              key={b.id}
+              className={`inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-[11px] font-semibold ${scoreTone(b.score)}`}
+              title={`${meta.help} — עדיפות ${b.rank + 1}`}
             >
-              <p className="flex items-center justify-center gap-1.5 text-[11px] font-bold sm:justify-start sm:text-xs">
-                <span className={`size-2 shrink-0 rounded-full sm:size-2.5 ${TEAM_META[id].dot}`} />
-                {TEAM_META[id].name}
-                <span className="hidden font-mono text-[10px] opacity-70 sm:mr-auto sm:inline">
-                  {t.count} שחקנים
-                </span>
-              </p>
-              <div className="mt-1 flex flex-col items-center gap-0 sm:mt-2 sm:flex-row sm:items-baseline sm:gap-3">
-                <span className="flex items-baseline gap-1">
-                  <span dir="ltr" className="font-mono text-lg font-bold tabular-nums sm:text-xl">
-                    {t.total.toFixed(1)}
-                  </span>
-                  <span className="text-[10px] opacity-70">דירוג</span>
-                </span>
-                <span className="flex items-baseline gap-1 opacity-90">
-                  <span dir="ltr" className="font-mono text-xs font-bold tabular-nums sm:text-sm">
-                    {t.combined.toFixed(1)}
-                  </span>
-                  <span className="text-[10px] opacity-70">כימיה</span>
-                </span>
-              </div>
-            </div>
+              <span className="font-mono text-[10px] opacity-70">{b.rank + 1}</span>
+              {meta.emoji} {meta.label}
+              <span dir="ltr" className="font-mono tabular-nums">
+                {b.score}
+              </span>
+            </span>
           );
         })}
       </div>
 
-      <div className="flex flex-wrap items-center gap-2 text-xs">
-        <span
-          className={`rounded-lg border px-2.5 py-1.5 font-semibold ${quality.tone}`}
-          title={
-            equalSizes
-              ? 'ההפרש בסכום הדירוגים בין הקבוצה החזקה לחלשה'
-              : 'הקבוצות לא באותו גודל, לכן ההשוואה היא לפי דירוג ממוצע לשחקן'
-          }
-        >
-          {quality.label} ·{' '}
-          {equalSizes ? (
-            <>
-              פער בדירוג{' '}
-              <span dir="ltr" className="font-mono tabular-nums">
-                {stats.totalSpread.toFixed(1)}
-              </span>
-            </>
-          ) : (
-            <>
-              פער לשחקן{' '}
-              <span dir="ltr" className="font-mono tabular-nums">
-                {stats.spread.toFixed(2)}
-              </span>
-            </>
-          )}
-        </span>
-        {equalSizes && (
-          <span className="rounded-lg border border-slate-700 bg-slate-800/50 px-2.5 py-1.5 font-semibold text-slate-300">
-            פער עם כימיה{' '}
-            <span dir="ltr" className="font-mono tabular-nums">
-              {stats.combinedSpread.toFixed(1)}
-            </span>
+      {/* מקרא: מה אומר הציון של כל קריטריון */}
+      <p className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[10px] text-slate-500">
+        <span>100 = הקריטריון מתקיים במלואו</span>
+        {SCORE_TONES.map((t) => (
+          <span key={t.min} className="inline-flex items-center gap-1">
+            <span className={`size-1.5 rounded-full ${t.dot}`} />
+            {t.label}
           </span>
-        )}
-        {!equalSizes && (
-          <span className="rounded-lg border border-slate-700 bg-slate-800/50 px-2.5 py-1.5 font-semibold text-slate-400">
-            קבוצות בגדלים שונים ({sizes.join('/')}) — הסכומים אינם ברי-השוואה
-          </span>
-        )}
-        {stats.totalBonds > 0 && (
-          <span className="rounded-lg border border-slate-700 bg-slate-800/50 px-2.5 py-1.5 font-semibold text-slate-300">
-            חברויות: {stats.bondsKept}/{stats.totalBonds} נשמרו
-          </span>
-        )}
-      </div>
+        ))}
+      </p>
     </div>
   );
 }

@@ -9,7 +9,7 @@ import {
   type Player,
   type TeamId,
 } from '../types';
-import { constraintMet, describeBonds } from './balance';
+import { BALANCE_GRADES, balanceLevel, constraintMet, describeBonds } from './balance';
 import {
   penaltyBreakdown,
   tiersPenalty,
@@ -24,10 +24,14 @@ export interface MovedPlayer {
   to: TeamId;
 }
 
+/**
+ * בעיה שעריכה ידנית יצרה. מה שמשפיע על המשחק עצמו — עמדות, איזון, גדלים
+ * ואילוצי השבוע — מוצג במלואו. קשרים בין שחקנים מסומנים כמשניים ונספרים
+ * בשורה אחת בלבד: עם 8 שחקנים שהוזזו הם הציפו את המסך והסתירו את העיקר.
+ */
 export interface LineupIssue {
-  /** warn = נוצרה בעיה · good = משהו דווקא השתפר */
-  kind: 'warn' | 'good';
   text: string;
+  minor?: boolean;
 }
 
 export interface CriterionDelta {
@@ -121,18 +125,15 @@ export function compareLineups(
     const now = constraintMet(c, teamsAfter);
     if (was && !now) {
       issues.push({
-        kind: 'warn',
         text:
           c.kind === 'together'
             ? `${a} ו${b} חייבים לשחק יחד השבוע — והופרדו`
             : `${a} ו${b} חייבים להיות בנפרד השבוע — ועכשיו הם באותה קבוצה`,
       });
-    } else if (!was && now) {
-      issues.push({ kind: 'good', text: `האילוץ על ${a} ו${b} מתקיים עכשיו` });
     }
   }
 
-  /* קשרים שנשברו או תוקנו */
+  /* קשרים שנשברו */
 
   const satisfied = (lineup: Lineup) => {
     const map = new Map<string, boolean>();
@@ -154,21 +155,13 @@ export function compareLineups(
     const names = `${b.aName} ו${b.bName}`;
     if (was && !now) {
       issues.push({
-        kind: 'warn',
+        minor: true,
         text:
           b.kind === 'hate'
             ? `${names} מעדיפים לא לשחק יחד — ועכשיו הם באותה קבוצה`
             : b.kind === 'friend'
               ? `${names} חברים — והופרדו`
               : `${names} מעדיפים לשחק יחד — והופרדו`,
-      });
-    } else if (!was && now) {
-      issues.push({
-        kind: 'good',
-        text:
-          b.kind === 'hate'
-            ? `${names} כבר לא באותה קבוצה — טוב`
-            : `${names} חזרו לשחק יחד`,
       });
     }
   }
@@ -184,15 +177,13 @@ export function compareLineups(
   const spreadBefore = spreadOf(baseline);
   const spreadAfter = spreadOf(current);
 
-  if (spreadAfter - spreadBefore > 0.05) {
+  // פער שגדל מ-0.01 ל-0.07 עדיין "איזון מצוין" — מזהירים רק כשהאיזון יורד דרגה,
+  // ולא על מעבר זעיר שבמקרה חוצה את הסף (0.10 ל-0.11)
+  const levelBefore = balanceLevel(spreadBefore);
+  const levelAfter = balanceLevel(spreadAfter);
+  if (levelAfter > levelBefore && spreadAfter - spreadBefore > 0.05) {
     issues.push({
-      kind: 'warn',
-      text: `פער הדירוג בין הקבוצות גדל מ-${spreadBefore.toFixed(2)} ל-${spreadAfter.toFixed(2)} לשחקן`,
-    });
-  } else if (spreadBefore - spreadAfter > 0.05) {
-    issues.push({
-      kind: 'good',
-      text: `פער הדירוג הצטמצם ל-${spreadAfter.toFixed(2)} לשחקן`,
+      text: `איזון ${BALANCE_GRADES[levelAfter]} במקום ${BALANCE_GRADES[levelBefore]} — פער הדירוג גדל מ-${spreadBefore.toFixed(2)} ל-${spreadAfter.toFixed(2)} לשחקן`,
     });
   }
 
@@ -203,12 +194,12 @@ export function compareLineups(
   const wasUneven = Math.max(...sizesBefore) - Math.min(...sizesBefore) > 1;
   if (uneven && !wasUneven) {
     issues.push({
-      kind: 'warn',
       text: `הקבוצות כבר לא בגדלים דומים (${sizes.join(' / ')}) — שחקן אחד עבר בלי החלפה`,
     });
   }
 
   /* ריכוז עמדות */
+  let positionWarned = false;
   for (const position of SPREAD_POSITIONS) {
     const countIn = (lineup: Lineup, t: TeamId) =>
       membersOf(lineup, t).filter((id) => byId.get(id)?.positions.join() === position).length;
@@ -219,13 +210,24 @@ export function compareLineups(
 
     const worstNow = Math.max(...lineupTeams(current).map((t) => countIn(current, t)), 0);
     const worstBefore = Math.max(...lineupTeams(baseline).map((t) => countIn(baseline, t)), 0);
-    if (worstNow > worstBefore) {
+    // 7 שחקני הגנה ב-3 קבוצות — 3 באחת מהן זו החלוקה הכי שווה שיש, לא בעיה
+    const fairShare = Math.ceil(holders / lineupTeams(current).length);
+    if (worstNow > worstBefore && worstNow > fairShare) {
       const team = lineupTeams(current).find((t) => countIn(current, t) === worstNow)!;
       issues.push({
-        kind: 'warn',
         text: `${worstNow} שחקני ${POSITION_META[position].label} נמצאים עכשיו ב${TEAM_META[team].name}`,
       });
+      positionWarned = true;
     }
+  }
+
+  // הספירה למעלה רואה רק שחקני עמדה אחת. שחקני הגנה/קישור שהצטופפו נתפסים
+  // רק בציון העמדות, ובלי זה עריכה כזו הייתה עוברת כ"אין בעיות"
+  const positionsScore = criteria.find((c) => c.id === 'positions');
+  if (!positionWarned && positionsScore && positionsScore.delta <= -10) {
+    issues.push({
+      text: `סידור העמדות נפגע — הציון ירד מ-${positionsScore.before} ל-${positionsScore.after}`,
+    });
   }
 
   return {

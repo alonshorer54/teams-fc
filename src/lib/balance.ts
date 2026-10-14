@@ -172,6 +172,16 @@ export const missingForEvenTeams = (total: number, teamCount: number): number =>
 /*  סטטיסטיקות                                                         */
 /* ------------------------------------------------------------------ */
 
+/**
+ * רמת האיזון לפי הפער בדירוג הממוצע לשחקן: 0 = מצוין, 1 = טוב, 2 = בינוני.
+ * אותם ספים מציירים את תגית האיזון וקובעים מתי עריכה ידנית "פגעה באיזון" —
+ * כך שאזהרה מופיעה רק כשהתגית באמת יורדת דרגה.
+ */
+export const balanceLevel = (spread: number): 0 | 1 | 2 =>
+  spread <= 0.1 ? 0 : spread <= 0.25 ? 1 : 2;
+
+export const BALANCE_GRADES = ['מצוין', 'טוב', 'בינוני'] as const;
+
 export function computeStats(
   lineup: Lineup,
   pool: Player[],

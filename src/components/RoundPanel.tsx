@@ -16,7 +16,7 @@ import type { Player } from '../types';
 import type { Substitution } from '../lib/storage';
 import { formatHebrewDate } from '../lib/format';
 import { teamSizeList } from '../lib/balance';
-import { RatingBadge } from './ui';
+import { Avatar, RatingBadge } from './ui';
 import { PasteListModal, type NewPlayerDraft } from './PasteListModal';
 
 /**
@@ -419,6 +419,7 @@ function PlayerChip({
     <span
       className={`inline-flex max-w-full items-center gap-2 rounded-xl border px-2.5 py-1.5 ${TONES[tone]}`}
     >
+      <Avatar name={player.name} photo={player.photo} size={24} />
       <span className="flex min-w-0 flex-col">
         <span className="flex min-w-0 items-center gap-1.5">
           <span
