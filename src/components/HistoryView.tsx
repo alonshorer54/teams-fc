@@ -290,6 +290,39 @@ export function HistoryView({
                     </ul>
                   </div>
                 )}
+
+                {/* שחקן שכבר בקצה הטווח "זז" בבדיקה בלי שהדירוג השתנה — אין מה להראות */}
+                {(() => {
+                  const moved = (record.ratingCheck?.changes ?? []).filter((c) => Number(c.to) !== Number(c.from));
+                  if (!moved.length) return null;
+                  return (
+                    <div className="rounded-xl border border-sky-500/25 bg-sky-500/5 p-3">
+                      <p className="mb-2 flex items-center gap-1.5 text-[11px] font-bold text-sky-300">
+                        <Scale size={12} />
+                        דירוגים שהשתנו השבוע
+                      </p>
+                      <ul className="flex flex-wrap gap-1.5">
+                        {moved.map((c) => {
+                          const up = Number(c.to) > Number(c.from);
+                          return (
+                            <li
+                              key={c.playerId}
+                              className={`inline-flex items-center gap-1.5 rounded-lg px-2 py-1 text-[11px] font-semibold ${
+                                up ? 'bg-emerald-500/15 text-emerald-200' : 'bg-amber-500/15 text-amber-200'
+                              }`}
+                            >
+                              {up ? <TrendingUp size={11} /> : <TrendingDown size={11} />}
+                              {c.name}
+                              <span dir="ltr" className="font-mono tabular-nums opacity-80">
+                                {Number(c.from).toFixed(1)} → {Number(c.to).toFixed(1)}
+                              </span>
+                            </li>
+                          );
+                        })}
+                      </ul>
+                    </div>
+                  );
+                })()}
               </div>
             )}
           </article>
