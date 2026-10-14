@@ -12,8 +12,9 @@ import {
   Users,
 } from 'lucide-react';
 import { POSITIONS, POSITION_META, type Player } from '../types';
-import { Avatar, ConfirmDialog, EmptyState, PositionChip, RatingBadge } from './ui';
+import { ConfirmDialog, EmptyState, PositionChip, RatingBadge } from './ui';
 import { PlayerFormModal, type PlayerDraft } from './PlayerFormModal';
+import { PhotoPicker } from './PhotoPicker';
 
 type SortKey = 'name' | 'rating';
 
@@ -22,11 +23,14 @@ export function PlayersView({
   onCreate,
   onUpdate,
   onDelete,
+  onSetPhoto,
 }: {
   players: Player[];
   onCreate: (draft: PlayerDraft) => void;
   onUpdate: (id: string, draft: PlayerDraft) => void;
   onDelete: (id: string) => void;
+  /** לחיצה על העיגול ברשימה — תמונה בלי לפתוח את טופס העריכה */
+  onSetPhoto: (id: string, photo: string) => void;
 }) {
   const [query, setQuery] = useState('');
   // ברירת מחדל לפי א"ב — הכי נוח למצוא שחקן מסוים
@@ -137,7 +141,13 @@ export function PlayersView({
                 key={p.id}
                 className="card flex items-start gap-3 p-3.5 transition hover:border-slate-700"
               >
-                <Avatar name={p.name} photo={p.photo} size={40} />
+                <PhotoPicker
+                  name={p.name}
+                  photo={p.photo}
+                  size={40}
+                  removable={false}
+                  onChange={(next) => next && onSetPhoto(p.id, next)}
+                />
 
                 <div className="min-w-0 flex-1 space-y-0.5">
                   <p className="flex items-center gap-1.5 truncate font-semibold text-slate-100">

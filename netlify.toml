@@ -6,6 +6,13 @@
   # Vite 8 and TypeScript 6 need a modern Node.
   NODE_VERSION = "22"
 
+# A photo shared from WhatsApp is posted here. The service worker normally catches
+# it; this is for the minutes after a deploy when a phone still runs the old one.
+[[redirects]]
+  from = "/share-photo"
+  to = "/?shared-photo"
+  status = 303
+
 # Single-page app: every unknown path serves index.html so deep links and
 # refreshes keep working instead of 404ing.
 [[redirects]]

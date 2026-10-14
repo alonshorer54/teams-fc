@@ -1,6 +1,5 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
-  Camera,
   Link2,
   MapPin,
   ShieldCheck,
@@ -8,11 +7,10 @@ import {
   ThumbsUp,
   UserPen,
   UserPlus,
-  X,
 } from 'lucide-react';
 import { POSITIONS, POSITION_META, cleanPositions, type Player, type Position } from '../types';
-import { photoFromFile } from '../lib/photo';
-import { Avatar, Modal } from './ui';
+import { Modal } from './ui';
+import { PhotoPicker } from './PhotoPicker';
 
 export interface PlayerDraft {
   name: string;
@@ -228,99 +226,6 @@ export function PlayerFormModal({
         </div>
       </div>
     </Modal>
-  );
-}
-
-/* ------------------------------ תמונה ------------------------------ */
-
-/**
- * לחיצה על העיגול פותחת את הגלריה. אין דרך למשוך תמונת פרופיל מוואטסאפ
- * ישירות — שומרים אותה מהפרופיל של השחקן לגלריה, ובוחרים אותה מכאן.
- */
-function PhotoPicker({
-  name,
-  photo,
-  onChange,
-}: {
-  name: string;
-  photo: string | undefined;
-  onChange: (next: string | undefined) => void;
-}) {
-  const inputRef = useRef<HTMLInputElement>(null);
-  const [busy, setBusy] = useState(false);
-  // השגיאה מוצגת ליד התמונה: בתחתית הטופס הארוך היא נופלת מחוץ למסך בטלפון
-  const [error, setError] = useState<string | null>(null);
-  // המודאל נסגר באמצע העיבוד? התוצאה לא שייכת לאף טופס — אחרת היא נוחתת על
-  // השחקן הבא שנפתח
-  const alive = useRef(true);
-  useEffect(() => {
-    alive.current = true;
-    return () => {
-      alive.current = false;
-    };
-  }, []);
-
-  return (
-    <div className="relative shrink-0">
-      <button
-        type="button"
-        onClick={() => inputRef.current?.click()}
-        disabled={busy}
-        className="group relative block rounded-full"
-        title="בחירת תמונה מהגלריה — למשל תמונת הפרופיל שלו מוואטסאפ, אחרי ששמרתם אותה"
-        aria-label={photo ? 'החלפת התמונה' : 'הוספת תמונה'}
-      >
-        <Avatar name={name || '?'} photo={photo} size={46} />
-        <span className="absolute -end-0.5 -bottom-0.5 rounded-full border border-slate-900 bg-emerald-500 p-1 text-emerald-950 transition group-hover:scale-110">
-          <Camera size={11} />
-        </span>
-      </button>
-
-      {photo && (
-        <button
-          type="button"
-          onClick={() => {
-            onChange(undefined);
-            setError(null);
-          }}
-          className="absolute -start-1 -top-1 rounded-full border border-slate-900 bg-slate-700 p-0.5 text-slate-200 transition hover:bg-rose-500"
-          title="הסרת התמונה"
-          aria-label="הסרת התמונה"
-        >
-          <X size={10} />
-        </button>
-      )}
-
-      <input
-        ref={inputRef}
-        type="file"
-        accept="image/*"
-        className="hidden"
-        onChange={async (e) => {
-          const file = e.target.files?.[0];
-          // מאפסים כדי שבחירה חוזרת באותו קובץ תפעיל שוב את האירוע
-          e.target.value = '';
-          if (!file) return;
-          setBusy(true);
-          setError(null);
-          try {
-            const next = await photoFromFile(file);
-            if (alive.current) onChange(next);
-          } catch (err) {
-            if (alive.current)
-              setError(err instanceof Error ? err.message : 'לא הצלחנו לטעון את התמונה');
-          } finally {
-            if (alive.current) setBusy(false);
-          }
-        }}
-      />
-
-      {error && (
-        <p className="absolute start-0 top-full z-10 mt-1 w-56 rounded-lg border border-rose-500/40 bg-slate-900 px-2 py-1 text-[11px] font-semibold text-rose-300">
-          {error}
-        </p>
-      )}
-    </div>
   );
 }
 

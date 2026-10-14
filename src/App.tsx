@@ -70,6 +70,7 @@ import { AuthGate, CloudNotConfigured } from './components/AuthGate';
 import { SharingCard } from './components/SharingCard';
 import { SyncBadge } from './components/SyncBadge';
 import { ConfirmDialog, Toast } from './components/ui';
+import { SharedPhotoModal } from './components/SharedPhotoModal';
 import type { PlayerDraft } from './components/PlayerFormModal';
 import type { NewPlayerDraft } from './components/PasteListModal';
 
@@ -448,6 +449,12 @@ function SquadApp({
     notify('הפרטים עודכנו');
   };
 
+  const setPlayerPhoto = (id: string, photo: string) => {
+    applyToPlayers((prev) => prev.map((p) => (p.id === id ? { ...p, photo } : p)));
+    const name = players.find((p) => p.id === id)?.name;
+    notify(name ? `התמונה של ${name} נשמרה` : 'התמונה נשמרה');
+  };
+
   const deletePlayer = (id: string) => {
     // normalizePlayers מנקה לבד הפניות לשחקן שנמחק
     applyToPlayers((prev) => prev.filter((p) => p.id !== id));
@@ -805,6 +812,7 @@ function SquadApp({
               onCreate={createPlayer}
               onUpdate={updatePlayer}
               onDelete={deletePlayer}
+              onSetPhoto={setPlayerPhoto}
             />
             {!isDemo && squad && (
               <SharingCard ownerId={squad.ownerId} ownerEmail={auth.email} notify={notify} />
@@ -901,6 +909,16 @@ function SquadApp({
             if (err) notify(`⚠️ ${err}`);
             else onLeftSquad();
           }}
+        />
+      )}
+
+      {/* מחוץ למצב דוגמה: תמונה ששותפה מוואטסאפ שייכת לשחקן אמיתי */}
+      {!isDemo && (
+        <SharedPhotoModal
+          players={players}
+          canEdit={isOwner}
+          onAssign={setPlayerPhoto}
+          notify={notify}
         />
       )}
 
