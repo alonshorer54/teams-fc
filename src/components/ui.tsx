@@ -1,4 +1,10 @@
-import { useEffect, type ReactNode } from 'react';
+import { useEffect, useRef, type ReactNode } from 'react';
+
+/**
+ * המודאלים הפתוחים, מהתחתון לעליון. חלון בתוך חלון (חיתוך תמונה מתוך טופס
+ * השחקן): Escape סוגר רק את העליון, ונעילת הגלילה משתחררת רק כשכולם נסגרו.
+ */
+const openModals: symbol[] = [];
 import { createPortal } from 'react-dom';
 import { X } from 'lucide-react';
 import { POSITION_META, isPlayerPhoto, type Position } from '../types';
@@ -20,16 +26,25 @@ export function Modal({
   children: ReactNode;
   maxWidth?: string;
 }) {
+  // onClose מגיע כפונקציה חדשה בכל רינדור. אילו היה בתלויות, כל רינדור של חלון
+  // חיצוני היה מוציא ומכניס אותו לראש המחסנית — מעל החלון שנפתח ממנו
+  const closeRef = useRef(onClose);
+  closeRef.current = onClose;
+
   useEffect(() => {
     if (!open) return;
-    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onClose();
+    const id = Symbol('modal');
+    openModals.push(id);
+    const onKey = (e: KeyboardEvent) =>
+      e.key === 'Escape' && openModals[openModals.length - 1] === id && closeRef.current();
     window.addEventListener('keydown', onKey);
     document.body.style.overflow = 'hidden';
     return () => {
       window.removeEventListener('keydown', onKey);
-      document.body.style.overflow = '';
+      openModals.splice(openModals.indexOf(id), 1);
+      if (!openModals.length) document.body.style.overflow = '';
     };
-  }, [open, onClose]);
+  }, [open]);
 
   if (!open) return null;
 

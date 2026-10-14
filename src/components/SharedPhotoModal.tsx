@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import type { Player } from '../types';
-import { photoFromFile } from '../lib/photo';
+import { loadPhoto } from '../lib/photo';
 import { SHARED_PHOTO_PARAM, clearSharedPhoto, readSharedPhoto } from '../lib/sharedPhoto';
 import { PhotoAssignModal } from './PhotoAssignModal';
 
@@ -20,7 +20,7 @@ export function SharedPhotoModal({
   onAssign: (id: string, photo: string) => void;
   notify: (msg: string) => void;
 }) {
-  const [photo, setPhoto] = useState<string | null>(null);
+  const [photo, setPhoto] = useState<HTMLCanvasElement | null>(null);
   // במצב פיתוח React מריץ אפקט פעמיים — בלי זה הפרמטר נמחק בריצה הראשונה,
   // והשנייה הייתה מודיעה שהתמונה "לא הגיעה"
   const started = useRef(false);
@@ -44,7 +44,7 @@ export function SharedPhotoModal({
           if (arrivedNow) notify('התמונה ששותפה לא הגיעה — נסו לשתף שוב');
           return;
         }
-        setPhoto(await photoFromFile(file));
+        setPhoto(await loadPhoto(file));
       } catch (err) {
         // תמונה שלא נקראת לא תיקרא גם בפעם הבאה
         void clearSharedPhoto();

@@ -17,7 +17,7 @@ import { ConfirmDialog, EmptyState, PositionChip, RatingBadge } from './ui';
 import { PlayerFormModal, type PlayerDraft } from './PlayerFormModal';
 import { PhotoPicker } from './PhotoPicker';
 import { PhotoAssignModal } from './PhotoAssignModal';
-import { photoFromFile } from '../lib/photo';
+import { loadPhoto } from '../lib/photo';
 
 type SortKey = 'name' | 'rating';
 
@@ -286,7 +286,7 @@ function BulkPhotosButton({
 }) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
-  const [queue, setQueue] = useState<string[]>([]);
+  const [queue, setQueue] = useState<HTMLCanvasElement[]>([]);
 
   return (
     <>
@@ -311,10 +311,10 @@ function BulkPhotosButton({
           e.target.value = '';
           if (!files.length) return;
           setBusy(true);
-          const photos: string[] = [];
+          const photos: HTMLCanvasElement[] = [];
           for (const file of files) {
             try {
-              photos.push(await photoFromFile(file));
+              photos.push(await loadPhoto(file));
             } catch {
               // תמונה שלא נקראת פשוט לא נכנסת לתור — מדווחים כמה בסוף
             }

@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
-import { Camera, X } from 'lucide-react';
-import { photoFromFile } from '../lib/photo';
-import { Avatar } from './ui';
+import { Camera, Crop as CropIcon, X } from 'lucide-react';
+import { defaultCrop, encodePhoto, loadPhoto, type Crop } from '../lib/photo';
+import { Avatar, Modal } from './ui';
+import { PhotoCropper } from './PhotoCropper';
 
 /**
  * לחיצה על העיגול פותחת את הגלריה. אין דרך בטוחה למשוך תמונת פרופיל מוואטסאפ
@@ -25,6 +26,8 @@ export function PhotoPicker({
   const [busy, setBusy] = useState(false);
   // השגיאה מוצגת ליד התמונה: בתחתית הטופס הארוך היא נופלת מחוץ למסך בטלפון
   const [error, setError] = useState<string | null>(null);
+  /** התמונה שנבחרה, בזמן שמכוונים איזה חלק ממנה נכנס לעיגול */
+  const [editing, setEditing] = useState<{ source: HTMLCanvasElement; crop: Crop } | null>(null);
   // המודאל נסגר באמצע העיבוד? התוצאה לא שייכת לאף טופס — אחרת היא נוחתת על
   // השחקן הבא שנפתח
   const alive = useRef(true);
@@ -88,8 +91,8 @@ export function PhotoPicker({
           setBusy(true);
           setError(null);
           try {
-            const next = await photoFromFile(file);
-            if (alive.current) onChange(next);
+            const source = await loadPhoto(file);
+            if (alive.current) setEditing({ source, crop: defaultCrop(source) });
           } catch (err) {
             if (alive.current)
               setError(err instanceof Error ? err.message : 'לא הצלחנו לטעון את התמונה');
@@ -98,6 +101,42 @@ export function PhotoPicker({
           }
         }}
       />
+
+      <Modal
+        open={!!editing}
+        onClose={() => setEditing(null)}
+        title={name ? `התמונה של ${name}` : 'התמונה של השחקן'}
+        icon={<CropIcon size={20} className="text-emerald-400" />}
+        maxWidth="max-w-sm"
+      >
+        {editing && (
+          <div className="space-y-4">
+            <PhotoCropper
+              source={editing.source}
+              crop={editing.crop}
+              onChange={(crop) => setEditing({ ...editing, crop })}
+            />
+            <div className="flex gap-2">
+              <button
+                className="btn-primary flex-1"
+                onClick={() => {
+                  try {
+                    onChange(encodePhoto(editing.source, editing.crop));
+                  } catch (err) {
+                    setError(err instanceof Error ? err.message : 'לא הצלחנו לשמור את התמונה');
+                  }
+                  setEditing(null);
+                }}
+              >
+                שמירה
+              </button>
+              <button className="btn-ghost" onClick={() => setEditing(null)}>
+                ביטול
+              </button>
+            </div>
+          </div>
+        )}
+      </Modal>
 
       {error && (
         <p className="absolute start-0 top-full z-10 mt-1 w-56 rounded-lg border border-rose-500/40 bg-slate-900 px-2 py-1 text-[11px] font-semibold text-rose-300">
