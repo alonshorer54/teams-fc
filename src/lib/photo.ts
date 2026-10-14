@@ -14,8 +14,8 @@ const SIDE = 224;
  */
 const MAX_SOURCE = 800;
 
-/** הצלע הארוכה של התמונה המלאה שמוצגת בהגדלה — כמו תמונת פרופיל בוואטסאפ */
-const FULL_SIDE = 640;
+/** הצלע של הפנים בהגדלה */
+const FULL_SIDE = 512;
 
 /**
  * איזה ריבוע מהתמונה נכנס לעיגול: מרכז בפיקסלים של המקור, ויחס הגדלה —
@@ -165,17 +165,20 @@ export function encodePhoto(src: HTMLCanvasElement, crop: Crop): string {
   throw new Error('התמונה גדולה מדי — נסו תמונה אחרת');
 }
 
-/** התמונה המלאה, בלי חיתוך — מה שמוצג כשלוחצים על העיגול */
-export function encodeFull(src: HTMLCanvasElement): string {
-  const scale = Math.min(1, FULL_SIDE / Math.max(src.width, src.height));
+/**
+ * מה שמוצג כשלוחצים על העיגול: אותו חיתוך של הפנים, בגדול — עד 512 פיקסלים,
+ * בלי להמציא פרטים שאין במקור.
+ */
+export function encodeFull(src: HTMLCanvasElement, crop: Crop): string {
+  const c = clampCrop(src, crop);
+  const size = Math.round(Math.min(FULL_SIDE, Math.max(SIDE, cropSide(src, c.zoom))));
   const canvas = document.createElement('canvas');
-  canvas.width = Math.round(src.width * scale);
-  canvas.height = Math.round(src.height * scale);
+  canvas.width = size;
+  canvas.height = size;
   const ctx = canvas.getContext('2d');
   if (!ctx) throw new Error('הדפדפן לא מאפשר לעבד תמונות');
-  ctx.imageSmoothingQuality = 'high';
-  ctx.drawImage(src, 0, 0, canvas.width, canvas.height);
-  for (const quality of [0.85, 0.75, 0.6]) {
+  drawCrop(ctx, src, c, size);
+  for (const quality of [0.88, 0.78, 0.65]) {
     const url = canvas.toDataURL('image/jpeg', quality);
     if (url.length <= MAX_FULL_PHOTO_LENGTH) return url;
   }

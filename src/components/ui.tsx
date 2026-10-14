@@ -304,7 +304,7 @@ export function PhotoViewer({
               <img
                 src={shown}
                 alt={name}
-                className="mx-auto max-h-[70vh] w-full rounded-2xl object-contain"
+                className="mx-auto aspect-square w-full max-w-[360px] rounded-2xl object-cover"
                 draggable={false}
               />
             ) : (
