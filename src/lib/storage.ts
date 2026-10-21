@@ -35,6 +35,12 @@ export interface PaymentRound {
    * ברירת מחדל ב-normalizeSettings: כל כתיבה של הגדרות מנורמלות הייתה מוחקת אותו.
    */
   playerIds?: string[];
+  /**
+   * גביות של ערבים קודמים שעוד חייבים בהן, מהחדשה לישנה. יושבות בתוך הגבייה
+   * הנוכחית ולא כשדה נפרד בהגדרות, כדי שגרסה ישנה שעוד רצה בטלפון של מישהו —
+   * שבונה את ההגדרות מהשדות שהיא מכירה — לא תמחק אותן בשמירה הבאה שלה.
+   */
+  earlier?: PaymentRound[];
 }
 
 export type PaymentMethod = 'bitGroup' | 'bit' | 'paybox' | 'cash';

@@ -34,6 +34,7 @@ export function RoundPanel({
   teamCount,
   fillerCount,
   onSetAll,
+  onListPasted,
   onAddPlayers,
   onClearRound,
   onToggle,
@@ -54,6 +55,8 @@ export function RoundPanel({
   /** כמה משלימים כבר נוספו, כדי שהמניין יהיה זהה לזה שההגרלה תראה */
   fillerCount: number;
   onSetAll: (ids: string[]) => void;
+  /** רשימה שהודבקה מהוואטסאפ — מי שבה עובר גם לגבייה */
+  onListPasted: (ids: string[]) => void;
   /** מוסיף למאגר את מי שהודבק ולא היה בו, ומחזיר את המזהים החדשים */
   onAddPlayers: (drafts: NewPlayerDraft[]) => string[];
   /** מרוקן את המחזור ומוחק את החלוקה — מחזור חדש */
@@ -283,7 +286,9 @@ export function RoundPanel({
         players={players}
         onClose={() => setPasteOpen(false)}
         onApply={(ids, newPlayers) => {
-          onSetAll([...ids, ...(newPlayers.length ? onAddPlayers(newPlayers) : [])]);
+          const all = [...ids, ...(newPlayers.length ? onAddPlayers(newPlayers) : [])];
+          onSetAll(all);
+          onListPasted(all);
           setPasteOpen(false);
         }}
       />

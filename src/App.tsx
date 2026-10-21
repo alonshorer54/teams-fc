@@ -37,12 +37,13 @@ import {
   type Draft,
   type PaymentRound,
 } from './lib/storage';
+import { alignToRecord, openEvening } from './lib/payments';
 import { isCloudConfigured } from './lib/supabase';
 import { useLocalStorage } from './hooks/useLocalStorage';
 import { useAuth } from './hooks/useAuth';
 import { answerInvitation, useSquads, type Squad } from './hooks/useSquads';
 import { useSyncedStore } from './hooks/useSyncedStore';
-import { formatHebrewDate, rollRoundDate, todayISO } from './lib/format';
+import { rollRoundDate, todayISO } from './lib/format';
 import { computeHistoryStats, streakByPlayer } from './lib/stats';
 import { computePairChemistry, pairEffectMap } from './lib/pairs';
 import {
@@ -518,8 +519,7 @@ function SquadApp({
 
   /* ------------------------------ היסטוריה ---------------------------- */
 
-  /** מחזיר הודעה כשיש משהו לומר מעבר ל"נשמר" */
-  const saveToHistory = (lineup: Lineup, date: string, cancelledIds: string[]): string | undefined => {
+  const saveToHistory = (lineup: Lineup, date: string, cancelledIds: string[]) => {
     // המשלימים לא נמצאים במאגר, אבל הם כן חלק מהקבוצות של הערב הזה
     const byId = new Map<string, { id: string; name: string; rating: number }>([
       ...players.map((p) => [p.id, p] as const),
@@ -547,22 +547,6 @@ function SquadApp({
         ),
     };
     setHistory((prev) => [record, ...prev]);
-
-    // הגבייה עוברת לערב הזה לבד (ראו האפקט של latestRecord). מי שלא שילם על
-    // הערב הקודם יוצא מהרשימה — אז אומרים את זה, כדי שהחוב לא ייעלם בשקט
-    const previous = isDemo ? demoPayments : settings.payments;
-    if (previous.matchDate && previous.matchDate < date) {
-      const owing = (previous.playerIds ?? [])
-        .filter((id) => !previous.paid[id])
-        .map((id) => players.find((p) => p.id === id)?.name)
-        .filter((name): name is string => !!name);
-      if (owing.length) {
-        // הודעה קופצת לא מחזיקה רשימה ארוכה — חמישה שמות, והשאר במספר
-        const shown = owing.slice(0, 5).join(', ');
-        const more = owing.length > 5 ? ` ועוד ${owing.length - 5}` : '';
-        return `הקבוצות נשמרו והגבייה עברה לערב הזה. על ${formatHebrewDate(previous.matchDate)} עוד לא שילמו: ${shown}${more}`;
-      }
-    }
   };
 
   /** ההגרלה האחרונה שנשמרה — לפי תאריך, ובאותו תאריך זו שנשמרה אחרונה */
@@ -578,44 +562,26 @@ function SquadApp({
     [history],
   );
 
+  const payments = isDemo ? demoPayments : settings.payments;
+  const setPayments = isDemo ? setDemoPayments : setRealPayments;
+
   /**
-   * רשימת התשלום היא תמיד מי ששיחק בהגרלה האחרונה שנשמרה. ערב חדש מחליף את
-   * הגבייה מיד — גם אם מישהו עוד חייב על הקודם — ושמירה חוזרת של אותו ערב
-   * (תיקון בקבוצות) מעדכנת את הרשימה ומשאירה את מי שכבר שילם.
+   * הגבייה מיושרת לקבוצות האחרונות שנשמרו: מי ששיחק הוא מי שמשלם. ערב חדש פותח
+   * גבייה חדשה מעל הקודמת (שנשארת אם עוד חייבים בה), ושמירה חוזרת של אותו ערב
+   * מעדכנת את הרשימה ומשאירה את מי שכבר שילם.
    *
-   * אפקט ולא קריאה מתוך השמירה: כך גם גבייה שאופסה, נמחקה או נשארה מאחור
-   * בגרסה ישנה מתיישרת לבד, בלי לשמור את הקבוצות פעם נוספת.
+   * אפקט ולא קריאה מתוך השמירה: כך גם גבייה שאופסה או נשארה מאחור בגרסה ישנה
+   * מתיישרת לבד, בלי לשמור את הקבוצות פעם נוספת.
    */
   useEffect(() => {
     if (!latestRecord || (!isDemo && store.status === 'loading')) return;
-    const current = isDemo ? demoPayments : settings.payments;
-    // גבייה על ערב חדש יותר מכל מה שבהיסטוריה היא של הגרלה שנמחקה — היא מוחלפת
-    // כמו כל ערב אחר שאינו האחרון
+    if (alignToRecord(payments, latestRecord) === payments) return;
+    setPayments((base) => alignToRecord(base, latestRecord));
+  }, [latestRecord, isDemo, store.status, payments, setPayments]);
 
-    const playerIds = allInLineup(recordLineup(latestRecord)).filter((id) => !isFillerId(id));
-    const sameEvening = current.matchDate === latestRecord.date;
-    // הערב הזה כבר שולם ונסגר — לא גובים ממנו שוב
-    if (sameEvening && current.playerIds?.length === 0) return;
-    const listed = current.playerIds ?? [];
-    if (
-      sameEvening &&
-      listed.length === playerIds.length &&
-      playerIds.every((id) => listed.includes(id))
-    ) {
-      return;
-    }
-
-    // גבייה חדשה מתחילה נקייה — סימונים של ערב קודם לא עוברים אליה
-    const keep = new Set(sameEvening ? playerIds : []);
-    const apply = (base: PaymentRound): PaymentRound => ({
-      ...base,
-      matchDate: latestRecord.date,
-      playerIds,
-      paid: Object.fromEntries(Object.entries(base.paid).filter(([id]) => keep.has(id))),
-    });
-    if (isDemo) setDemoPayments(apply);
-    else setRealPayments(apply);
-  }, [latestRecord, isDemo, store.status, demoPayments, settings.payments, setRealPayments]);
+  /** רשימה מהוואטסאפ פותחת את הגבייה של הערב עוד לפני שיש קבוצות */
+  const openPaymentsFromList = (date: string, ids: string[]) =>
+    setPayments((base) => openEvening(base, date, ids));
 
   /**
    * מסמן תוצאה, ומיד אחריה מריץ את בדיקת הדירוגים אם המחזור הזה הוא כל שלישי.
@@ -888,6 +854,7 @@ function SquadApp({
             priorities={priorities}
             setPriorities={setPriorities}
             onSaveHistory={saveToHistory}
+            onListPasted={openPaymentsFromList}
             onAddPlayers={addPlayers}
             notify={notify}
             isDemo={isDemo}
@@ -913,8 +880,8 @@ function SquadApp({
           <PaymentsView
             players={players}
             // במצב דוגמה הגבייה חיה בזיכרון, כמו כל השאר, ולא נוגעת בגבייה האמיתית
-            payments={isDemo ? demoPayments : settings.payments}
-            onChange={isDemo ? setDemoPayments : setRealPayments}
+            payments={payments}
+            onChange={setPayments}
             notify={notify}
           />
         )}

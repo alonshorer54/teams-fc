@@ -86,6 +86,7 @@ export function DrawView({
   priorities,
   setPriorities,
   onSaveHistory,
+  onListPasted,
   onAddPlayers,
   notify,
   isDemo,
@@ -100,8 +101,9 @@ export function DrawView({
   recentLineups: Lineup[];
   priorities: CriterionSetting[];
   setPriorities: (next: CriterionSetting[]) => void;
-  /** מחזיר הודעה שמחליפה את ה"נשמר" הרגיל, כשיש מה לומר */
-  onSaveHistory: (lineup: Lineup, date: string, cancelledIds: string[]) => string | undefined;
+  onSaveHistory: (lineup: Lineup, date: string, cancelledIds: string[]) => void;
+  /** רשימה מהוואטסאפ נקלטה — פותחים לה גבייה */
+  onListPasted: (date: string, ids: string[]) => void;
   onAddPlayers: (drafts: NewPlayerDraft[]) => string[];
   notify: (msg: string) => void;
   isDemo: boolean;
@@ -327,6 +329,7 @@ export function DrawView({
         teamCount={teamCount}
         fillerCount={fillers.length}
         onAddPlayers={onAddPlayers}
+        onListPasted={(ids) => onListPasted(matchDate, ids)}
         onSetAll={(ids) =>
           setDraft((p) => ({ ...p, selectedIds: ids, cancelledIds: [], substitutions: [] }))
         }
@@ -486,10 +489,8 @@ export function DrawView({
             <button
               className="btn-ghost"
               onClick={() => {
-                const note = onSaveHistory(lineup, matchDate, cancelledIds);
-                notify(
-                  note ?? (isDemo ? 'נוסף להיסטוריית הדוגמה (זמני)' : 'הקבוצות נשמרו בהיסטוריה ✔'),
-                );
+                onSaveHistory(lineup, matchDate, cancelledIds);
+                notify(isDemo ? 'נוסף להיסטוריית הדוגמה (זמני)' : 'הקבוצות נשמרו בהיסטוריה ✔');
               }}
             >
               <Save size={16} />
