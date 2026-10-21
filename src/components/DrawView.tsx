@@ -101,7 +101,8 @@ export function DrawView({
   recentLineups: Lineup[];
   priorities: CriterionSetting[];
   setPriorities: (next: CriterionSetting[]) => void;
-  onSaveHistory: (lineup: Lineup, date: string, cancelledIds: string[]) => void;
+  /** מחזיר true כששמירה קודמת של אותו ערב הוחלפה */
+  onSaveHistory: (lineup: Lineup, date: string, cancelledIds: string[]) => boolean;
   /** רשימה מהוואטסאפ נקלטה — פותחים לה גבייה */
   onListPasted: (date: string, ids: string[]) => void;
   onAddPlayers: (drafts: NewPlayerDraft[]) => string[];
@@ -489,8 +490,14 @@ export function DrawView({
             <button
               className="btn-ghost"
               onClick={() => {
-                onSaveHistory(lineup, matchDate, cancelledIds);
-                notify(isDemo ? 'נוסף להיסטוריית הדוגמה (זמני)' : 'הקבוצות נשמרו בהיסטוריה ✔');
+                const replaced = onSaveHistory(lineup, matchDate, cancelledIds);
+                notify(
+                  isDemo
+                    ? 'נוסף להיסטוריית הדוגמה (זמני)'
+                    : replaced
+                      ? 'הקבוצות של הערב עודכנו ✔'
+                      : 'הקבוצות נשמרו בהיסטוריה ✔',
+                );
               }}
             >
               <Save size={16} />

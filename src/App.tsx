@@ -522,7 +522,8 @@ function SquadApp({
   const payments = isDemo ? demoPayments : settings.payments;
   const setPayments = isDemo ? setDemoPayments : setRealPayments;
 
-  const saveToHistory = (lineup: Lineup, date: string, cancelledIds: string[]) => {
+  /** מחזיר true כששמירה קודמת של אותו ערב הוחלפה */
+  const saveToHistory = (lineup: Lineup, date: string, cancelledIds: string[]): boolean => {
     // המשלימים לא נמצאים במאגר, אבל הם כן חלק מהקבוצות של הערב הזה
     const byId = new Map<string, { id: string; name: string; rating: number }>([
       ...players.map((p) => [p.id, p] as const),
@@ -535,8 +536,13 @@ function SquadApp({
     const snapshot = (ids: string[]) =>
       ids.map(one).filter((p): p is NonNullable<ReturnType<typeof one>> => !!p);
 
+    // שמירה חוזרת של אותו ערב מחליפה את הקודמת, במקום עוד הגרלה לצידה
+    const previous = history.filter((r) => r.date === date);
+    // אותן קבוצות בדיוק: התוצאה ובדיקת הדירוגים שכבר נרשמו עדיין נכונות, ונשארות
+    const same = previous.find((r) => lineupKey(recordLineup(r)) === lineupKey(lineup));
+
     const record: MatchRecord = {
-      id: newId(),
+      id: same?.id ?? newId(),
       savedAt: new Date().toISOString(),
       date,
       teams: Object.fromEntries(
@@ -548,11 +554,18 @@ function SquadApp({
         .filter((s): s is { out: NonNullable<typeof s.out>; in: NonNullable<typeof s.in> } =>
           Boolean(s.out && s.in),
         ),
+      ...(same?.placements && { placements: same.placements }),
+      ...(same?.result && { result: same.result }),
+      ...(same?.ratingCheck && { ratingCheck: same.ratingCheck }),
     };
-    setHistory((prev) => [record, ...prev]);
+    // קבוצות אחרות: תיקוני הדירוג שהתוצאה הישנה גררה מתבטלים, כמו בניקוי תוצאה
+    const undone = previous.filter((r) => r !== same).flatMap((r) => r.ratingCheck?.changes ?? []);
+    if (undone.length) applyToPlayers((prev) => revertChanges(prev, undone));
+    setHistory((prev) => [record, ...prev.filter((r) => r.date !== date)]);
     // האפקט שלמטה מיישר רק לערב האחרון. קבוצות שנשמרו באיחור — אחרי שכבר הודבקה
     // הרשימה של השבוע הבא — מקבלות כאן גבייה משלהן מתחת לזו של הבא
     setPayments((base) => alignToRecord(base, record, 'earlier'));
+    return previous.length > 0;
   };
 
   /** ההגרלה האחרונה שנשמרה — לפי תאריך, ובאותו תאריך זו שנשמרה אחרונה */

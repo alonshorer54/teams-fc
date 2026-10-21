@@ -8,18 +8,23 @@ export const owingIds = (round: PaymentRound): string[] =>
 /** גבייה שעוד חייבים בה — רק כזו נשמרת כשנפתח ערב חדש */
 export const isUnfinished = (round: PaymentRound): boolean => owingIds(round).length > 0;
 
-/** אותו ערב, רשימה מעודכנת: מי שנשאר שומר את הסימון שלו, מי שהוחלף יוצא */
-function withRoster(round: PaymentRound, playerIds: string[]): PaymentRound {
-  const keep = new Set(playerIds);
-  return {
-    ...round,
-    playerIds,
-    paid: Object.fromEntries(Object.entries(round.paid).filter(([id]) => keep.has(id))),
-  };
-}
-
 const sameIds = (a: readonly string[], b: readonly string[]) =>
   a.length === b.length && a.every((id) => b.includes(id));
+
+/**
+ * הרשימה של ערב אחרי עדכון: מי שברשימה החדשה, ועוד מי שכבר שילם ויצא ממנה
+ * (הוחלף בקבוצות). סימון תשלום לא נמחק בשקט — הכסף כבר אצלך.
+ */
+const nextRoster = (round: PaymentRound, playerIds: string[]): string[] => [
+  ...playerIds,
+  ...Object.keys(round.paid).filter((id) => !playerIds.includes(id)),
+];
+
+/** אותו ערב, רשימה מעודכנת. מחזיר את אותו אובייקט כשאין שינוי */
+function withRoster(round: PaymentRound, playerIds: string[]): PaymentRound {
+  const next = nextRoster(round, playerIds);
+  return round.playerIds && sameIds(round.playerIds, next) ? round : { ...round, playerIds: next };
+}
 
 /**
  * מה עושים עם ערב ישן יותר מהגבייה הנוכחית:
@@ -34,7 +39,7 @@ export type OlderEvening = 'ignore' | 'earlier' | 'replace';
 /**
  * פותח גבייה לערב `date` עם `playerIds`.
  *
- * - אותו ערב: הרשימה מתעדכנת, וכל מי שנשאר בה שומר את הסימון.
+ * - אותו ערב: הרשימה מתעדכנת, ואף סימון תשלום לא נמחק (ראו nextRoster).
  * - ערב חדש: הגבייה הנוכחית, אם עוד חייבים בה, יורדת מתחת לחדשה (`earlier`)
  *   ולא נמחקת. גבייה שכולם שילמו בה פשוט מתחלפת.
  * - ערב ישן יותר מהגבייה הנוכחית: לפי `older`.
@@ -49,11 +54,7 @@ export function openEvening(
 ): PaymentRound {
   if (!date || !playerIds.length) return payments;
 
-  if (payments.matchDate === date) {
-    return payments.playerIds && sameIds(payments.playerIds, playerIds)
-      ? payments
-      : withRoster(payments, playerIds);
-  }
+  if (payments.matchDate === date) return withRoster(payments, playerIds);
 
   const { earlier = [], ...current } = payments;
   const fresh: PaymentRound = {
@@ -70,8 +71,8 @@ export function openEvening(
       return { ...fresh, earlier: earlier.filter((r) => r.matchDate !== date) };
     }
     const existing = earlier.find((r) => r.matchDate === date);
-    if (existing?.playerIds && sameIds(existing.playerIds, playerIds)) return payments;
     const round = existing ? withRoster(existing, playerIds) : fresh;
+    if (round === existing) return payments;
     return {
       ...payments,
       earlier: [...earlier.filter((r) => r.matchDate !== date), round].sort((a, b) =>
