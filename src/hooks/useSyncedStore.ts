@@ -64,14 +64,25 @@ export function useSyncedStore(userId: string | null, isOwner = true) {
   const adoptions = useRef(0);
   /** שינוי מקומי שעוד לא הגיע לענן — ממתין או בדרך */
   const isSaving = () => timerArmed.current || inFlight.current > 0;
+  /** ה-updated_at של השמירות שלנו, כדי לזהות את ההד שלהן בערוץ הזמן-אמת */
+  const ownWrites = useRef(new Set<string>());
+  /** שינוי ממכשיר אחר הגיע בזמן ששמרנו, ועוד לא נלקח */
+  const missedRemote = useRef(false);
 
   /** Replaces local state with what the database holds, after a refused or conflicting save. */
-  const adoptCloud = useCallback(async (): Promise<boolean> => {
+  const adoptCloud = useCallback(async (unlessSaving = false): Promise<boolean> => {
     const client = supabase;
     if (!client || !userId) return false;
     const { data } = await client.from(TABLE).select('*').eq('user_id', userId).maybeSingle();
     if (!data) return false;
+    // נלחץ משהו בזמן ההבאה: אימוץ עכשיו היה מוחק אותו. השמירה שלו תיתקל בהתנגשות
+    // ותאמץ את הענן בעצמה
+    if (unlessSaving && isSaving()) {
+      missedRemote.current = true;
+      return false;
+    }
     adoptions.current += 1;
+    missedRemote.current = false;
     const cloudSettings = normalizeSettings((data.settings ?? {}) as Partial<AppSettings>);
     cloudFingerprint.current = fingerprint(data.players ?? [], data.history ?? [], cloudSettings);
     cloudUpdatedAt.current = data.updated_at ?? null;
@@ -170,7 +181,18 @@ export function useSyncedStore(userId: string | null, isOwner = true) {
     if (!client || !userId || !hydrated.current) return;
 
     const current = fingerprint(players, history, settings);
-    if (current === cloudFingerprint.current) return; // אין שינוי אמיתי
+    if (current === cloudFingerprint.current) {
+      // אין שינוי אמיתי — למשל סימון שבוטל בתוך ההשהיה. אין שמירה שתיתקל בהתנגשות,
+      // אז שינוי ממכשיר אחר שדילגנו עליו בינתיים נלקח כאן
+      if (!inFlight.current) {
+        if (missedRemote.current) {
+          missedRemote.current = false;
+          void adoptCloud(true);
+        }
+        setStatus((s) => (s === 'saving' ? 'synced' : s));
+      }
+      return;
+    }
 
     setStatus('saving');
     timerArmed.current = true;
@@ -186,6 +208,8 @@ export function useSyncedStore(userId: string | null, isOwner = true) {
         try {
           // המכשיר אימץ את הענן בינתיים: מה שחיכה כאן כבר לא המצב שלו
           if (adoptions.current !== adoptedBefore) return;
+          const updatedAt = new Date().toISOString();
+          ownWrites.current.add(updatedAt);
           const result = await upsertRow(
             client,
             userId,
@@ -195,8 +219,10 @@ export function useSyncedStore(userId: string | null, isOwner = true) {
             supportsSettings,
             isOwner,
             cloudUpdatedAt.current,
+            updatedAt,
           );
           if (!result.success) {
+            ownWrites.current.delete(updatedAt);
             setError(result.message ?? 'השמירה נכשלה');
             setStatus('error');
             // A conflicting or refused change would otherwise be retried with every later edit;
@@ -212,8 +238,17 @@ export function useSyncedStore(userId: string | null, isOwner = true) {
           if (!timerArmed.current && inFlight.current === 1) setStatus('synced');
         } finally {
           inFlight.current -= 1;
+          if (!isSaving() && missedRemote.current) {
+            missedRemote.current = false;
+            void adoptCloud(true);
+          }
         }
-      });
+      })
+        // שמירה שזרקה (רשת שנפלה) לא תתקע את כל השמירות שאחריה בתור
+        .catch((e: unknown) => {
+          setError(e instanceof Error ? e.message : 'השמירה נכשלה');
+          setStatus('error');
+        });
     }, SAVE_DEBOUNCE_MS);
 
     return () => {
@@ -242,15 +277,20 @@ export function useSyncedStore(userId: string | null, isOwner = true) {
             updated_at?: string;
           };
           if (!row) return;
-          // שינוי מקומי עוד לא הגיע לענן. אם זה ההד של השמירה שלנו — אין מה לקחת ממנו;
-          // אם זה שינוי ממכשיר אחר — השמירה שלנו תיתקל בהתנגשות ותאמץ את הענן בעצמה.
-          // אימוץ כאן היה מחזיר את המסך למצב שלפני הלחיצות האחרונות
-          if (isSaving()) return;
+          // ההד של שמירה שלנו — כבר יודעים מה יש בו
+          if (row.updated_at && ownWrites.current.delete(row.updated_at)) return;
+          // שינוי ממכשיר אחר בזמן שינוי מקומי שעוד לא הגיע לענן: אימוץ עכשיו היה מחזיר
+          // את המסך למצב שלפני הלחיצות האחרונות. השמירה שלנו תיתקל בהתנגשות ותאמץ את
+          // הענן בעצמה, ואם לא תהיה שמירה — הוא נלקח כשהכל נרגע
+          if (isSaving()) {
+            missedRemote.current = true;
+            return;
+          }
           if (!row.players) {
             // מעל 1MB ה-Realtime שולח את השורה בלי העמודות הגדולות. במקום לפספס את
             // השינוי בשקט — מביאים את השורה עצמה (אלא אם זה ההד של השמירה שלנו)
             if (row.updated_at && row.updated_at !== cloudUpdatedAt.current) {
-              void adoptCloud().then((ok) => {
+              void adoptCloud(true).then((ok) => {
                 if (!ok) return;
                 setLastSyncedAt(row.updated_at ?? new Date().toISOString());
                 setStatus('synced');
@@ -291,24 +331,38 @@ export function useSyncedStore(userId: string | null, isOwner = true) {
       const client = supabase;
       if (!client || !userId) return;
 
-      const result = await upsertRow(
-        client,
-        userId,
-        nextPlayers,
-        nextHistory,
-        settings,
-        supportsSettings,
-        isOwner,
-        cloudUpdatedAt.current,
-      );
-      if (!result.success) {
-        if (result.conflict) await adoptCloud();
-        return;
-      }
-      cloudFingerprint.current = fingerprint(nextPlayers, nextHistory, settings);
-      cloudUpdatedAt.current = result.updatedAt;
-      setLastSyncedAt(result.updatedAt);
-      setStatus('synced');
+      // בתור עם השמירות הרגילות, מאותה סיבה
+      inFlight.current += 1;
+      const step = saveChain.current.then(async () => {
+        try {
+          const updatedAt = new Date().toISOString();
+          ownWrites.current.add(updatedAt);
+          const result = await upsertRow(
+            client,
+            userId,
+            nextPlayers,
+            nextHistory,
+            settings,
+            supportsSettings,
+            isOwner,
+            cloudUpdatedAt.current,
+            updatedAt,
+          );
+          if (!result.success) {
+            ownWrites.current.delete(updatedAt);
+            if (result.conflict) await adoptCloud();
+            return;
+          }
+          cloudFingerprint.current = fingerprint(nextPlayers, nextHistory, settings);
+          cloudUpdatedAt.current = result.updatedAt;
+          setLastSyncedAt(result.updatedAt);
+          setStatus('synced');
+        } finally {
+          inFlight.current -= 1;
+        }
+      });
+      saveChain.current = step.catch(() => undefined);
+      await step;
     },
     [userId, isOwner, settings, setPlayers, setHistory, adoptCloud],
   );
@@ -368,8 +422,8 @@ async function upsertRow(
   supportsSettings: { current: boolean },
   isOwner: boolean,
   expected: string | null,
+  updatedAt = new Date().toISOString(),
 ): Promise<SaveResult> {
-  const updatedAt = new Date().toISOString();
 
   if (expected) {
     const write = (withSettings: boolean) =>

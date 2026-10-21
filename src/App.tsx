@@ -519,6 +519,9 @@ function SquadApp({
 
   /* ------------------------------ היסטוריה ---------------------------- */
 
+  const payments = isDemo ? demoPayments : settings.payments;
+  const setPayments = isDemo ? setDemoPayments : setRealPayments;
+
   const saveToHistory = (lineup: Lineup, date: string, cancelledIds: string[]) => {
     // המשלימים לא נמצאים במאגר, אבל הם כן חלק מהקבוצות של הערב הזה
     const byId = new Map<string, { id: string; name: string; rating: number }>([
@@ -547,6 +550,9 @@ function SquadApp({
         ),
     };
     setHistory((prev) => [record, ...prev]);
+    // האפקט שלמטה מיישר רק לערב האחרון. קבוצות שנשמרו באיחור — אחרי שכבר הודבקה
+    // הרשימה של השבוע הבא — מקבלות כאן גבייה משלהן מתחת לזו של הבא
+    setPayments((base) => alignToRecord(base, record, 'earlier'));
   };
 
   /** ההגרלה האחרונה שנשמרה — לפי תאריך, ובאותו תאריך זו שנשמרה אחרונה */
@@ -562,9 +568,6 @@ function SquadApp({
     [history],
   );
 
-  const payments = isDemo ? demoPayments : settings.payments;
-  const setPayments = isDemo ? setDemoPayments : setRealPayments;
-
   /**
    * הגבייה מיושרת לקבוצות האחרונות שנשמרו: מי ששיחק הוא מי שמשלם. ערב חדש פותח
    * גבייה חדשה מעל הקודמת (שנשארת אם עוד חייבים בה), ושמירה חוזרת של אותו ערב
@@ -579,9 +582,15 @@ function SquadApp({
     setPayments((base) => alignToRecord(base, latestRecord));
   }, [latestRecord, isDemo, store.status, payments, setPayments]);
 
-  /** רשימה מהוואטסאפ פותחת את הגבייה של הערב עוד לפני שיש קבוצות */
-  const openPaymentsFromList = (date: string, ids: string[]) =>
-    setPayments((base) => openEvening(base, date, ids));
+  /**
+   * רשימה מהוואטסאפ פותחת את הגבייה של הערב עוד לפני שיש קבוצות. ערב שכבר יש לו
+   * קבוצות שמורות לא נוגעים בו: ביום המשחק התאריך עוד לא התקדם, ורשימה של השבוע
+   * הבא שהודבקה באותו לילה הייתה מוחקת את הסימונים של מי ששילם הערב.
+   */
+  const openPaymentsFromList = (date: string, ids: string[]) => {
+    if (history.some((r) => r.date === date)) return;
+    setPayments((base) => openEvening(base, date, ids, 'replace'));
+  };
 
   /**
    * מסמן תוצאה, ומיד אחריה מריץ את בדיקת הדירוגים אם המחזור הזה הוא כל שלישי.
