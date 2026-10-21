@@ -23,6 +23,7 @@ import {
   teamGridClass,
   type Lineup,
   type Player,
+  type SaveOutcome,
   type TeamId,
 } from '../types';
 import {
@@ -101,8 +102,7 @@ export function DrawView({
   recentLineups: Lineup[];
   priorities: CriterionSetting[];
   setPriorities: (next: CriterionSetting[]) => void;
-  /** מחזיר true כששמירה קודמת של אותו ערב הוחלפה */
-  onSaveHistory: (lineup: Lineup, date: string, cancelledIds: string[]) => boolean;
+  onSaveHistory: (lineup: Lineup, date: string, cancelledIds: string[]) => SaveOutcome;
   /** רשימה מהוואטסאפ נקלטה — פותחים לה גבייה */
   onListPasted: (date: string, ids: string[]) => void;
   onAddPlayers: (drafts: NewPlayerDraft[]) => string[];
@@ -490,13 +490,15 @@ export function DrawView({
             <button
               className="btn-ghost"
               onClick={() => {
-                const replaced = onSaveHistory(lineup, matchDate, cancelledIds);
+                const outcome = onSaveHistory(lineup, matchDate, cancelledIds);
                 notify(
-                  isDemo
-                    ? 'נוסף להיסטוריית הדוגמה (זמני)'
-                    : replaced
-                      ? 'הקבוצות של הערב עודכנו ✔'
-                      : 'הקבוצות נשמרו בהיסטוריה ✔',
+                  outcome === 'resultCleared'
+                    ? 'הקבוצות של הערב עודכנו — התוצאה שסומנה נמחקה, צריך לסמן אותה שוב'
+                    : isDemo
+                      ? 'נוסף להיסטוריית הדוגמה (זמני)'
+                      : outcome === 'replaced'
+                        ? 'הקבוצות של הערב עודכנו ✔'
+                        : 'הקבוצות נשמרו בהיסטוריה ✔',
                 );
               }}
             >

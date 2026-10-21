@@ -443,6 +443,9 @@ export function withCurrentNames(
   return changed ? next : history;
 }
 
+/** מה קרה בשמירת קבוצות: ערב חדש, החלפה של שמירה קודמת, או החלפה שמחקה תוצאה שכבר סומנה */
+export type SaveOutcome = 'added' | 'replaced' | 'resultCleared';
+
 /** ההרכב של הגרלה שנשמרה, כמזהי שחקנים — כדי להשוות אותה להגרלות חדשות. */
 export const recordLineup = (record: MatchRecord): Lineup =>
   Object.fromEntries(

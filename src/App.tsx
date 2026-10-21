@@ -18,6 +18,7 @@ import {
   membersOf,
   normalizePlayers,
   recordLineup,
+  recordPlacements,
   squadOnly,
   teamsIn,
   withCurrentNames,
@@ -26,6 +27,7 @@ import {
   type MatchRecord,
   type Placements,
   type Player,
+  type SaveOutcome,
 } from './types';
 import { VARIETY_MEMORY, lineupKey, removeFromLineup } from './lib/balance';
 import {
@@ -522,8 +524,8 @@ function SquadApp({
   const payments = isDemo ? demoPayments : settings.payments;
   const setPayments = isDemo ? setDemoPayments : setRealPayments;
 
-  /** מחזיר true כששמירה קודמת של אותו ערב הוחלפה */
-  const saveToHistory = (lineup: Lineup, date: string, cancelledIds: string[]): boolean => {
+  /** מה קרה לשמירה קודמת של אותו ערב, אם הייתה */
+  const saveToHistory = (lineup: Lineup, date: string, cancelledIds: string[]): SaveOutcome => {
     // המשלימים לא נמצאים במאגר, אבל הם כן חלק מהקבוצות של הערב הזה
     const byId = new Map<string, { id: string; name: string; rating: number }>([
       ...players.map((p) => [p.id, p] as const),
@@ -538,8 +540,13 @@ function SquadApp({
 
     // שמירה חוזרת של אותו ערב מחליפה את הקודמת, במקום עוד הגרלה לצידה
     const previous = history.filter((r) => r.date === date);
-    // אותן קבוצות בדיוק: התוצאה ובדיקת הדירוגים שכבר נרשמו עדיין נכונות, ונשארות
-    const same = previous.find((r) => lineupKey(recordLineup(r)) === lineupKey(lineup));
+    // אותן קבוצות באותם צבעים: התוצאה ובדיקת הדירוגים שכבר נרשמו עדיין נכונות, ונשארות.
+    // הצבע חלק מההשוואה כי התוצאה נשמרת לפי צבע — אחרי החלפת צבעים היא הייתה עוברת לקבוצה הלא נכונה
+    const byColor = (l: Lineup) =>
+      lineupTeams(l)
+        .map((t) => `${t}:${[...membersOf(l, t)].sort().join(',')}`)
+        .join('|');
+    const same = previous.find((r) => byColor(recordLineup(r)) === byColor(lineup));
 
     const record: MatchRecord = {
       id: same?.id ?? newId(),
@@ -565,7 +572,8 @@ function SquadApp({
     // האפקט שלמטה מיישר רק לערב האחרון. קבוצות שנשמרו באיחור — אחרי שכבר הודבקה
     // הרשימה של השבוע הבא — מקבלות כאן גבייה משלהן מתחת לזו של הבא
     setPayments((base) => alignToRecord(base, record, 'earlier'));
-    return previous.length > 0;
+    if (!previous.length) return 'added';
+    return previous.some((r) => r !== same && recordPlacements(r)) ? 'resultCleared' : 'replaced';
   };
 
   /** ההגרלה האחרונה שנשמרה — לפי תאריך, ובאותו תאריך זו שנשמרה אחרונה */
