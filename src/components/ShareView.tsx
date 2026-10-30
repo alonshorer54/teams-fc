@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { CalendarDays, Copy, Image as ImageIcon, Share2 } from 'lucide-react';
-import { POSITION_META, TEAM_META, teamGridClass, teamsIn } from '../types';
+import { TEAM_META, teamGridClass, teamsIn } from '../types';
 import {
   buildWhatsAppFormationText,
   buildWhatsAppText,
@@ -13,6 +13,8 @@ import {
 import type { FieldPosition } from '../lib/formation';
 import { canShareImage, downloadImage, renderTeamsImage, shareImage } from '../lib/shareImage';
 import { useLocalStorage } from '../hooks/useLocalStorage';
+import { Avatar } from './ui';
+import { PitchField, RotatingGoal } from './PitchField';
 
 type ShareLayout = 'list' | 'formation';
 
@@ -171,38 +173,33 @@ export function ShareView({
 /** השורות במגרש, מהחלוצים למעלה ועד השער למטה */
 const PITCH_LINES: FieldPosition[] = ['att', 'mid', 'def', 'gk'];
 
-/** המערך בתצוגת השיתוף: שמות בלבד, בלי דירוגים ובלי סימון של מי לא בעמדה שלו */
+/**
+ * המערך בתצוגת השיתוף: אותו מגרש כמו בעריכה, בלי דירוגים ובלי סימון של מי
+ * לא בעמדה שלו.
+ */
 function SharePitch({ formation }: { formation: ShareFormation }) {
   return (
-    <div className="relative bg-gradient-to-b from-emerald-900/45 to-emerald-950/70 px-2 pt-6 pb-3">
-      <span className="absolute top-2 right-3 font-mono text-[11px] font-bold text-emerald-200/80" dir="ltr">
-        {formation.label}
-      </span>
-      <div className="flex flex-col gap-3">
-        {PITCH_LINES.map((line) => {
-          const names = formation.lines[line];
-          if (line === 'gk' && !names.length) {
-            return (
-              <p key={line} className="text-center text-xs font-semibold text-slate-400">
-                {POSITION_META.gk.emoji} מתחלפים בשער
-              </p>
-            );
-          }
-          if (!names.length) return null;
-          return (
-            <div key={line} className="flex justify-center gap-2">
-              {names.map((name, i) => (
-                <span
-                  key={`${name}-${i}`}
-                  className="min-w-0 flex-1 truncate text-center text-[15px] font-semibold text-slate-100"
-                >
-                  {name}
+    <PitchField label={formation.label}>
+      {PITCH_LINES.map((line) => {
+        const players = formation.lines[line];
+        if (line === 'gk' && !players.length) return <RotatingGoal key={line} />;
+        if (!players.length) return null;
+        return (
+          <div key={line} className="flex justify-center gap-1">
+            {players.map((player, i) => (
+              <div
+                key={`${player.name}-${i}`}
+                className="flex w-[4.75rem] flex-col items-center gap-0.5 px-0.5 py-1"
+              >
+                <Avatar name={player.name} photo={player.photo} size={34} />
+                <span className="w-full truncate text-center text-[11px] leading-tight font-semibold text-slate-100">
+                  {player.name}
                 </span>
-              ))}
-            </div>
-          );
-        })}
-      </div>
-    </div>
+              </div>
+            ))}
+          </div>
+        );
+      })}
+    </PitchField>
   );
 }

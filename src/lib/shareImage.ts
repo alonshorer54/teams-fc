@@ -1,10 +1,88 @@
-import { TEAM_META, teamsIn, type TeamId } from '../types';
+import { TEAM_META, isPlayerPhoto, teamsIn, type TeamId } from '../types';
 import type { ShareFormations, ShareTeams } from './format';
 import { formatHebrewDate } from './format';
 import type { FieldPosition } from './formation';
 
 /** השורות במגרש, מהחלוצים למעלה ועד השער למטה — כמו בתצוגת המגרש באפליקציה */
 const PITCH_LINES: FieldPosition[] = ['att', 'mid', 'def', 'gk'];
+
+/** המרווח בראש המגרש — מקום לתווית המערך מעל שורת החלוצים */
+const PITCH_TOP = 40;
+/** רדיוס העיגול של שחקן, ורוחב המשבצת שלו בשורה */
+const AVATAR_R = 32;
+const TOKEN_W = 136;
+
+/**
+ * צבעי העיגול לשחקן בלי תמונה — אותם צבעים ואותה בחירה לפי השם כמו ב-Avatar,
+ * כך שכל שחקן נראה בתמונה כמו באפליקציה.
+ */
+const AVATAR_FILLS: [string, string][] = [
+  ['rgba(5,150,105,0.55)', '#d1fae5'],
+  ['rgba(2,132,199,0.55)', '#e0f2fe'],
+  ['rgba(124,58,237,0.55)', '#ede9fe'],
+  ['rgba(217,119,6,0.55)', '#fef3c7'],
+  ['rgba(225,29,72,0.55)', '#ffe4e6'],
+  ['rgba(13,148,136,0.55)', '#ccfbf1'],
+];
+
+/** התמונות של השחקנים, טעונות מראש — קנבס לא יכול לחכות לתמונה באמצע ציור */
+async function loadPhotos(formations: ShareFormations): Promise<Map<string, HTMLImageElement>> {
+  const sources = new Set(
+    teamsIn(formations)
+      .flatMap((t) => Object.values(formations[t]!.lines).flat())
+      .map((p) => p.photo)
+      .filter(isPlayerPhoto),
+  );
+  const loaded = new Map<string, HTMLImageElement>();
+  await Promise.all(
+    [...sources].map(async (src) => {
+      const img = new Image();
+      img.src = src;
+      try {
+        await img.decode();
+        loaded.set(src, img);
+      } catch {
+        // תמונה שלא נטענת — השחקן יקבל עיגול עם האות הראשונה, כמו בלי תמונה
+      }
+    }),
+  );
+  return loaded;
+}
+
+/** עיגול השחקן: התמונה שלו, ובלעדיה האות הראשונה של השם */
+function drawAvatar(
+  ctx: CanvasRenderingContext2D,
+  name: string,
+  photo: HTMLImageElement | undefined,
+  x: number,
+  y: number,
+  r: number,
+) {
+  ctx.save();
+  ctx.beginPath();
+  ctx.arc(x, y, r, 0, Math.PI * 2);
+  if (photo) {
+    ctx.clip();
+    ctx.drawImage(photo, x - r, y - r, r * 2, r * 2);
+  } else {
+    let hash = 0;
+    for (const ch of name) hash = (hash * 31 + ch.charCodeAt(0)) >>> 0;
+    const [fill, text] = AVATAR_FILLS[hash % AVATAR_FILLS.length];
+    ctx.fillStyle = fill;
+    ctx.fill();
+    ctx.fillStyle = text;
+    ctx.font = `700 ${Math.round(r * 0.84)}px "Rubik","Assistant","Segoe UI",system-ui,sans-serif`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(name.trim().charAt(0), x, y + 1);
+  }
+  ctx.restore();
+  ctx.beginPath();
+  ctx.arc(x, y, r, 0, Math.PI * 2);
+  ctx.strokeStyle = 'rgba(255,255,255,0.12)';
+  ctx.lineWidth = 2;
+  ctx.stroke();
+}
 
 /**
  * מצייר את הקבוצות על קנבס ומחזיר PNG.
@@ -25,15 +103,17 @@ export async function renderTeamsImage(
   const ids = teamsIn(teams);
   if (!ids.length) return null;
   const { formations } = options;
+  const photos = formations ? await loadPhotos(formations) : new Map<string, HTMLImageElement>();
 
   const scale = 2; // כדי שייצא חד גם במסכי רטינה
-  const W = 1080;
+  // מגרש צריך רוחב: שלושה שחקנים בשורה, כל אחד עם עיגול ושם, בשלוש עמודות
+  const W = formations && ids.length > 2 ? 1440 : 1080;
   const pad = 40;
   const colGap = 24;
   const colW = (W - pad * 2 - colGap * (ids.length - 1)) / ids.length;
   const headerH = 74;
   const rowH = 62;
-  const lineH = 76;
+  const lineH = 128;
   const titleH = options.includeDate ? 116 : 72;
 
   // במערך כל שורה היא עמדה; קישור ריק (בקבוצה של 5) לא תופס שורה, השער תמיד כן
@@ -41,7 +121,7 @@ export async function renderTeamsImage(
     PITCH_LINES.filter((line) => line === 'gk' || formations![teamId]!.lines[line].length);
   const bodyH = (teamId: TeamId) =>
     formations?.[teamId]
-      ? pitchLines(teamId).length * lineH + 24
+      ? PITCH_TOP + pitchLines(teamId).length * lineH + 16
       : Math.max((teams[teamId] ?? []).length, 1) * rowH;
 
   const H = titleH + headerH + Math.max(...ids.map(bodyH)) + pad * 2;
@@ -115,42 +195,69 @@ export async function renderTeamsImage(
     if (formation) {
       const top = y + headerH;
       const pitchH = bodyH(teamId);
+      const cx = x + colW / 2;
 
-      // סימוני חצי מגרש: חצי עיגול למעלה, רחבה למטה
-      ctx.strokeStyle = 'rgba(255,255,255,0.14)';
+      // דשא, וסימוני חצי מגרש — אותו מגרש כמו באפליקציה
+      ctx.save();
+      roundRect(x, y, colW, cardH, 18);
+      ctx.clip();
+      const grass = ctx.createLinearGradient(0, top, 0, top + pitchH);
+      grass.addColorStop(0, '#0f3d2e');
+      grass.addColorStop(1, '#05261b');
+      ctx.fillStyle = grass;
+      ctx.fillRect(x, top, colW, pitchH);
+      ctx.restore();
+
+      ctx.strokeStyle = 'rgba(255,255,255,0.12)';
       ctx.lineWidth = 2;
-      ctx.beginPath();
-      ctx.arc(x + colW / 2, top, 44, 0, Math.PI);
+      roundRect(x + 10, top + 8, colW - 20, pitchH - 16, 8);
       ctx.stroke();
-      ctx.strokeRect(x + colW * 0.28, top + pitchH - 58, colW * 0.44, 58);
+      ctx.beginPath();
+      ctx.arc(cx, top + 8, 46, 0, Math.PI);
+      ctx.stroke();
+      ctx.strokeRect(x + colW * 0.3, top + pitchH - 8 - 76, colW * 0.4, 76);
 
-      ctx.fillStyle = 'rgba(255,255,255,0.75)';
-      ctx.font = font(20, '600');
-      ctx.textAlign = 'right';
-      ctx.fillText(formation.label, x + colW - 14, top + 30);
-
+      // תווית המערך בפינה, כמו בכרטיס באפליקציה
+      ctx.font = font(19, '700');
+      const label = `מערך ${formation.label}`;
+      const labelW = ctx.measureText(label).width + 20;
+      ctx.fillStyle = 'rgba(0,0,0,0.3)';
+      roundRect(x + colW - 20 - labelW, top + 18, labelW, 32, 8);
+      ctx.fill();
+      ctx.fillStyle = '#a7f3d0';
       ctx.textAlign = 'center';
+      ctx.fillText(label, x + colW - 20 - labelW / 2, top + 41);
+
       pitchLines(teamId).forEach((line, i) => {
-        const lineY = top + 12 + i * lineH + lineH / 2 + 9;
+        const lineTop = top + PITCH_TOP + i * lineH;
         const here = formation.lines[line];
+
         if (line === 'gk' && !here.length) {
-          ctx.fillStyle = 'rgba(226,232,240,0.6)';
-          ctx.font = font(22, '600');
-          ctx.fillText('🧤 מתחלפים בשער', x + colW / 2, lineY);
+          ctx.font = font(21, '600');
+          const text = '🧤 מתחלפים בשער';
+          const w = ctx.measureText(text).width + 32;
+          ctx.fillStyle = 'rgba(0,0,0,0.2)';
+          roundRect(cx - w / 2, lineTop + 34, w, 46, 10);
+          ctx.fill();
+          ctx.setLineDash([6, 5]);
+          ctx.strokeStyle = 'rgba(255,255,255,0.25)';
+          ctx.stroke();
+          ctx.setLineDash([]);
+          ctx.fillStyle = '#cbd5e1';
+          ctx.textAlign = 'center';
+          ctx.fillText(text, cx, lineTop + 64);
           return;
         }
-        // שמות באותה שורה מתחלקים שווה ברוחב, מימין לשמאל. כל שם על רקע משלו —
-        // בלי זה שלושה שמות בשורה נקראים כמו שם ארוך אחד
-        const slotW = (colW - 12) / here.length;
-        ctx.font = font(here.length >= 3 ? 20 : 24, '600');
-        here.forEach((name, j) => {
-          const cx = x + colW - 6 - slotW * (j + 0.5);
-          const pillW = Math.min(ctx.measureText(name).width + 18, slotW - 6);
-          ctx.fillStyle = 'rgba(2,6,23,0.45)';
-          roundRect(cx - pillW / 2, lineY - 27, pillW, 38, 10);
-          ctx.fill();
-          ctx.fillStyle = '#f8fafc';
-          ctx.fillText(name, cx, lineY, pillW - 12);
+
+        // השחקנים בשורה מרוכזים באמצע, כל אחד במשבצת בגודל קבוע — עיגול ושם מתחתיו
+        const tokenW = Math.min(TOKEN_W, (colW - 24) / here.length);
+        here.forEach((player, j) => {
+          const px = cx + ((here.length - 1) / 2 - j) * tokenW;
+          drawAvatar(ctx, player.name, photos.get(player.photo ?? ''), px, lineTop + 40, AVATAR_R);
+          ctx.fillStyle = '#f1f5f9';
+          ctx.font = font(22, '600');
+          ctx.textAlign = 'center';
+          ctx.fillText(player.name, px, lineTop + 40 + AVATAR_R + 30, tokenW - 10);
         });
       });
       return;

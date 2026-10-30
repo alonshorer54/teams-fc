@@ -12,6 +12,7 @@ import {
 import { CHEMISTRY_BONUS_PER_BOND, bondStatus, type TeamStats } from '../lib/balance';
 import { formationLabel, type FieldPosition } from '../lib/formation';
 import { Avatar, PositionChip, RatingBadge } from './ui';
+import { PitchField, RotatingGoal } from './PitchField';
 
 export function TeamCard({
   teamId,
@@ -307,90 +308,65 @@ function Pitch({
   const nameOf = (id: string) => byId.get(id)?.name ?? '';
 
   return (
-    <div className="relative min-h-[9rem] flex-1 overflow-hidden bg-gradient-to-b from-emerald-900/45 to-emerald-950/70 px-2 pt-4 pb-3">
-      {/* סימוני חצי מגרש: קו האמצע וחצי העיגול למעלה, הרחבה למטה */}
-      <div aria-hidden className="pointer-events-none absolute inset-x-2 inset-y-1.5 rounded-md border border-white/10" />
-      <div aria-hidden className="pointer-events-none absolute top-1.5 left-1/2 h-7 w-16 -translate-x-1/2 rounded-b-full border border-t-0 border-white/10" />
-      <div aria-hidden className="pointer-events-none absolute bottom-1.5 left-1/2 h-12 w-2/5 -translate-x-1/2 border border-b-0 border-white/10" />
+    <PitchField label={formationLabel(stats.formation.formation)}>
+      {PITCH_LINES.map((line) => {
+        const here = stats.formation.spots
+          .filter((s) => s.position === line)
+          .sort((a, b) => nameOf(a.id).localeCompare(nameOf(b.id), 'he'));
+        if (line === 'gk' && stats.formation.rotatingGoal) return <RotatingGoal key={line} />;
+        if (!here.length) return null;
 
-      <span className="absolute top-2 right-3 inline-flex items-center gap-1 rounded-md bg-black/30 px-1.5 py-0.5 text-[11px] font-semibold text-emerald-200">
-        מערך
-        <span className="font-mono font-bold tabular-nums" dir="ltr">
-          {formationLabel(stats.formation.formation)}
-        </span>
-      </span>
+        return (
+          <div key={line} className="flex justify-center gap-1">
+            {here.map((spot) => {
+              const player = byId.get(spot.id);
+              if (!player) return null;
+              const own = player.positions.filter((p) => p !== 'any');
 
-      <div className="relative flex h-full flex-col justify-between gap-2.5">
-        {PITCH_LINES.map((line) => {
-          const here = stats.formation.spots
-            .filter((s) => s.position === line)
-            .sort((a, b) => nameOf(a.id).localeCompare(nameOf(b.id), 'he'));
-          if (line === 'gk' && stats.formation.rotatingGoal) {
-            return (
-              <div key={line} className="flex justify-center">
-                <span
-                  className="rounded-lg border border-dashed border-white/20 bg-black/20 px-3 py-2 text-[11px] font-semibold text-slate-300"
-                  title="אין בקבוצה שחקן שמסומן כשוער, אז אף אחד לא מוצג בשער"
+              return (
+                <div
+                  key={spot.id}
+                  draggable
+                  onDragStart={(e) => {
+                    e.dataTransfer.setData('text/player-id', spot.id);
+                    e.dataTransfer.effectAllowed = 'move';
+                  }}
+                  onDragOver={(e) => e.preventDefault()}
+                  onDrop={(e) => onDrop(e, spot.id)}
+                  onClick={() => onSelect(spot.id)}
+                  title={
+                    spot.fits
+                      ? `${player.name} — ${POSITION_META[line].label}`
+                      : `${player.name} — ${own.map((p) => POSITION_META[p].label).join('/')}, משחק כאן ב${POSITION_META[line].label}`
+                  }
+                  className={`flex w-[4.75rem] cursor-grab flex-col items-center gap-0.5 rounded-lg px-0.5 py-1 transition active:cursor-grabbing ${
+                    selectedId === spot.id
+                      ? 'bg-emerald-500/25 ring-1 ring-emerald-400/70'
+                      : 'hover:bg-white/[0.06]'
+                  }`}
                 >
-                  🧤 מתחלפים בשער
-                </span>
-              </div>
-            );
-          }
-          if (!here.length) return null;
-
-          return (
-            <div key={line} className="flex justify-center gap-1">
-              {here.map((spot) => {
-                const player = byId.get(spot.id);
-                if (!player) return null;
-                const own = player.positions.filter((p) => p !== 'any');
-
-                return (
-                  <div
-                    key={spot.id}
-                    draggable
-                    onDragStart={(e) => {
-                      e.dataTransfer.setData('text/player-id', spot.id);
-                      e.dataTransfer.effectAllowed = 'move';
-                    }}
-                    onDragOver={(e) => e.preventDefault()}
-                    onDrop={(e) => onDrop(e, spot.id)}
-                    onClick={() => onSelect(spot.id)}
-                    title={
-                      spot.fits
-                        ? `${player.name} — ${POSITION_META[line].label}`
-                        : `${player.name} — ${own.map((p) => POSITION_META[p].label).join('/')}, משחק כאן ב${POSITION_META[line].label}`
-                    }
-                    className={`flex w-[4.75rem] cursor-grab flex-col items-center gap-0.5 rounded-lg px-0.5 py-1 transition active:cursor-grabbing ${
-                      selectedId === spot.id
-                        ? 'bg-emerald-500/25 ring-1 ring-emerald-400/70'
-                        : 'hover:bg-white/[0.06]'
-                    }`}
-                  >
-                    <span className={`rounded-full ${spot.fits ? '' : 'ring-2 ring-amber-400'}`}>
-                      <Avatar name={player.name} photo={player.photo} size={34} />
+                  <span className={`rounded-full ${spot.fits ? '' : 'ring-2 ring-amber-400'}`}>
+                    <Avatar name={player.name} photo={player.photo} size={34} />
+                  </span>
+                  <span className="w-full truncate text-center text-[11px] leading-tight font-semibold text-slate-100">
+                    {player.name}
+                  </span>
+                  <span dir="ltr" className="font-mono text-[10px] leading-none text-slate-400 tabular-nums">
+                    {player.rating.toFixed(1)}
+                  </span>
+                  {!spot.fits && (
+                    <span className="rounded bg-amber-500/20 px-1 text-[9px] leading-tight font-semibold whitespace-nowrap text-amber-200">
+                      {own.map((p) => POSITION_META[p].emoji).join('')}{' '}
+                      {own.map((p) => POSITION_META[p].label).join('/')}
                     </span>
-                    <span className="w-full truncate text-center text-[11px] leading-tight font-semibold text-slate-100">
-                      {player.name}
-                    </span>
-                    <span dir="ltr" className="font-mono text-[10px] leading-none text-slate-400 tabular-nums">
-                      {player.rating.toFixed(1)}
-                    </span>
-                    {!spot.fits && (
-                      <span className="rounded bg-amber-500/20 px-1 text-[9px] leading-tight font-semibold whitespace-nowrap text-amber-200">
-                        {own.map((p) => POSITION_META[p].emoji).join('')}{' '}
-                        {own.map((p) => POSITION_META[p].label).join('/')}
-                      </span>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-          );
-        })}
-      </div>
-    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        );
+      })}
+    </PitchField>
   );
 }
 

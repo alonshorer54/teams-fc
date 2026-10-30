@@ -35,10 +35,16 @@ export function buildWhatsAppText(teams: ShareTeams, options: ShareOptions = {})
  * הקבוצה במערך, לשיתוף: שמות בלבד, שורה לכל עמדה. שער ריק = מתחלפים.
  * מי שמשחק לא בעמדה שלו לא מסומן כאן בכוונה — זה מידע למארגן, לא לקבוצה.
  */
+export interface SharePlayer {
+  name: string;
+  /** התמונה של השחקן, כדי שהמערך בתמונה ייראה כמו המגרש באפליקציה */
+  photo?: string;
+}
+
 export interface ShareFormation {
   /** "3-2-1" */
   label: string;
-  lines: Record<FieldPosition, string[]>;
+  lines: Record<FieldPosition, SharePlayer[]>;
 }
 
 export type ShareFormations = TeamMap<ShareFormation>;
@@ -61,7 +67,7 @@ export function buildWhatsAppFormationText(
     const meta = TEAM_META[id];
     const formation = formations[id]!;
     const rows = MESSAGE_LINES.flatMap((line) => {
-      const names = formation.lines[line];
+      const names = formation.lines[line].map((p) => p.name);
       if (line === 'gk') return [`${POSITION_META.gk.emoji} ${names.length ? names.join(', ') : 'מתחלפים'}`];
       return names.length ? [`${POSITION_META[line].emoji} ${names.join(', ')}`] : [];
     });

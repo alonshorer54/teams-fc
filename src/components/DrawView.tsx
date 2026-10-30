@@ -240,15 +240,15 @@ export function DrawView({
   }, [lineup, teamIds, nameById]);
 
   const shareFormations: ShareFormations = useMemo(() => {
-    const byName = (a: string, b: string) => a.localeCompare(b, 'he');
+    const photoOf = new Map(pool.map((p) => [p.id, p.photo]));
     return Object.fromEntries(
       teamsIn(stats.teams).map((t) => {
         const fit = stats.teams[t]!.formation;
         const namesAt = (line: FieldPosition) =>
           fit.spots
             .filter((s) => s.position === line)
-            .map((s) => nameById.get(s.id) ?? '')
-            .sort(byName);
+            .map((s) => ({ name: nameById.get(s.id) ?? '', photo: photoOf.get(s.id) }))
+            .sort((a, b) => a.name.localeCompare(b.name, 'he'));
         return [
           t,
           {
@@ -258,7 +258,7 @@ export function DrawView({
         ];
       }),
     );
-  }, [stats, nameById]);
+  }, [stats, nameById, pool]);
 
   const setLineup =(l: Lineup | null) => setDraft((p) => ({ ...p, lineup: l }));
 
