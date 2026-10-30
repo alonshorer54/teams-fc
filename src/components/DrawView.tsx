@@ -618,7 +618,7 @@ export function DrawView({
             <div className="inline-flex rounded-xl border border-slate-700 bg-slate-900/60 p-1 text-xs font-semibold">
               {(
                 [
-                  ['pitch', '⚽ מגרש'],
+                  ['pitch', '⚽ מערך'],
                   ['list', '📋 רשימה'],
                 ] as const
               ).map(([view, label]) => (

@@ -84,8 +84,9 @@ export function ShareView({
           <div className="inline-flex rounded-xl border border-slate-700 bg-slate-900/60 p-1 text-xs font-semibold">
             {(
               [
-                ['list', '📋 רשימה'],
+                // אותו סדר כמו בעריכה: המערך מימין, הרשימה משמאל
                 ['formation', '⚽ מערך'],
+                ['list', '📋 רשימה'],
               ] as const
             ).map(([value, label]) => (
               <button
