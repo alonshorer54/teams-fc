@@ -10,11 +10,10 @@ import {
   type ShareFormations,
   type ShareTeams,
 } from '../lib/format';
-import type { FieldPosition } from '../lib/formation';
 import { canShareImage, downloadImage, renderTeamsImage, shareImage } from '../lib/shareImage';
 import { useLocalStorage } from '../hooks/useLocalStorage';
-import { Avatar } from './ui';
-import { PitchField, RotatingGoal } from './PitchField';
+import { PITCH_LINES } from '../lib/formation';
+import { PitchField, PitchPlayer, RotatingGoal } from './PitchField';
 
 type ShareLayout = 'list' | 'formation';
 
@@ -34,7 +33,8 @@ export function ShareView({
   onCopied: (msg: string) => void;
 }) {
   const [includeDate, setIncludeDate] = useState(false);
-  const [layout, setLayout] = useLocalStorage<ShareLayout>('kohot.shareLayout.v1', 'list');
+  const [storedLayout, setLayout] = useLocalStorage<ShareLayout>('kohot.shareLayout.v1', 'list');
+  const layout: ShareLayout = storedLayout === 'formation' ? 'formation' : 'list';
   const ids = useMemo(() => teamsIn(teams), [teams]);
 
   const text = useMemo(
@@ -171,9 +171,6 @@ export function ShareView({
   );
 }
 
-/** השורות במגרש, מהחלוצים למעלה ועד השער למטה */
-const PITCH_LINES: FieldPosition[] = ['att', 'mid', 'def', 'gk'];
-
 /**
  * המערך בתצוגת השיתוף: אותו מגרש כמו בעריכה, בלי דירוגים ובלי סימון של מי
  * לא בעמדה שלו.
@@ -188,15 +185,7 @@ function SharePitch({ formation }: { formation: ShareFormation }) {
         return (
           <div key={line} className="flex justify-center gap-1">
             {players.map((player, i) => (
-              <div
-                key={`${player.name}-${i}`}
-                className="flex w-[4.75rem] flex-col items-center gap-0.5 px-0.5 py-1"
-              >
-                <Avatar name={player.name} photo={player.photo} size={34} />
-                <span className="w-full truncate text-center text-[11px] leading-tight font-semibold text-slate-100">
-                  {player.name}
-                </span>
-              </div>
+              <PitchPlayer key={`${player.name}-${i}`} name={player.name} photo={player.photo} />
             ))}
           </div>
         );

@@ -34,6 +34,9 @@ export function formationFor(size: number): Formation {
   return { gk: 1, def, mid: mid + Math.max(0, outfield - top), att };
 }
 
+/** השורות במגרש, מהחלוצים למעלה ועד השער למטה — בעריכה, בשיתוף ובתמונה */
+export const PITCH_LINES: readonly FieldPosition[] = ['att', 'mid', 'def', 'gk'];
+
 /** "3-2-1" — הגנה, קישור, התקפה */
 export const formationLabel = (f: Formation): string => `${f.def}-${f.mid}-${f.att}`;
 
@@ -193,16 +196,18 @@ export function fitFormation(
   const filled: Formation = { gk: 0, def: 0, mid: 0, att: 0 };
   const spots = members.map((m, player) => {
     let position = slotType[slotOf[player]];
+    const fromGoal = position === 'gk' && !fitsIn(player, 'gk');
     // בלי שוער מסומן אף אחד לא "נשלח" לשער: מי שקיבל את המשבצת חוזר לשורה
     // שלו בשדה, והשער מוצג כמתחלף
-    if (position === 'gk' && !fitsIn(player, 'gk')) {
+    if (fromGoal) {
       rotatingGoal = true;
       position = ownPositions(m.positions).reduce((best, pos) =>
         distance([pos], 'gk') < distance([best], 'gk') ? pos : best,
       );
     }
     const fits = fitsIn(player, position);
-    if (fits) filled[position]++;
+    // הוא שחקן נוסף בשורה, לא אחד מהמשבצות שלה — אחרת השורה הייתה נקראת 4/3
+    if (fits && !fromGoal) filled[position]++;
     return { id: m.id, position, fits };
   });
   return {

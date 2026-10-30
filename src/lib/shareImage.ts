@@ -1,10 +1,7 @@
 import { TEAM_META, isPlayerPhoto, teamsIn, type TeamId } from '../types';
 import type { ShareFormations, ShareTeams } from './format';
 import { formatHebrewDate } from './format';
-import type { FieldPosition } from './formation';
-
-/** השורות במגרש, מהחלוצים למעלה ועד השער למטה — כמו בתצוגת המגרש באפליקציה */
-const PITCH_LINES: FieldPosition[] = ['att', 'mid', 'def', 'gk'];
+import { PITCH_LINES, type FieldPosition } from './formation';
 
 /** המרווח בראש המגרש — מקום לתווית המערך מעל שורת החלוצים */
 const PITCH_TOP = 40;

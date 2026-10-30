@@ -1,4 +1,5 @@
-import type { ReactNode } from 'react';
+import type { HTMLAttributes, ReactNode } from 'react';
+import { Avatar } from './ui';
 
 /**
  * חצי מגרש עם סימונים ותווית המערך — הרקע של תצוגת המגרש בעריכה ובשיתוף,
@@ -20,6 +21,41 @@ export function PitchField({ label, children }: { label: string; children: React
       </span>
 
       <div className="relative flex h-full flex-col justify-between gap-2.5">{children}</div>
+    </div>
+  );
+}
+
+/**
+ * שחקן על המגרש: עיגול ושם מתחתיו. מה שבא מתחת לשם (דירוג, תווית עמדה) מגיע
+ * מבחוץ — בשיתוף אין שם כלום.
+ */
+export function PitchPlayer({
+  name,
+  photo,
+  ringed = false,
+  className = '',
+  children,
+  ...rest
+}: {
+  name: string;
+  photo?: string;
+  /** טבעת כתומה — משחק לא בעמדה שלו */
+  ringed?: boolean;
+  className?: string;
+  children?: ReactNode;
+} & Omit<HTMLAttributes<HTMLDivElement>, 'className' | 'children'>) {
+  return (
+    <div
+      {...rest}
+      className={`flex w-[4.75rem] flex-col items-center gap-0.5 rounded-lg px-0.5 py-1 ${className}`}
+    >
+      <span className={`rounded-full ${ringed ? 'ring-2 ring-amber-400' : ''}`}>
+        <Avatar name={name} photo={photo} size={34} />
+      </span>
+      <span className="w-full truncate text-center text-[11px] leading-tight font-semibold text-slate-100">
+        {name}
+      </span>
+      {children}
     </div>
   );
 }

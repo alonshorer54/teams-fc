@@ -10,9 +10,9 @@ import {
   type TeamId,
 } from '../types';
 import { CHEMISTRY_BONUS_PER_BOND, bondStatus, type TeamStats } from '../lib/balance';
-import { formationLabel, type FieldPosition } from '../lib/formation';
+import { PITCH_LINES, formationLabel, type FieldPosition } from '../lib/formation';
 import { Avatar, PositionChip, RatingBadge } from './ui';
-import { PitchField, RotatingGoal } from './PitchField';
+import { PitchField, PitchPlayer, RotatingGoal } from './PitchField';
 
 export function TeamCard({
   teamId,
@@ -284,9 +284,6 @@ export function TeamCard({
  */
 export type TeamView = 'list' | 'pitch';
 
-/** השורות על המגרש, מהחלוצים למעלה ועד השוער למטה */
-const PITCH_LINES: FieldPosition[] = ['att', 'mid', 'def', 'gk'];
-
 /**
  * הקבוצה כפי שהיא עומדת על המגרש: חצי מגרש, שורה לכל עמדה במערך.
  * שחקן שמשחק לא בעמדה שלו מקבל טבעת כתומה ותווית של העמדה האמיתית שלו —
@@ -324,8 +321,11 @@ function Pitch({
               const own = player.positions.filter((p) => p !== 'any');
 
               return (
-                <div
+                <PitchPlayer
                   key={spot.id}
+                  name={player.name}
+                  photo={player.photo}
+                  ringed={!spot.fits}
                   draggable
                   onDragStart={(e) => {
                     e.dataTransfer.setData('text/player-id', spot.id);
@@ -339,18 +339,12 @@ function Pitch({
                       ? `${player.name} — ${POSITION_META[line].label}`
                       : `${player.name} — ${own.map((p) => POSITION_META[p].label).join('/')}, משחק כאן ב${POSITION_META[line].label}`
                   }
-                  className={`flex w-[4.75rem] cursor-grab flex-col items-center gap-0.5 rounded-lg px-0.5 py-1 transition active:cursor-grabbing ${
+                  className={`cursor-grab transition active:cursor-grabbing ${
                     selectedId === spot.id
                       ? 'bg-emerald-500/25 ring-1 ring-emerald-400/70'
                       : 'hover:bg-white/[0.06]'
                   }`}
                 >
-                  <span className={`rounded-full ${spot.fits ? '' : 'ring-2 ring-amber-400'}`}>
-                    <Avatar name={player.name} photo={player.photo} size={34} />
-                  </span>
-                  <span className="w-full truncate text-center text-[11px] leading-tight font-semibold text-slate-100">
-                    {player.name}
-                  </span>
                   <span dir="ltr" className="font-mono text-[10px] leading-none text-slate-400 tabular-nums">
                     {player.rating.toFixed(1)}
                   </span>
@@ -360,7 +354,7 @@ function Pitch({
                       {own.map((p) => POSITION_META[p].label).join('/')}
                     </span>
                   )}
-                </div>
+                </PitchPlayer>
               );
             })}
           </div>

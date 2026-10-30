@@ -117,7 +117,9 @@ export function DrawView({
   const [mode, setMode] = useState<Mode>('admin');
   const [selectedPlayer, setSelectedPlayer] = useState<string | null>(null);
   // העדפת תצוגה של המכשיר הזה בלבד — לא שייכת לנתוני הקבוצה ולא מסתנכרנת
-  const [teamView, setTeamView] = useLocalStorage<TeamView>('kohot.teamView.v1', 'pitch');
+  const [storedView, setTeamView] = useLocalStorage<TeamView>('kohot.teamView.v1', 'pitch');
+  // ערך שמור לא מוכר לא אמור להשאיר את הכרטיס בלי אף אחת מהתצוגות
+  const teamView: TeamView = storedView === 'list' ? 'list' : 'pitch';
   /** ההשפעה של הפעולה הידנית האחרונה, להודעה הקופצת */
   const [lastChange, setLastChange] = useState<{
     diff: LineupDiff;
@@ -241,8 +243,9 @@ export function DrawView({
 
   const shareFormations: ShareFormations = useMemo(() => {
     const photoOf = new Map(pool.map((p) => [p.id, p.photo]));
+    // קבוצה ריקה לא נשלחת כמערך — כמו שהרשימה מדלגת עליה, ולא מגרש ריק עם "מתחלפים בשער"
     return Object.fromEntries(
-      teamsIn(stats.teams).map((t) => {
+      teamsIn(stats.teams).filter((t) => stats.teams[t]!.count > 0).map((t) => {
         const fit = stats.teams[t]!.formation;
         const namesAt = (line: FieldPosition) =>
           fit.spots
