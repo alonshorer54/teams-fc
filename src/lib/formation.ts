@@ -76,46 +76,113 @@ export function fittedCount(byMask: ArrayLike<number>, slots: readonly number[])
   return best;
 }
 
+/** איפה שחקן עומד במערך, והאם זו העמדה שלו */
+export interface Spot {
+  id: string;
+  position: FieldPosition;
+  fits: boolean;
+}
+
 export interface FormationFit {
   formation: Formation;
   /** כמה מכל עמדה מאוישים בשחקן שזו העמדה שלו */
   filled: Formation;
   /** כמה שחקנים משחקים בעמדה שהיא לא שלהם */
   outOfPlace: number;
+  /** כל שחקן והמשבצת שלו, לפי סדר הקלט */
+  spots: Spot[];
+}
+
+/** מיקום כל עמדה לאורך המגרש — כדי שחלוץ עודף יירד לקישור ולא להגנה, ושחקן שדה לא יעמוד בשער */
+const DEPTH: Record<FieldPosition, number> = { gk: -2, def: 0, mid: 1, att: 2 };
+
+/**
+ * שיבוץ בעלות מינימלית (האלגוריתם ההונגרי), למטריצה ריבועית.
+ * מחזיר לכל שורה את העמודה שלה. הקבוצות קטנות, אז O(n³) זניח.
+ */
+function assign(cost: number[][]): number[] {
+  const n = cost.length;
+  const u = new Array<number>(n + 1).fill(0);
+  const v = new Array<number>(n + 1).fill(0);
+  const p = new Array<number>(n + 1).fill(0);
+  const way = new Array<number>(n + 1).fill(0);
+
+  for (let i = 1; i <= n; i++) {
+    p[0] = i;
+    let j0 = 0;
+    const minv = new Array<number>(n + 1).fill(Infinity);
+    const used = new Array<boolean>(n + 1).fill(false);
+    do {
+      used[j0] = true;
+      const i0 = p[j0];
+      let delta = Infinity;
+      let j1 = 0;
+      for (let j = 1; j <= n; j++) {
+        if (used[j]) continue;
+        const cur = cost[i0 - 1][j - 1] - u[i0] - v[j];
+        if (cur < minv[j]) {
+          minv[j] = cur;
+          way[j] = j0;
+        }
+        if (minv[j] < delta) {
+          delta = minv[j];
+          j1 = j;
+        }
+      }
+      for (let j = 0; j <= n; j++) {
+        if (used[j]) {
+          u[p[j]] += delta;
+          v[j] -= delta;
+        } else {
+          minv[j] -= delta;
+        }
+      }
+      j0 = j1;
+    } while (p[j0] !== 0);
+    do {
+      const j1 = way[j0];
+      p[j0] = p[j1];
+      j0 = j1;
+    } while (j0);
+  }
+
+  const columnOf = new Array<number>(n);
+  for (let j = 1; j <= n; j++) if (p[j]) columnOf[p[j] - 1] = j - 1;
+  return columnOf;
 }
 
 /**
- * איך הקבוצה עומדת על המגרש: שיבוץ בפועל של השחקנים למערך, כך שכמה שיותר
- * מהם בעמדה שלהם. לתצוגה — לחיפוש מספיק `fittedCount`.
+ * איך הקבוצה עומדת על המגרש: כל שחקן מקבל משבצת במערך. קודם כמה שיותר שחקנים
+ * בעמדה שלהם, ומי שנשאר בלי — למשבצת הכי קרובה לעמדה שלו. לתצוגה; לחיפוש
+ * מספיק `fittedCount`.
  */
-export function fitFormation(members: readonly Position[][]): FormationFit {
+export function fitFormation(
+  members: readonly { id: string; positions: readonly Position[] }[],
+): FormationFit {
   const formation = formationFor(members.length);
-  const slots = formationSlots(formation);
-  // כל משבצת על המגרש, ומי עומד בה
-  const slotType = slots.flatMap((n, type) => Array<number>(n).fill(type));
-  const owner = new Array<number>(slotType.length).fill(-1);
-  const masks = members.map(positionMask);
+  const slotType = formationSlots(formation).flatMap((n, type) =>
+    Array<FieldPosition>(n).fill(SPREAD_POSITIONS[type] as FieldPosition),
+  );
+  const masks = members.map((m) => positionMask(m.positions));
+  const fitsIn = (player: number, slot: FieldPosition) =>
+    !!(masks[player] & (1 << SPREAD_POSITIONS.indexOf(slot)));
 
-  const place = (player: number, seen: boolean[]): boolean => {
-    for (let s = 0; s < slotType.length; s++) {
-      if (seen[s] || !(masks[player] & (1 << slotType[s]))) continue;
-      seen[s] = true;
-      if (owner[s] === -1 || place(owner[s], seen)) {
-        owner[s] = player;
-        return true;
-      }
-    }
-    return false;
-  };
-
-  let placed = 0;
-  for (let p = 0; p < members.length; p++) {
-    if (place(p, new Array<boolean>(slotType.length).fill(false))) placed++;
-  }
+  // שחקן לא במקום עולה תמיד יותר מכל המרחקים יחד, כך שמספר הלא-במקום הוא המינימום
+  const cost = members.map((m, player) =>
+    slotType.map((slot) => {
+      if (fitsIn(player, slot)) return 0;
+      const own = m.positions.filter((pos): pos is FieldPosition => pos !== 'any');
+      return 100 + Math.min(...own.map((pos) => Math.abs(DEPTH[pos] - DEPTH[slot])));
+    }),
+  );
+  const slotOf = members.length ? assign(cost) : [];
 
   const filled: Formation = { gk: 0, def: 0, mid: 0, att: 0 };
-  owner.forEach((player, s) => {
-    if (player !== -1) filled[SPREAD_POSITIONS[slotType[s]] as FieldPosition]++;
+  const spots = members.map((m, player) => {
+    const position = slotType[slotOf[player]];
+    const fits = fitsIn(player, position);
+    if (fits) filled[position]++;
+    return { id: m.id, position, fits };
   });
-  return { formation, filled, outOfPlace: members.length - placed };
+  return { formation, filled, outOfPlace: spots.filter((s) => !s.fits).length, spots };
 }

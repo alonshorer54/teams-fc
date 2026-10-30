@@ -24,6 +24,7 @@ export function TeamCard({
   onMove,
   onSwap,
   onRecolor,
+  view = 'list',
 }: {
   teamId: TeamId;
   playerIds: string[];
@@ -36,6 +37,8 @@ export function TeamCard({
   onSwap: (aId: string, bId: string) => void;
   /** החלפת הצבע של הקבוצה. אם היעד תפוס — שתי הקבוצות מתחלפות. */
   onRecolor?: (to: TeamId) => void;
+  /** רשימה, או הקבוצה כפי שהיא עומדת על המגרש */
+  view?: TeamView;
 }) {
   const meta = TEAM_META[teamId];
   const byId = new Map(pool.map((p) => [p.id, p]));
@@ -123,78 +126,89 @@ export function TeamCard({
         )}
       </header>
 
-      {/* רשימת השחקנים */}
+      {/* רשימת השחקנים, או המגרש */}
       {/* flex-1 מצמיד את סיכום הקבוצה לתחתית הכרטיס — אחרת קבוצה עם פחות
           שורות מסיימת גבוה יותר, והסיכומים של שלוש הקבוצות לא מיושרים */}
-      <ul className={`min-h-[9rem] flex-1 divide-y divide-slate-800/60 ${meta.softBg}`}>
-        {playerIds.length === 0 && (
-          <li className="px-4 py-10 text-center text-xs text-slate-500">
-            גררו לכאן שחקנים
-          </li>
-        )}
-
-        {ordered.map((id, index) => {
-          const player = byId.get(id);
-          if (!player) return null;
-          const bond = bondStatus(id, lineup, pool);
-          const isSelected = selectedId === id;
-
-          return (
-            <li
-              key={id}
-              draggable
-              onDragStart={(e) => {
-                e.dataTransfer.setData('text/player-id', id);
-                e.dataTransfer.effectAllowed = 'move';
-              }}
-              onDragOver={(e) => e.preventDefault()}
-              onDrop={(e) => handleDrop(e, id)}
-              onClick={() => onSelect(id)}
-              className={`flex cursor-grab items-center gap-2.5 px-3 py-2.5 transition active:cursor-grabbing ${
-                isSelected
-                  ? 'bg-emerald-500/20 ring-1 ring-emerald-400/60 ring-inset'
-                  : 'hover:bg-white/[0.04]'
-              }`}
-              title="לחצו לבחירה, ואז לחצו על שחקן אחר כדי להחליף ביניהם"
-            >
-              <span className="w-4 shrink-0 text-center font-mono text-[11px] text-slate-500 tabular-nums">
-                {index + 1}
-              </span>
-
-              <Avatar name={player.name} photo={player.photo} size={30} zoomable playerId={player.id} />
-
-              <span className="min-w-0 flex-1">
-                <span className="flex min-w-0 items-center gap-1.5">
-                  <span className="truncate text-sm font-semibold text-slate-100">
-                    {player.name}
-                  </span>
-                  <PositionChip positions={player.positions} />
-                </span>
-                {/* שורת החברים נשמרת גם למי שאין לו חבר בבריכה. בלי זה השורה
-                    נמוכה ב-12 פיקסלים, והשחקנים בשלוש הקבוצות מפסיקים להיות
-                    מיושרים זה מול זה — קבוצה עם פחות חברים מטפסת כלפי מעלה */}
-                <span
-                  className={`flex h-3 items-center gap-1 truncate text-[10px] ${
-                    bond.together ? 'text-emerald-400/90' : 'text-amber-400/80'
-                  }`}
-                >
-                  {bond.hasBond && (
-                    <>
-                      {bond.together ? <Link2 size={9} /> : <Unlink size={9} />}
-                      חבר של {bond.partnerNames.join(', ')}
-                      {!bond.together && ' · בקבוצה אחרת'}
-                    </>
-                  )}
-                </span>
-              </span>
-
-              <RatingBadge rating={player.rating} size="sm" />
+      {view === 'pitch' && playerIds.length > 0 ? (
+        <Pitch
+          stats={stats}
+          byId={byId}
+          selectedId={selectedId}
+          onSelect={onSelect}
+          onDrop={handleDrop}
+        />
+      ) : (
+        <ul className={`min-h-[9rem] flex-1 divide-y divide-slate-800/60 ${meta.softBg}`}>
+          {playerIds.length === 0 && (
+            <li className="px-4 py-10 text-center text-xs text-slate-500">
+              גררו לכאן שחקנים
             </li>
-          );
-        })}
-      </ul>
+          )}
+  
+          {ordered.map((id, index) => {
+            const player = byId.get(id);
+            if (!player) return null;
+            const bond = bondStatus(id, lineup, pool);
+            const isSelected = selectedId === id;
+  
+            return (
+              <li
+                key={id}
+                draggable
+                onDragStart={(e) => {
+                  e.dataTransfer.setData('text/player-id', id);
+                  e.dataTransfer.effectAllowed = 'move';
+                }}
+                onDragOver={(e) => e.preventDefault()}
+                onDrop={(e) => handleDrop(e, id)}
+                onClick={() => onSelect(id)}
+                className={`flex cursor-grab items-center gap-2.5 px-3 py-2.5 transition active:cursor-grabbing ${
+                  isSelected
+                    ? 'bg-emerald-500/20 ring-1 ring-emerald-400/60 ring-inset'
+                    : 'hover:bg-white/[0.04]'
+                }`}
+                title="לחצו לבחירה, ואז לחצו על שחקן אחר כדי להחליף ביניהם"
+              >
+                <span className="w-4 shrink-0 text-center font-mono text-[11px] text-slate-500 tabular-nums">
+                  {index + 1}
+                </span>
+  
+                <Avatar name={player.name} photo={player.photo} size={30} zoomable playerId={player.id} />
+  
+                <span className="min-w-0 flex-1">
+                  <span className="flex min-w-0 items-center gap-1.5">
+                    <span className="truncate text-sm font-semibold text-slate-100">
+                      {player.name}
+                    </span>
+                    <PositionChip positions={player.positions} />
+                  </span>
+                  {/* שורת החברים נשמרת גם למי שאין לו חבר בבריכה. בלי זה השורה
+                      נמוכה ב-12 פיקסלים, והשחקנים בשלוש הקבוצות מפסיקים להיות
+                      מיושרים זה מול זה — קבוצה עם פחות חברים מטפסת כלפי מעלה */}
+                  <span
+                    className={`flex h-3 items-center gap-1 truncate text-[10px] ${
+                      bond.together ? 'text-emerald-400/90' : 'text-amber-400/80'
+                    }`}
+                  >
+                    {bond.hasBond && (
+                      <>
+                        {bond.together ? <Link2 size={9} /> : <Unlink size={9} />}
+                        חבר של {bond.partnerNames.join(', ')}
+                        {!bond.together && ' · בקבוצה אחרת'}
+                      </>
+                    )}
+                  </span>
+                </span>
+  
+                <RatingBadge rating={player.rating} size="sm" />
+              </li>
+            );
+          })}
+        </ul>
+      )}
 
-      {stats.count > 0 && (
+      {/* במגרש המערך כבר מצויר, ומי שלא בעמדה שלו מסומן על השחקן עצמו */}
+      {stats.count > 0 && view === 'list' && (
         <div
           className="flex flex-wrap items-center justify-center gap-x-3 gap-y-1 border-t border-slate-800/70 bg-slate-950/30 px-2 py-2 text-xs text-slate-200"
           title="המערך של הקבוצה, וכמה מכל עמדה מאוישים בשחקן שזו העמדה שלו. שחקן כללי מתאים לכל עמדה"
@@ -260,6 +274,107 @@ export function TeamCard({
  * בחירת צבע חדש לקבוצה. צבע שכבר שייך לקבוצה אחרת אינו חסום —
  * בחירה בו מחליפה בין השתיים, וזו הדרך הטבעית לומר "שהם ישחקו בשחור".
  */
+export type TeamView = 'list' | 'pitch';
+
+/** השורות על המגרש, מהחלוצים למעלה ועד השוער למטה */
+const PITCH_LINES: FieldPosition[] = ['att', 'mid', 'def', 'gk'];
+
+/**
+ * הקבוצה כפי שהיא עומדת על המגרש: חצי מגרש, שורה לכל עמדה במערך.
+ * שחקן שמשחק לא בעמדה שלו מקבל טבעת כתומה ותווית של העמדה האמיתית שלו —
+ * כך רואים מי זז ולאן, ולא רק שחסר משהו.
+ */
+function Pitch({
+  stats,
+  byId,
+  selectedId,
+  onSelect,
+  onDrop,
+}: {
+  stats: TeamStats;
+  byId: Map<string, Player>;
+  selectedId: string | null;
+  onSelect: (id: string) => void;
+  onDrop: (e: React.DragEvent, overPlayerId?: string) => void;
+}) {
+  const nameOf = (id: string) => byId.get(id)?.name ?? '';
+
+  return (
+    <div className="relative min-h-[9rem] flex-1 overflow-hidden bg-gradient-to-b from-emerald-900/45 to-emerald-950/70 px-2 pt-4 pb-3">
+      {/* סימוני חצי מגרש: קו האמצע וחצי העיגול למעלה, הרחבה למטה */}
+      <div aria-hidden className="pointer-events-none absolute inset-x-2 inset-y-1.5 rounded-md border border-white/10" />
+      <div aria-hidden className="pointer-events-none absolute top-1.5 left-1/2 h-7 w-16 -translate-x-1/2 rounded-b-full border border-t-0 border-white/10" />
+      <div aria-hidden className="pointer-events-none absolute bottom-1.5 left-1/2 h-12 w-2/5 -translate-x-1/2 border border-b-0 border-white/10" />
+
+      <span className="absolute top-2 right-3 inline-flex items-center gap-1 rounded-md bg-black/30 px-1.5 py-0.5 text-[11px] font-semibold text-emerald-200">
+        מערך
+        <span className="font-mono font-bold tabular-nums" dir="ltr">
+          {formationLabel(stats.formation.formation)}
+        </span>
+      </span>
+
+      <div className="relative flex h-full flex-col justify-between gap-2.5">
+        {PITCH_LINES.map((line) => {
+          const here = stats.formation.spots
+            .filter((s) => s.position === line)
+            .sort((a, b) => nameOf(a.id).localeCompare(nameOf(b.id), 'he'));
+          if (!here.length) return null;
+
+          return (
+            <div key={line} className="flex justify-center gap-1">
+              {here.map((spot) => {
+                const player = byId.get(spot.id);
+                if (!player) return null;
+                const own = player.positions.filter((p) => p !== 'any');
+
+                return (
+                  <div
+                    key={spot.id}
+                    draggable
+                    onDragStart={(e) => {
+                      e.dataTransfer.setData('text/player-id', spot.id);
+                      e.dataTransfer.effectAllowed = 'move';
+                    }}
+                    onDragOver={(e) => e.preventDefault()}
+                    onDrop={(e) => onDrop(e, spot.id)}
+                    onClick={() => onSelect(spot.id)}
+                    title={
+                      spot.fits
+                        ? `${player.name} — ${POSITION_META[line].label}`
+                        : `${player.name} — ${own.map((p) => POSITION_META[p].label).join('/')}, משחק כאן ב${POSITION_META[line].label}`
+                    }
+                    className={`flex w-[4.75rem] cursor-grab flex-col items-center gap-0.5 rounded-lg px-0.5 py-1 transition active:cursor-grabbing ${
+                      selectedId === spot.id
+                        ? 'bg-emerald-500/25 ring-1 ring-emerald-400/70'
+                        : 'hover:bg-white/[0.06]'
+                    }`}
+                  >
+                    <span className={`rounded-full ${spot.fits ? '' : 'ring-2 ring-amber-400'}`}>
+                      <Avatar name={player.name} photo={player.photo} size={34} />
+                    </span>
+                    <span className="w-full truncate text-center text-[11px] leading-tight font-semibold text-slate-100">
+                      {player.name}
+                    </span>
+                    <span dir="ltr" className="font-mono text-[10px] leading-none text-slate-400 tabular-nums">
+                      {player.rating.toFixed(1)}
+                    </span>
+                    {!spot.fits && (
+                      <span className="rounded bg-amber-500/20 px-1 text-[9px] leading-tight font-semibold whitespace-nowrap text-amber-200">
+                        {own.map((p) => POSITION_META[p].emoji).join('')}{' '}
+                        {own.map((p) => POSITION_META[p].label).join('/')}
+                      </span>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 function ColorPicker({
   current,
   lineup,

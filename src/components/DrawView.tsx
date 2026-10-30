@@ -58,7 +58,8 @@ import { PrioritiesPanel } from './PrioritiesPanel';
 import { ConstraintsPanel } from './ConstraintsPanel';
 import { ChangeReport } from './ChangeReport';
 import { ChangePopup } from './ChangePopup';
-import { TeamCard } from './TeamCard';
+import { TeamCard, type TeamView } from './TeamCard';
+import { useLocalStorage } from '../hooks/useLocalStorage';
 import { ShareView } from './ShareView';
 import type { ShareTeams } from '../lib/format';
 
@@ -113,6 +114,8 @@ export function DrawView({
 }) {
   const [mode, setMode] = useState<Mode>('admin');
   const [selectedPlayer, setSelectedPlayer] = useState<string | null>(null);
+  // העדפת תצוגה של המכשיר הזה בלבד — לא שייכת לנתוני הקבוצה ולא מסתנכרנת
+  const [teamView, setTeamView] = useLocalStorage<TeamView>('kohot.teamView.v1', 'pitch');
   /** ההשפעה של הפעולה הידנית האחרונה, להודעה הקופצת */
   const [lastChange, setLastChange] = useState<{
     diff: LineupDiff;
@@ -583,10 +586,35 @@ export function DrawView({
             </div>
           )}
 
+          <div className="flex justify-center">
+            <div className="inline-flex rounded-xl border border-slate-700 bg-slate-900/60 p-1 text-xs font-semibold">
+              {(
+                [
+                  ['pitch', '⚽ מגרש'],
+                  ['list', '📋 רשימה'],
+                ] as const
+              ).map(([view, label]) => (
+                <button
+                  key={view}
+                  onClick={() => setTeamView(view)}
+                  aria-pressed={teamView === view}
+                  className={`rounded-lg px-4 py-1.5 transition ${
+                    teamView === view
+                      ? 'bg-emerald-500/20 text-emerald-200'
+                      : 'text-slate-400 hover:text-slate-200'
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          </div>
+
           <div className={teamGridClass(teamIds.length)}>
             {teamIds.map((id) => (
               <TeamCard
                 key={id}
+                view={teamView}
                 teamId={id}
                 playerIds={membersOf(lineup, id)}
                 pool={pool}

@@ -182,7 +182,9 @@ export function computeStats(
     const members = membersOf(lineup, t);
     const total = members.reduce((s, id) => s + (byId.get(id)?.rating ?? 0), 0);
 
-    const formation = fitFormation(members.map((id) => byId.get(id)?.positions ?? ['any']));
+    const formation = fitFormation(
+      members.map((id) => ({ id, positions: byId.get(id)?.positions ?? ['any'] })),
+    );
 
     teams[t] = {
       count: members.length,
