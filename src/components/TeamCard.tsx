@@ -196,11 +196,14 @@ export function TeamCard({
 
       {stats.count > 0 && (
         <div
-          className="flex flex-wrap items-center justify-center gap-x-2.5 gap-y-0.5 border-t border-slate-800/70 bg-slate-950/30 px-2 py-1.5 text-[11px] text-slate-300"
+          className="flex flex-wrap items-center justify-center gap-x-3 gap-y-1 border-t border-slate-800/70 bg-slate-950/30 px-2 py-2 text-xs text-slate-200"
           title="המערך של הקבוצה, וכמה מכל עמדה מאוישים בשחקן שזו העמדה שלו. שחקן כללי מתאים לכל עמדה"
         >
-          <span className="font-mono font-bold text-slate-400 tabular-nums" dir="ltr">
-            {formationLabel(stats.formation.formation)}
+          <span className="inline-flex items-center gap-1 rounded-md border border-emerald-500/30 bg-emerald-500/10 px-1.5 py-0.5 font-semibold text-emerald-300">
+            מערך
+            <span className="font-mono font-bold tabular-nums" dir="ltr">
+              {formationLabel(stats.formation.formation)}
+            </span>
           </span>
           {SPREAD_POSITIONS.map((pos) => {
             const need = stats.formation.formation[pos as FieldPosition];
@@ -215,7 +218,7 @@ export function TeamCard({
                 <span className="font-mono font-bold tabular-nums" dir="ltr">
                   {have}/{need}
                 </span>
-                <span className="text-[10px] text-slate-500">{POSITION_META[pos].label}</span>
+                <span className="text-[11px] text-slate-400">{POSITION_META[pos].label}</span>
               </span>
             );
           })}

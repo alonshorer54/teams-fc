@@ -12,6 +12,7 @@ import {
 import { BALANCE_GRADES, balanceLevel, constraintMet, describeBonds } from './balance';
 import {
   penaltyBreakdown,
+  positionsPenalty,
   tiersPenalty,
   type CriterionSetting,
   type ScoreId,
@@ -92,11 +93,22 @@ export function compareLineups(
   const tiersScore = (lineup: Lineup) =>
     Math.round((1 - tiersPenalty({ lineup, pool, ratingOf, pairEffects })) * 100);
 
-  // פיזור הרמות תמיד פעיל, ולכן תמיד נמדד — ובא ראשון, כמו בשורת הציונים
+  const formationScore = (lineup: Lineup) =>
+    Math.round((1 - positionsPenalty({ lineup, pool, ratingOf, pairEffects })) * 100);
+
+  // פיזור הרמות והמערך תמיד פעילים, ולכן תמיד נמדדים — ובאים ראשונים, כמו בשורת הציונים
   const tiersBefore = tiersScore(baseline);
   const tiersAfter = tiersScore(current);
+  const positionsBefore = formationScore(baseline);
+  const positionsAfter = formationScore(current);
   const criteria: CriterionDelta[] = [
     { id: 'tiers', before: tiersBefore, after: tiersAfter, delta: tiersAfter - tiersBefore },
+    {
+      id: 'positions',
+      before: positionsBefore,
+      after: positionsAfter,
+      delta: positionsAfter - positionsBefore,
+    },
     ...priorities
       .filter((p) => p.enabled)
       .map((p) => ({

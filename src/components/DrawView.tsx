@@ -40,8 +40,10 @@ import {
 } from '../lib/balance';
 import {
   CRITERION_META,
+  POSITIONS_META,
   TIERS_META,
   penaltyBreakdown,
+  positionsPenalty,
   tiersPenalty,
   type CriterionId,
   type CriterionSetting,
@@ -182,6 +184,20 @@ export function DrawView({
       ),
     [lineup, teamIds, pool, ratingOf, activeEffects],
   );
+  const positionsScore = useMemo(
+    () =>
+      Math.round(
+        (1 -
+          positionsPenalty({
+            lineup: lineup ?? emptyLineup(teamIds),
+            pool,
+            ratingOf,
+            pairEffects: activeEffects,
+          })) *
+          100,
+      ),
+    [lineup, teamIds, pool, ratingOf, activeEffects],
+  );
 
   // השוואה בין ההגרלה המקורית למצב אחרי העריכות הידניות
   const diff = useMemo(
@@ -195,8 +211,6 @@ export function DrawView({
   const unavailable = useMemo(() => {
     const map: Partial<Record<CriterionId, string>> = {};
     if (!pairEffects.size) map.gameChemistry = 'עוד אין מספיק היסטוריה עם תוצאות כדי ללמוד זוגות';
-    if (!players.some((p) => !p.positions.includes('any')))
-      map.positions = 'עוד לא הוגדרו עמדות לשחקנים';
     if (!players.some((p) => p.loveIds.length || p.hateIds.length))
       map.affinity = 'עוד לא הוגדרו העדפות "עם / בלי" לשחקנים';
     if (!players.some((p) => p.friendIds.length)) map.friends = 'עוד לא הוגדרו חברויות';
@@ -549,6 +563,9 @@ export function DrawView({
             breakdown={breakdown}
             unavailable={unavailable}
             tiers={tiersScore}
+            positions={
+              players.some((p) => !p.positions.includes('any')) ? positionsScore : null
+            }
             stats={stats}
           />
           {bonds.length > 0 && <BondsPanel bonds={bonds} />}
@@ -620,12 +637,15 @@ function CriteriaScores({
   breakdown,
   unavailable,
   tiers,
+  positions,
   stats,
 }: {
   breakdown: ReturnType<typeof penaltyBreakdown>;
   unavailable: Partial<Record<CriterionId, string>>;
-  /** ציון פיזור הרמות — תמיד פעיל, ולכן בלי מספר עדיפות */
+  /** ציוני פיזור הרמות והמערך — תמיד פעילים, ולכן בלי מספר עדיפות */
   tiers: number;
+  /** null = לאף שחקן לא הוגדרה עמדה, ואז אין מה להציג */
+  positions: number | null;
   stats: ReturnType<typeof computeStats>;
 }) {
   const active = breakdown.filter((b) => b.enabled && !unavailable[b.id]);
@@ -667,6 +687,17 @@ function CriteriaScores({
             {tiers}
           </span>
         </span>
+        {positions !== null && (
+          <span
+            className={`inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-[11px] font-semibold ${scoreTone(positions)}`}
+            title={POSITIONS_META.help}
+          >
+            {POSITIONS_META.emoji} {POSITIONS_META.label}
+            <span dir="ltr" className="font-mono tabular-nums">
+              {positions}
+            </span>
+          </span>
+        )}
         {active.map((b) => {
           const meta = CRITERION_META[b.id];
 

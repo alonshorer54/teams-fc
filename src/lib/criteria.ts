@@ -5,17 +5,19 @@ import { ALL_MASK, fittedCount, formationFor, formationSlots, positionMask } fro
  * הקריטריונים שההגרלה מתחשבת בהם.
  * הסדר ניתן לשינוי, וכל קריטריון אפשר לכבות.
  */
-export type CriterionId = 'rating' | 'positions' | 'friends' | 'gameChemistry' | 'affinity';
+export type CriterionId = 'rating' | 'friends' | 'gameChemistry' | 'affinity';
 
 export interface CriterionSetting {
   id: CriterionId;
   enabled: boolean;
 }
 
-/** סדר ברירת המחדל — דירוג ראשון, אחר כך עמדות, חברויות, כימיה משחקית, ואהבה/שנאה */
+/**
+ * סדר ברירת המחדל — דירוג ראשון, אחר כך חברויות, כימיה משחקית, ואהבה/שנאה.
+ * העמדות לא כאן: המערך הוא איך עומדים על המגרש, אז הוא תמיד פעיל (ראו POSITIONS_RANK).
+ */
 export const DEFAULT_PRIORITIES: CriterionSetting[] = [
   { id: 'rating', enabled: true },
-  { id: 'positions', enabled: true },
   { id: 'friends', enabled: true },
   // דלוק כברירת מחדל: הקנס שלו הוא 0 כל עוד אין אף זוג שעבר את סף המדגם,
   // אז זה פשוט "מתעורר" מעצמו בשבוע שבו נצברו מספיק תוצאות
@@ -37,11 +39,6 @@ export const CRITERION_META: Record<
     label: 'דירוג',
     emoji: '⭐',
     help: 'משווה את סך הדירוגים בין הקבוצות. זה מה שקובע שהקבוצות שקולות.',
-  },
-  positions: {
-    label: 'עמדות',
-    emoji: '🧤',
-    help: 'כל קבוצה נבנית לפי מערך: 7 שחקנים = שוער, 3 הגנה, 2 קישור וחלוץ; 5 שחקנים = שוער, 2 הגנה ו-2 התקפה. ההגרלה מנסה שכל שחקן יעמוד בעמדה שלו.',
   },
   friends: {
     label: 'חברויות',
@@ -71,14 +68,12 @@ export const priorityWeight = (rank: number) => 1000 / Math.pow(6, rank);
  * כמה כל קריטריון מוכן להתגמש כשמחפשים חלוקה מגוונת, כמכפיל של סובלנות הבסיס.
  *
  * זה לא אותו דבר לכל הקריטריונים, ובכוונה. דירוג הוא האיזון עצמו וחברויות הן
- * הבטחה למשתמש, אז שניהם כמעט לא זזים. עמדות קופצות בשליש שלם על כל שחקן
- * שלא במקומו, והעדפות אישיות מנורמלות לפי מספר המחזיקים — סובלנות אחידה הייתה
- * פוסלת בגללן כל חלופה.
+ * הבטחה למשתמש, אז שניהם כמעט לא זזים. העדפות אישיות מנורמלות לפי מספר
+ * המחזיקים — סובלנות אחידה הייתה פוסלת בגללן כל חלופה.
  * הקריטריונים התחתונים הם בדיוק אלה שאמורים לזוז ראשונים.
  */
 export const VARIETY_FLEX: Record<CriterionId, number> = {
   rating: 1,
-  positions: 2,
   friends: 0,
   gameChemistry: 5,
   affinity: 3,
@@ -165,11 +160,25 @@ export const TIERS_META = {
   help: 'החזקים והחלשים מתחלקים בין הקבוצות. 100 = כל קבוצה קיבלה אחד מכל רמה.',
 };
 
-/** ציון שמוצג לצד הקריטריונים: אחד מהם, או פיזור הרמות שתמיד פעיל */
-export type ScoreId = CriterionId | 'tiers';
+/* ------------------------ מערך העמדות — תמיד פעיל ------------------------ */
+
+/** המערך נשקל מיד אחרי פיזור הרמות, ולפני כל הקריטריונים שאפשר לסדר */
+const POSITIONS_RANK = 2;
+
+/** כמה חלופה מגוונת מותר לה לעמוד פחות טוב על המגרש מהטובה ביותר */
+export const POSITIONS_VARIETY_FLEX = 2;
+
+export const POSITIONS_META = {
+  label: 'עמדות',
+  emoji: '🧤',
+  help: 'כל קבוצה נבנית לפי מערך: 7 שחקנים = שוער, 3 הגנה, 2 קישור וחלוץ; 5 שחקנים = שוער, 2 הגנה ו-2 התקפה. 100 = כל שחקן בעמדה שלו, או הכי קרוב לזה שאפשר.',
+};
+
+/** ציון שמוצג לצד הקריטריונים: אחד מהם, או אחד משני הכללים שתמיד פעילים */
+export type ScoreId = CriterionId | 'tiers' | 'positions';
 
 export const scoreMeta = (id: ScoreId): { label: string; emoji: string; help: string } =>
-  id === 'tiers' ? TIERS_META : CRITERION_META[id];
+  id === 'tiers' ? TIERS_META : id === 'positions' ? POSITIONS_META : CRITERION_META[id];
 
 /**
  * סטייה ממוצעת לשחקן, בנקודות דירוג, שנחשבת קנס מלא בפיזור הרמות.
@@ -388,7 +397,7 @@ export function misplacedPositions(lineup: Lineup, pool: Player[]): number {
  * שחקן אחד לא במקום כבר עולה הרבה: בשלוש קבוצות זה שליש מהקנס המלא. כך העמדות
  * מכריעות בין כל החלוקות ששקולות בדירוג, ולא רק שוברות שוויון מדי פעם.
  */
-function positionsPenalty({ lineup, pool }: PenaltyInput): number {
+export function positionsPenalty({ lineup, pool }: PenaltyInput): number {
   const teams = activeTeams(lineup).length;
   return teams < 2 ? 0 : Math.min(1, misplacedPositions(lineup, pool) / teams);
 }
@@ -398,22 +407,26 @@ const PENALTY_FN: Record<CriterionId, (input: PenaltyInput) => number> = {
   friends: friendsPenalty,
   gameChemistry: gameChemistryPenalty,
   affinity: affinityPenalty,
-  positions: positionsPenalty,
 };
 
 /** קנס כולל משוקלל לפי סדר העדיפויות. ככל שנמוך יותר — החלוקה טובה יותר. */
 export function weightedPenalty(input: PenaltyInput, priorities: CriterionSetting[]): number {
-  return weighPenalties(tiersPenalty(input), criterionPenalties(input, priorities));
+  return weighPenalties(
+    tiersPenalty(input),
+    positionsPenalty(input),
+    criterionPenalties(input, priorities),
+  );
 }
 
 /**
  * השקלול עצמו, מקנסות שכבר חושבו — למי שצריך גם את הקנסות בנפרד ולא רוצה
  * לחשב אותם פעמיים. `penalties` מיושר מול סדר העדיפויות, כמו ב-criterionPenalties.
+ * הקריטריון העליון נשאר ראשון; פיזור הרמות והמערך תופסים את שני המקומות שאחריו.
  */
-export function weighPenalties(tiers: number, penalties: number[]): number {
-  let total = tiers * priorityWeight(TIERS_RANK);
+export function weighPenalties(tiers: number, positions: number, penalties: number[]): number {
+  let total = tiers * priorityWeight(TIERS_RANK) + positions * priorityWeight(POSITIONS_RANK);
   penalties.forEach((penalty, rank) => {
-    total += penalty * priorityWeight(rank < TIERS_RANK ? rank : rank + 1);
+    total += penalty * priorityWeight(rank < TIERS_RANK ? rank : rank + 2);
   });
   return total;
 }
@@ -467,12 +480,7 @@ export function normalizePriorities(
   if (savedVersion < 2) {
     result = result.map((s) => (s.id === 'gameChemistry' ? { ...s, enabled: true } : s));
   }
-  // גרסה 3: התגיות הוחלפו בעמדות. קריטריון חדש היה נכנס בסוף הרשימה, שם הוא
-  // כמעט לא משפיע — אז פעם אחת הוא עובר למקום השני, מיד אחרי הקריטריון העליון
-  if (savedVersion < 3) {
-    const positions = result.find((s) => s.id === 'positions')!;
-    const rest = result.filter((s) => s.id !== 'positions');
-    result = [rest[0], { ...positions, enabled: true }, ...rest.slice(1)];
-  }
+  // העמדות יצאו מהרשימה והפכו לכלל קבוע — "positions" שנשמר בעבר כבר סונן
+  // למעלה יחד עם כל מזהה שלא מוכר, אז אין כאן מה להעביר
   return result;
 }

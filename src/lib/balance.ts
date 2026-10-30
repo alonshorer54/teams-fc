@@ -12,9 +12,11 @@ import {
 } from '../types';
 import { fitFormation, type FormationFit } from './formation';
 import {
+  POSITIONS_VARIETY_FLEX,
   TIERS_VARIETY_FLEX,
   VARIETY_FLEX,
   criterionPenalties,
+  positionsPenalty,
   tiersPenalty,
   relationCounts,
   weighPenalties,
@@ -632,8 +634,9 @@ interface Candidate {
   lineup: Lineup;
   cost: number;
   penalties: number[];
-  /** פיזור הרמות — לא חלק מ-penalties, כי הוא לא ברשימת העדיפויות */
+  /** פיזור הרמות והמערך — לא חלק מ-penalties, כי הם לא ברשימת העדיפויות */
   tiers: number;
+  positions: number;
   sizeOff: number;
   /** כמה אילוצים חד-פעמיים הופרו */
   broken: number;
@@ -685,13 +688,15 @@ export function generateLineup(pool: Player[], options: GenerateOptions): Lineup
     // כל רכיב מחושב פעם אחת, והעלות נבנית מהם — כמו ב-cost, בלי לחשב שוב
     const penalties = criterionPenalties({ ...input, lineup }, priorities);
     const tiers = tiersPenalty({ ...input, lineup });
+    const positions = positionsPenalty({ ...input, lineup });
     const sizeOff = sizeOffOf(lineup);
     const broken = brokenConstraints(lineup, constraints);
     const candidate: Candidate = {
       lineup,
-      cost: weighPenalties(tiers, penalties) + hardPenalty(sizeOff, broken),
+      cost: weighPenalties(tiers, positions, penalties) + hardPenalty(sizeOff, broken),
       penalties,
       tiers,
+      positions,
       sizeOff,
       broken,
     };
@@ -811,6 +816,7 @@ export function generateLineup(pool: Player[], options: GenerateOptions): Lineup
         c.sizeOff <= bar.sizeOff &&
         c.broken <= bar.broken &&
         c.tiers <= bar.tiers + tolerance * TIERS_VARIETY_FLEX + 1e-9 &&
+        c.positions <= bar.positions + tolerance * POSITIONS_VARIETY_FLEX + 1e-9 &&
         priorities.every(
           (setting, rank) =>
             !setting.enabled ||
