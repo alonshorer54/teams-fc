@@ -223,6 +223,13 @@ export function TeamCard({
             const need = stats.formation.formation[pos as FieldPosition];
             const have = stats.formation.filled[pos as FieldPosition];
             if (!need) return null;
+            if (pos === 'gk' && stats.formation.rotatingGoal) {
+              return (
+                <span key={pos} className="inline-flex items-center gap-0.5 text-slate-400">
+                  {POSITION_META.gk.emoji} מתחלפים
+                </span>
+              );
+            }
             return (
               <span
                 key={pos}
@@ -318,6 +325,18 @@ function Pitch({
           const here = stats.formation.spots
             .filter((s) => s.position === line)
             .sort((a, b) => nameOf(a.id).localeCompare(nameOf(b.id), 'he'));
+          if (line === 'gk' && stats.formation.rotatingGoal) {
+            return (
+              <div key={line} className="flex justify-center">
+                <span
+                  className="rounded-lg border border-dashed border-white/20 bg-black/20 px-3 py-2 text-[11px] font-semibold text-slate-300"
+                  title="אין בקבוצה שחקן שמסומן כשוער, אז אף אחד לא מוצג בשער"
+                >
+                  🧤 מתחלפים בשער
+                </span>
+              </div>
+            );
+          }
           if (!here.length) return null;
 
           return (

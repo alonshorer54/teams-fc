@@ -1,29 +1,46 @@
 import { useMemo, useState } from 'react';
 import { CalendarDays, Copy, Image as ImageIcon, Share2 } from 'lucide-react';
-import { TEAM_META, teamGridClass, teamsIn } from '../types';
-import { buildWhatsAppText, copyToClipboard, formatHebrewDate, type ShareTeams } from '../lib/format';
+import { POSITION_META, TEAM_META, teamGridClass, teamsIn } from '../types';
+import {
+  buildWhatsAppFormationText,
+  buildWhatsAppText,
+  copyToClipboard,
+  formatHebrewDate,
+  type ShareFormation,
+  type ShareFormations,
+  type ShareTeams,
+} from '../lib/format';
+import type { FieldPosition } from '../lib/formation';
 import { canShareImage, downloadImage, renderTeamsImage, shareImage } from '../lib/shareImage';
+import { useLocalStorage } from '../hooks/useLocalStorage';
 
+type ShareLayout = 'list' | 'formation';
 
 /**
  * "מצב וואטסאפ" — תצוגה נקייה לחלוטין: שמות קבוצות ושמות שחקנים בלבד.
- * ללא דירוגים, ללא ממוצעים וללא סימוני כימיה.
+ * ללא דירוגים, ללא ממוצעים וללא סימוני כימיה. אפשר לשלוח כרשימה או לפי המערך.
  */
 export function ShareView({
   teams,
+  formations,
   date,
   onCopied,
 }: {
   teams: ShareTeams;
+  formations: ShareFormations;
   date: string;
   onCopied: (msg: string) => void;
 }) {
   const [includeDate, setIncludeDate] = useState(false);
+  const [layout, setLayout] = useLocalStorage<ShareLayout>('kohot.shareLayout.v1', 'list');
   const ids = useMemo(() => teamsIn(teams), [teams]);
 
   const text = useMemo(
-    () => buildWhatsAppText(teams, { includeDate, date }),
-    [teams, includeDate, date],
+    () =>
+      layout === 'formation'
+        ? buildWhatsAppFormationText(formations, { includeDate, date })
+        : buildWhatsAppText(teams, { includeDate, date }),
+    [layout, teams, formations, includeDate, date],
   );
 
   const [busy, setBusy] = useState(false);
@@ -36,7 +53,10 @@ export function ShareView({
   const sendImage = async () => {
     setBusy(true);
     try {
-      const blob = await renderTeamsImage(teams, date, { includeDate });
+      const blob = await renderTeamsImage(teams, date, {
+        includeDate,
+        formations: layout === 'formation' ? formations : undefined,
+      });
       if (!blob) {
         onCopied('יצירת התמונה נכשלה');
         return;
@@ -59,6 +79,27 @@ export function ShareView({
           תצוגת שיתוף נקייה
         </div>
         <div className="flex flex-wrap items-center gap-3">
+          <div className="inline-flex rounded-xl border border-slate-700 bg-slate-900/60 p-1 text-xs font-semibold">
+            {(
+              [
+                ['list', '📋 רשימה'],
+                ['formation', '⚽ מערך'],
+              ] as const
+            ).map(([value, label]) => (
+              <button
+                key={value}
+                onClick={() => setLayout(value)}
+                aria-pressed={layout === value}
+                className={`rounded-lg px-3 py-1.5 transition ${
+                  layout === value
+                    ? 'bg-emerald-500/20 text-emerald-200'
+                    : 'text-slate-400 hover:text-slate-200'
+                }`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
           <label className="flex cursor-pointer items-center gap-2 text-xs text-slate-400">
             <input
               type="checkbox"
@@ -91,19 +132,23 @@ export function ShareView({
                   <span className={meta.nameChip}>{meta.name}</span>
                 </h3>
               </header>
-              <ul className={`divide-y divide-slate-800/60 ${meta.softBg}`}>
-                {names.map((name, i) => (
-                  <li
-                    key={`${name}-${i}`}
-                    className="px-4 py-2.5 text-center text-[15px] font-semibold text-slate-100"
-                  >
-                    {name}
-                  </li>
-                ))}
-                {names.length === 0 && (
-                  <li className="px-4 py-8 text-center text-xs text-slate-500">אין שחקנים</li>
-                )}
-              </ul>
+              {layout === 'formation' && formations[id] ? (
+                <SharePitch formation={formations[id]} />
+              ) : (
+                <ul className={`divide-y divide-slate-800/60 ${meta.softBg}`}>
+                  {names.map((name, i) => (
+                    <li
+                      key={`${name}-${i}`}
+                      className="px-4 py-2.5 text-center text-[15px] font-semibold text-slate-100"
+                    >
+                      {name}
+                    </li>
+                  ))}
+                  {names.length === 0 && (
+                    <li className="px-4 py-8 text-center text-xs text-slate-500">אין שחקנים</li>
+                  )}
+                </ul>
+              )}
             </section>
           );
         })}
@@ -118,6 +163,45 @@ export function ShareView({
         {includeDate && (
           <p className="mt-2 text-[11px] text-slate-500">התאריך שיצורף: {formatHebrewDate(date)}</p>
         )}
+      </div>
+    </div>
+  );
+}
+
+/** השורות במגרש, מהחלוצים למעלה ועד השער למטה */
+const PITCH_LINES: FieldPosition[] = ['att', 'mid', 'def', 'gk'];
+
+/** המערך בתצוגת השיתוף: שמות בלבד, בלי דירוגים ובלי סימון של מי לא בעמדה שלו */
+function SharePitch({ formation }: { formation: ShareFormation }) {
+  return (
+    <div className="relative bg-gradient-to-b from-emerald-900/45 to-emerald-950/70 px-2 pt-6 pb-3">
+      <span className="absolute top-2 right-3 font-mono text-[11px] font-bold text-emerald-200/80" dir="ltr">
+        {formation.label}
+      </span>
+      <div className="flex flex-col gap-3">
+        {PITCH_LINES.map((line) => {
+          const names = formation.lines[line];
+          if (line === 'gk' && !names.length) {
+            return (
+              <p key={line} className="text-center text-xs font-semibold text-slate-400">
+                {POSITION_META.gk.emoji} מתחלפים בשער
+              </p>
+            );
+          }
+          if (!names.length) return null;
+          return (
+            <div key={line} className="flex justify-center gap-2">
+              {names.map((name, i) => (
+                <span
+                  key={`${name}-${i}`}
+                  className="min-w-0 flex-1 truncate text-center text-[15px] font-semibold text-slate-100"
+                >
+                  {name}
+                </span>
+              ))}
+            </div>
+          );
+        })}
       </div>
     </div>
   );

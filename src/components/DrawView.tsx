@@ -21,6 +21,7 @@ import {
   membersOf,
   recolorTeam,
   teamGridClass,
+  teamsIn,
   type Lineup,
   type Player,
   type SaveOutcome,
@@ -61,7 +62,8 @@ import { ChangePopup } from './ChangePopup';
 import { TeamCard, type TeamView } from './TeamCard';
 import { useLocalStorage } from '../hooks/useLocalStorage';
 import { ShareView } from './ShareView';
-import type { ShareTeams } from '../lib/format';
+import type { ShareFormations, ShareTeams } from '../lib/format';
+import { formationLabel, type FieldPosition } from '../lib/formation';
 
 type Mode = 'admin' | 'share';
 
@@ -237,7 +239,28 @@ export function DrawView({
     );
   }, [lineup, teamIds, nameById]);
 
-  const setLineup = (l: Lineup | null) => setDraft((p) => ({ ...p, lineup: l }));
+  const shareFormations: ShareFormations = useMemo(() => {
+    const byName = (a: string, b: string) => a.localeCompare(b, 'he');
+    return Object.fromEntries(
+      teamsIn(stats.teams).map((t) => {
+        const fit = stats.teams[t]!.formation;
+        const namesAt = (line: FieldPosition) =>
+          fit.spots
+            .filter((s) => s.position === line)
+            .map((s) => nameById.get(s.id) ?? '')
+            .sort(byName);
+        return [
+          t,
+          {
+            label: formationLabel(fit.formation),
+            lines: { gk: namesAt('gk'), def: namesAt('def'), mid: namesAt('mid'), att: namesAt('att') },
+          },
+        ];
+      }),
+    );
+  }, [stats, nameById]);
+
+  const setLineup =(l: Lineup | null) => setDraft((p) => ({ ...p, lineup: l }));
 
   /**
    * כל שינוי ידני עובר כאן: מחשבים מה הפעולה הזו בדיוק עשתה,
@@ -547,7 +570,12 @@ export function DrawView({
           hint={`נבחרו ${pool.length} שחקנים. לחצו על "הגרלת קבוצות" כדי לחלק אותם ל-${teamCount} קבוצות מאוזנות של ${teamSizeList(pool.length, teamCount).join(' / ')}.`}
         />
       ) : mode === 'share' ? (
-        <ShareView teams={shareTeams} date={matchDate} onCopied={notify} />
+        <ShareView
+          teams={shareTeams}
+          formations={shareFormations}
+          date={matchDate}
+          onCopied={notify}
+        />
       ) : (
         <>
           {diff?.changed && (

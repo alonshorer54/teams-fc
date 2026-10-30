@@ -1,5 +1,5 @@
 import { lineupTeams, membersOf, type Lineup, type Player, type TeamId } from '../types';
-import { ALL_MASK, fittedCount, formationFor, formationSlots, positionMask } from './formation';
+import { ALL_MASK, ANY_MASK, fittedCount, formationFor, formationSlots, positionMask } from './formation';
 
 /**
  * הקריטריונים שההגרלה מתחשבת בהם.
@@ -373,7 +373,7 @@ export function misplacedPositions(lineup: Lineup, pool: Player[]): number {
   const outOfPlace = active.map((t) => {
     const members = membersOf(lineup, t);
     byMask.fill(0);
-    for (const id of members) byMask[maskOf.get(id) ?? ALL_MASK]++;
+    for (const id of members) byMask[maskOf.get(id) ?? ANY_MASK]++;
     const slots = slotsFor(members.length);
 
     for (let m = 0; m <= ALL_MASK; m++) allMasks[m] += byMask[m];

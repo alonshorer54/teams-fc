@@ -1,4 +1,5 @@
-import { TEAM_META, teamsIn, type TeamId, type TeamMap } from '../types';
+import { POSITION_META, TEAM_META, teamsIn, type TeamId, type TeamMap } from '../types';
+import type { FieldPosition } from './formation';
 
 /** שמות השחקנים לכל קבוצה משתתפת — הקלט של כל מסלולי השיתוף. */
 export type ShareTeams = TeamMap<string[]>;
@@ -25,6 +26,46 @@ export function buildWhatsAppText(teams: ShareTeams, options: ShareOptions = {})
     const names = teams[id] ?? [];
     if (!names.length) continue;
     blocks.push([`${meta.emoji} *${meta.name}*`, ...names.map((n) => `• ${n}`)].join('\n'));
+  }
+
+  return blocks.join('\n\n');
+}
+
+/**
+ * הקבוצה במערך, לשיתוף: שמות בלבד, שורה לכל עמדה. שער ריק = מתחלפים.
+ * מי שמשחק לא בעמדה שלו לא מסומן כאן בכוונה — זה מידע למארגן, לא לקבוצה.
+ */
+export interface ShareFormation {
+  /** "3-2-1" */
+  label: string;
+  lines: Record<FieldPosition, string[]>;
+}
+
+export type ShareFormations = TeamMap<ShareFormation>;
+
+/** סדר השורות בהודעה: מהשער קדימה, כמו שכותבים הרכב */
+const MESSAGE_LINES: FieldPosition[] = ['gk', 'def', 'mid', 'att'];
+
+/** אותה הודעה, אבל כל קבוצה כתובה לפי המערך שלה */
+export function buildWhatsAppFormationText(
+  formations: ShareFormations,
+  options: ShareOptions = {},
+): string {
+  const blocks: string[] = [];
+
+  if (options.includeDate && options.date) {
+    blocks.push(`⚽ קבוצות ${formatHebrewDate(options.date)}`);
+  }
+
+  for (const id of teamsIn(formations)) {
+    const meta = TEAM_META[id];
+    const formation = formations[id]!;
+    const rows = MESSAGE_LINES.flatMap((line) => {
+      const names = formation.lines[line];
+      if (line === 'gk') return [`${POSITION_META.gk.emoji} ${names.length ? names.join(', ') : 'מתחלפים'}`];
+      return names.length ? [`${POSITION_META[line].emoji} ${names.join(', ')}`] : [];
+    });
+    blocks.push([`${meta.emoji} *${meta.name}* · ${formation.label}`, ...rows].join('\n'));
   }
 
   return blocks.join('\n\n');

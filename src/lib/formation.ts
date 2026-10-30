@@ -40,15 +40,27 @@ export const formationLabel = (f: Formation): string => `${f.def}-${f.mid}-${f.a
 /** כל העמדות יחד, כמסכת ביטים לפי הסדר של SPREAD_POSITIONS */
 export const ALL_MASK = (1 << SPREAD_POSITIONS.length) - 1;
 
-/** העמדות שהשחקן יכול לעמוד בהן, כמסכת ביטים. "כללי" עומד בכל מקום. */
+/**
+ * "כללי" — כל עמדות השדה, אבל לא השער. רק מי שסומן כשוער נחשב שוער: אחרת
+ * המערך היה שולח מישהו לשער רק כי לא סימנו לו עמדה.
+ */
+export const ANY_MASK = ALL_MASK & ~(1 << SPREAD_POSITIONS.indexOf('gk'));
+
+/** העמדות שהשחקן יכול לעמוד בהן, כמסכת ביטים. */
 export function positionMask(positions: readonly Position[]): number {
   let mask = 0;
   for (const p of positions) {
-    if (p === 'any') return ALL_MASK;
+    if (p === 'any') return ANY_MASK;
     mask |= 1 << SPREAD_POSITIONS.indexOf(p);
   }
-  return mask || ALL_MASK;
+  return mask || ANY_MASK;
 }
+
+/** עמדות השדה של שחקן כרשימה — "כללי" הוא כל שלוש */
+const ownPositions = (positions: readonly Position[]): FieldPosition[] => {
+  const own = positions.filter((p): p is FieldPosition => p !== 'any');
+  return own.length ? own : ['def', 'mid', 'att'];
+};
 
 /** המערך כמערך מספרים, לפי הסדר של SPREAD_POSITIONS */
 export const formationSlots = (f: Formation): number[] =>
@@ -91,6 +103,8 @@ export interface FormationFit {
   outOfPlace: number;
   /** כל שחקן והמשבצת שלו, לפי סדר הקלט */
   spots: Spot[];
+  /** אין בקבוצה שוער מסומן — השער מוצג כ"מתחלפים", ואף אחד לא מוצג כשוער */
+  rotatingGoal: boolean;
 }
 
 /** מיקום כל עמדה לאורך המגרש — כדי שחלוץ עודף יירד לקישור ולא להגנה, ושחקן שדה לא יעמוד בשער */
@@ -168,21 +182,34 @@ export function fitFormation(
     !!(masks[player] & (1 << SPREAD_POSITIONS.indexOf(slot)));
 
   // שחקן לא במקום עולה תמיד יותר מכל המרחקים יחד, כך שמספר הלא-במקום הוא המינימום
+  const distance = (positions: readonly Position[], slot: FieldPosition) =>
+    Math.min(...ownPositions(positions).map((pos) => Math.abs(DEPTH[pos] - DEPTH[slot])));
   const cost = members.map((m, player) =>
-    slotType.map((slot) => {
-      if (fitsIn(player, slot)) return 0;
-      const own = m.positions.filter((pos): pos is FieldPosition => pos !== 'any');
-      return 100 + Math.min(...own.map((pos) => Math.abs(DEPTH[pos] - DEPTH[slot])));
-    }),
+    slotType.map((slot) => (fitsIn(player, slot) ? 0 : 100 + distance(m.positions, slot))),
   );
   const slotOf = members.length ? assign(cost) : [];
 
+  let rotatingGoal = false;
   const filled: Formation = { gk: 0, def: 0, mid: 0, att: 0 };
   const spots = members.map((m, player) => {
-    const position = slotType[slotOf[player]];
+    let position = slotType[slotOf[player]];
+    // בלי שוער מסומן אף אחד לא "נשלח" לשער: מי שקיבל את המשבצת חוזר לשורה
+    // שלו בשדה, והשער מוצג כמתחלף
+    if (position === 'gk' && !fitsIn(player, 'gk')) {
+      rotatingGoal = true;
+      position = ownPositions(m.positions).reduce((best, pos) =>
+        distance([pos], 'gk') < distance([best], 'gk') ? pos : best,
+      );
+    }
     const fits = fitsIn(player, position);
     if (fits) filled[position]++;
     return { id: m.id, position, fits };
   });
-  return { formation, filled, outOfPlace: spots.filter((s) => !s.fits).length, spots };
+  return {
+    formation,
+    filled,
+    outOfPlace: spots.filter((s) => !s.fits).length,
+    spots,
+    rotatingGoal,
+  };
 }
