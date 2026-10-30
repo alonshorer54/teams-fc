@@ -2,14 +2,15 @@ import { useState } from 'react';
 import { Link2, Palette, Unlink, Users } from 'lucide-react';
 import {
   ALL_TEAM_IDS,
-  POSITIONS,
   POSITION_META,
+  SPREAD_POSITIONS,
   TEAM_META,
   type Lineup,
   type Player,
   type TeamId,
 } from '../types';
 import { CHEMISTRY_BONUS_PER_BOND, bondStatus, type TeamStats } from '../lib/balance';
+import { formationLabel, type FieldPosition } from '../lib/formation';
 import { Avatar, PositionChip, RatingBadge } from './ui';
 
 export function TeamCard({
@@ -196,15 +197,28 @@ export function TeamCard({
       {stats.count > 0 && (
         <div
           className="flex flex-wrap items-center justify-center gap-x-2.5 gap-y-0.5 border-t border-slate-800/70 bg-slate-950/30 px-2 py-1.5 text-[11px] text-slate-300"
-          title="כמה שחקנים מכל עמדה יש בקבוצה. שחקן של כמה עמדות נספר בזו שהקבוצה הכי צריכה"
+          title="המערך של הקבוצה, וכמה מכל עמדה מאוישים בשחקן שזו העמדה שלו. שחקן כללי מתאים לכל עמדה"
         >
-          {POSITIONS.map((pos) => (
-            <span key={pos} className="inline-flex items-center gap-0.5">
-              {POSITION_META[pos].emoji}
-              <span className="font-mono font-bold tabular-nums">{stats.positionCounts[pos]}</span>
-              <span className="text-[10px] text-slate-500">{POSITION_META[pos].label}</span>
-            </span>
-          ))}
+          <span className="font-mono font-bold text-slate-400 tabular-nums" dir="ltr">
+            {formationLabel(stats.formation.formation)}
+          </span>
+          {SPREAD_POSITIONS.map((pos) => {
+            const need = stats.formation.formation[pos as FieldPosition];
+            const have = stats.formation.filled[pos as FieldPosition];
+            if (!need) return null;
+            return (
+              <span
+                key={pos}
+                className={`inline-flex items-center gap-0.5 ${have < need ? 'text-amber-300' : ''}`}
+              >
+                {POSITION_META[pos].emoji}
+                <span className="font-mono font-bold tabular-nums" dir="ltr">
+                  {have}/{need}
+                </span>
+                <span className="text-[10px] text-slate-500">{POSITION_META[pos].label}</span>
+              </span>
+            );
+          })}
         </div>
       )}
 

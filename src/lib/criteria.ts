@@ -1,12 +1,5 @@
-import {
-  SPREAD_POSITIONS,
-  lineupTeams,
-  membersOf,
-  type Lineup,
-  type Player,
-  type Position,
-  type TeamId,
-} from '../types';
+import { lineupTeams, membersOf, type Lineup, type Player, type TeamId } from '../types';
+import { ALL_MASK, fittedCount, formationFor, formationSlots, positionMask } from './formation';
 
 /**
  * הקריטריונים שההגרלה מתחשבת בהם.
@@ -48,7 +41,7 @@ export const CRITERION_META: Record<
   positions: {
     label: 'עמדות',
     emoji: '🧤',
-    help: 'מפזר שווה בין הקבוצות שוערים, הגנה, קישור והתקפה — שלא כל החלוצים ייפלו לאותה קבוצה.',
+    help: 'כל קבוצה נבנית לפי מערך: 7 שחקנים = שוער, 3 הגנה, 2 קישור וחלוץ; 5 שחקנים = שוער, 2 הגנה ו-2 התקפה. ההגרלה מנסה שכל שחקן יעמוד בעמדה שלו.',
   },
   friends: {
     label: 'חברויות',
@@ -333,72 +326,62 @@ function affinityPenalty({ lineup, pool }: PenaltyInput): number {
   return total ? violated / total : 0;
 }
 
-/**
- * כמה כל שחקן שווה בכל עמדה: שחקן של עמדה אחת שווה 1 בה, ושחקן של הגנה וקישור
- * שווה חצי בכל אחת. כך שני שחקנים כאלה באותה קבוצה הם שחקן הגנה ושחקן קישור.
- * מחושב פעם אחת לבריכה, כי הקנס נקרא מהלולאה הפנימית.
- */
-const positionCache = new WeakMap<Player[], Map<string, [Position, number][]>>();
+/** העמדות של כל שחקן כמסכת ביטים — מחושב פעם אחת לבריכה, כי הקנס נקרא מהלולאה הפנימית */
+const maskCache = new WeakMap<Player[], Map<string, number>>();
 
-const positionsOf = (pool: Player[]): Map<string, [Position, number][]> => {
-  let map = positionCache.get(pool);
+const masksOf = (pool: Player[]): Map<string, number> => {
+  let map = maskCache.get(pool);
   if (!map) {
-    map = new Map(
-      pool.map((p) => {
-        const spread = p.positions.filter((pos) => pos !== 'any');
-        return [p.id, spread.map((pos) => [pos, 1 / spread.length] as [Position, number])];
-      }),
-    );
-    positionCache.set(pool, map);
+    map = new Map(pool.map((p) => [p.id, positionMask(p.positions)]));
+    maskCache.set(pool, map);
   }
   return map;
 };
 
-/** שוער כפול באותה קבוצה הוא הבעיה הכי מורגשת על המגרש */
-const GOALKEEPER_WEIGHT = 2;
+const slotsCache: number[][] = [];
+const slotsFor = (size: number): number[] =>
+  (slotsCache[size] ??= formationSlots(formationFor(size)));
 
 /**
- * כמה שחקנים צריך להעביר כדי שכל עמדה תתחלק שווה. 4 חלוצים ב-3 קבוצות זה
- * 2/1/1; חלוקה של 2/2/0 רחוקה מזה בשחקן אחד, ו-4/0/0 בשניים.
+ * כמה שחקנים עומדים לא במקום, מעבר למה שאי אפשר להימנע ממנו.
+ *
+ * כל קבוצה נמדדת מול המערך שלה (ראו formationFor): 7 שחקנים הם שוער, 3 הגנה,
+ * 2 קישור וחלוץ, ושחקן שאין לו משבצת בעמדה שלו משחק לא במקום. שני דברים נספרים:
+ * - כמה לא במקום יש מעבר למינימום — אם יש בבריכה 9 חלוצים ו-3 משבצות התקפה,
+ *   שישה ישחקו אחורה בכל חלוקה, וזה לא נזקף לחובתה.
+ * - כמה מהם מצטופפים בקבוצה אחת — שישה חלוצים בהגנה זה 2/2/2, לא 6/0/0.
  */
 export function misplacedPositions(lineup: Lineup, pool: Player[]): number {
   const active = activeTeams(lineup);
   if (active.length < 2) return 0;
-  const positionOf = positionsOf(pool);
+  const maskOf = masksOf(pool);
 
-  // ספירה אחת לכל קבוצה: counts[team][position]
-  const counts = active.map((t) => {
-    const byPosition: Partial<Record<Position, number>> = {};
-    for (const id of membersOf(lineup, t)) {
-      for (const [position, share] of positionOf.get(id) ?? []) {
-        byPosition[position] = (byPosition[position] ?? 0) + share;
-      }
-    }
-    return byPosition;
+  const allMasks = new Int32Array(ALL_MASK + 1);
+  const allSlots = [0, 0, 0, 0];
+  const byMask = new Int32Array(ALL_MASK + 1);
+  let players = 0;
+
+  const outOfPlace = active.map((t) => {
+    const members = membersOf(lineup, t);
+    byMask.fill(0);
+    for (const id of members) byMask[maskOf.get(id) ?? ALL_MASK]++;
+    const slots = slotsFor(members.length);
+
+    for (let m = 0; m <= ALL_MASK; m++) allMasks[m] += byMask[m];
+    for (let s = 0; s < slots.length; s++) allSlots[s] += slots[s];
+    players += members.length;
+    return members.length - fittedCount(byMask, slots);
   });
 
-  // חלקים של שליש מצטברים ל-2.9999999999999996, ואז floor ו-ceil טועים בשחקן שלם
-  const exact = (n: number) => Math.round(n * 1e6) / 1e6;
+  let total = 0;
+  for (const n of outOfPlace) total += n;
+  const unavoidable = players - fittedCount(allMasks, allSlots);
 
-  let misplaced = 0;
-  for (const position of SPREAD_POSITIONS) {
-    let holders = 0;
-    for (const team of counts) holders += team[position] ?? 0;
-    holders = exact(holders);
-    if (!holders) continue;
+  const share = Math.ceil(total / active.length);
+  let crowded = 0;
+  for (const n of outOfPlace) crowded += Math.max(0, n - share);
 
-    const low = Math.floor(holders / active.length);
-    const high = Math.ceil(holders / active.length);
-    let over = 0;
-    let under = 0;
-    for (const team of counts) {
-      const c = exact(team[position] ?? 0);
-      over += Math.max(0, c - high);
-      under += Math.max(0, low - c);
-    }
-    misplaced += Math.max(over, under) * (position === 'gk' ? GOALKEEPER_WEIGHT : 1);
-  }
-  return misplaced;
+  return Math.max(0, total - unavoidable) + crowded;
 }
 
 /**
