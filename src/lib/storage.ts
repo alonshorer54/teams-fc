@@ -72,6 +72,8 @@ export interface AppSettings {
    * רק תוצאות חדשות נספרו, ו-App מריץ עליו פעם אחת את כל ההיסטוריה מחדש.
    */
   ratingDriftSince: string;
+  /** לפי איזו גרסת כללים חושב המד — ראו DRIFT_RULES_VERSION */
+  ratingRulesVersion: number;
   payments: PaymentRound;
   /** המחזור הנוכחי — מסונכרן כדי שהטלפון והמחשב יראו את אותן קבוצות */
   round: Draft;
@@ -81,6 +83,7 @@ export const defaultSettings = (): AppSettings => ({
   priorities: DEFAULT_PRIORITIES,
   prioritiesVersion: PRIORITIES_VERSION,
   ratingDriftSince: '',
+  ratingRulesVersion: 1,
   payments: emptyPayments(''),
   round: emptyDraft(''),
 });
@@ -92,6 +95,7 @@ export const normalizeSettings = (raw: Partial<AppSettings> | undefined): AppSet
   prioritiesVersion: raw?.prioritiesVersion ?? (raw?.priorities ? 1 : PRIORITIES_VERSION),
   // ריק = עוד לא עוגן. App מריץ את כל ההיסטוריה פעם אחת ומעגן להתחלה
   ratingDriftSince: raw?.ratingDriftSince ?? '',
+  ratingRulesVersion: raw?.ratingRulesVersion ?? 1,
   payments: raw?.payments ?? emptyPayments(''),
   round: normalizeDraft(raw?.round ?? {}, raw?.round?.matchDate ?? ''),
 });

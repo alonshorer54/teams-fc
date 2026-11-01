@@ -202,6 +202,8 @@ export function HistoryView({
             {isOpen && (
               <div className="space-y-4 border-t border-slate-800/70 p-4">
                 <ResultPicker
+                  // תוצאה שהשתנתה מבחוץ (שמירה, ניקוי, סנכרון ממכשיר אחר) מאפסת את הסימון
+                  key={JSON.stringify(placements)}
                   teams={teams}
                   value={placements}
                   onChange={(next) => {
@@ -372,15 +374,22 @@ function ResultPicker({
   /** "כולן באמצע" — נקודת הפתיחה כשעוד לא נקבעה תוצאה */
   const middle = Math.max(1, Math.ceil(count / 2));
   const [mistake, setMistake] = useState<'won' | 'lost' | null>(null);
+  /*
+   * הסימון נשמר רק בלחיצה על "שמירת התוצאה". כששמרנו בכל לחיצה, בדיקת הדירוגים
+   * רצה על תוצאה חלקית ("שחור ניצחה" לפני שסומנו האחרות) והחלון הראה שחקנים
+   * עולים שבסוף לא זזו (אלון, 2.11)
+   */
+  const [draft, setDraft] = useState<Placements | null>(value);
+  const dirty = !!draft !== !!value || teams.some((t) => draft?.[t] !== value?.[t]);
 
   const setPlace = (team: TeamId, place: Placement) => {
     const base: Placements =
-      value ?? (Object.fromEntries(teams.map((t) => [t, middle])) as Placements);
+      draft ?? (Object.fromEntries(teams.map((t) => [t, middle])) as Placements);
     const next = { ...base, [team]: place };
     // סימון שלא יכול לקרות לא נשמר בכלל — אחרת הוא נכנס לסטטיסטיקות ולתיקון הדירוגים
     const impossible = impossibleResult(next, teams);
     if (impossible) return setMistake(impossible);
-    onChange(next);
+    setDraft(next);
   };
 
   return (
@@ -417,7 +426,7 @@ function ResultPicker({
                     onClick={() => setPlace(t, place)}
                     title={`${TEAM_META[t].name} — ${meta.label}`}
                     className={`min-w-0 flex-1 cursor-pointer rounded-lg border px-1 py-1.5 text-[10px] font-bold transition ${
-                      value?.[t] === place
+                      draft?.[t] === place
                         ? placementTone(place, count)
                         : 'border-slate-700 bg-slate-800/40 text-slate-400 hover:border-slate-600 hover:text-white'
                     }`}
@@ -431,12 +440,21 @@ function ResultPicker({
         ))}
       </ul>
 
-      {value && (
+      {dirty && draft && (
+        <button className="btn-primary mt-3 w-full" onClick={() => onChange(draft)}>
+          שמירת התוצאה
+        </button>
+      )}
+
+      {(value || draft) && (
         <button
           className="mt-2 w-full rounded-lg py-2 text-[11px] font-semibold text-slate-500 transition hover:bg-slate-800/60 hover:text-slate-300"
-          onClick={() => onChange(null)}
+          onClick={() => {
+            setDraft(null);
+            if (value) onChange(null);
+          }}
         >
-          ניקוי התוצאה
+          {value ? 'ניקוי התוצאה' : 'ביטול הסימון'}
         </button>
       )}
 

@@ -50,6 +50,7 @@ import { computeHistoryStats, streakByPlayer } from './lib/stats';
 import { computePairChemistry, pairEffectMap } from './lib/pairs';
 import {
   DRIFT_FROM_START,
+  DRIFT_RULES_VERSION,
   applyChanges,
   countedRounds,
   isCheckpoint,
@@ -323,7 +324,8 @@ function SquadApp({
     // Rewriting every rating is the owner's call, not something a helper's device does
     if (isDemo || !isOwner || store.status === 'loading' || store.status === 'error') return;
     if (replayedFor.current === auth.userId) return;
-    if (settings.ratingDriftSince === DRIFT_FROM_START) return;
+    const anchored = settings.ratingDriftSince === DRIFT_FROM_START;
+    if (anchored && settings.ratingRulesVersion === DRIFT_RULES_VERSION) return;
     replayedFor.current = auth.userId;
 
     const replayed = replayFromStart(migratedPlayers, realHistory);
@@ -341,15 +343,21 @@ function SquadApp({
 
     if (moved.length) setPlayers(() => normalizePlayers(replayed.players));
     setRealHistory(() => replayed.history);
-    store.setSettings((prev) => ({ ...prev, ratingDriftSince: DRIFT_FROM_START }));
-    // משתמש חדש בלי תוצאות לא צריך חלון על משהו שלא קרה
-    if (countedRounds(realHistory).length) setReplaySummary(moved);
+    store.setSettings((prev) => ({
+      ...prev,
+      ratingDriftSince: DRIFT_FROM_START,
+      ratingRulesVersion: DRIFT_RULES_VERSION,
+    }));
+    // משתמש חדש בלי תוצאות לא צריך חלון על משהו שלא קרה. מכשיר בגרסה ישנה מוחק את
+    // גרסת הכללים כששומר הגדרות, וההרצה החוזרת לא משנה כלום — אז גם עליה אין חלון
+    if (countedRounds(realHistory).length && (moved.length || !anchored)) setReplaySummary(moved);
   }, [
     isDemo,
     isOwner,
     store,
     auth.userId,
     settings.ratingDriftSince,
+    settings.ratingRulesVersion,
     migratedPlayers,
     realHistory,
     setPlayers,
