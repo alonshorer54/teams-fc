@@ -277,10 +277,18 @@ function cleanPlayer(v: unknown): Player | null {
     id: v.id,
     name: v.name,
     rating: Math.min(5, Math.max(1, v.rating)),
-    friendIds: strings(v.friendIds),
+    // Old backups kept a single friend, a single position, or "שוער" as a tag or a note;
+    // they convert the same way normalizePlayers converts old data in storage
+    friendIds: Array.isArray(v.friendIds) ? strings(v.friendIds) : isStr(v.friendOf) ? [v.friendOf] : [],
     loveIds: strings(v.loveIds),
     hateIds: strings(v.hateIds),
-    positions: Array.isArray(v.positions) ? cleanPositions(v.positions) : ['any'],
+    positions: Array.isArray(v.positions)
+      ? cleanPositions(v.positions)
+      : isStr(v.position)
+        ? cleanPositions([v.position])
+        : [...strings(v.tags), isStr(v.notes) ? v.notes.trim() : ''].includes('שוער')
+          ? ['gk']
+          : ['any'],
     ...(v.isManager === true && { isManager: true }),
     ...(isPlayerPhoto(v.photo) && { photo: v.photo }),
   };
