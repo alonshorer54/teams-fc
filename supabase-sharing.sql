@@ -167,8 +167,10 @@ create policy "helpers update team" on public.kohot_data for update to authentic
 -- On a helper's write: every existing player must still be there, unchanged — except the
 -- rating, by at most one automatic correction step (0.1) for a recorded result or its undo.
 -- And that step has to be the one recorded: a rating may only move by what this same write
--- adds to (or removes from) the corrections in history. Without that, 0.1 per save was no
--- limit at all — forty saves moved a rating by four points.
+-- adds to (or removes from) the corrections in history. This doesn't stop a determined helper
+-- (they can write the correction record too), but every rating they move now shows up as a
+-- correction on an evening in the history, where the owner sees it; before, a rating could
+-- be walked anywhere 0.1 per save without a trace.
 -- New players may be added with any rating. The owner is not limited.
 create or replace function public.kohot_guard_helper_write()
 returns trigger
