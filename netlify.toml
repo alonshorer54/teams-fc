@@ -27,6 +27,17 @@
   [headers.values]
     Cache-Control = "no-cache, no-store, must-revalidate"
 
+# Basic browser protections for every page. frame-ancestors stops another site from showing the
+# app inside its own page and tricking a signed-in owner into tapping on it (clickjacking);
+# the rest keep the app's address out of other sites' logs and stop content-type guessing.
+[[headers]]
+  for = "/*"
+  [headers.values]
+    Content-Security-Policy = "frame-ancestors 'none'; object-src 'none'; base-uri 'self'"
+    X-Frame-Options = "DENY"
+    X-Content-Type-Options = "nosniff"
+    Referrer-Policy = "strict-origin-when-cross-origin"
+
 # Hashed assets are immutable — safe to cache hard and forever.
 [[headers]]
   for = "/assets/*"

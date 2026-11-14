@@ -13,7 +13,7 @@ export function PitchField({ label, children }: { label: string; children: React
       <div aria-hidden className="pointer-events-none absolute top-1.5 left-1/2 h-7 w-16 -translate-x-1/2 rounded-b-full border border-t-0 border-white/10" />
       <div aria-hidden className="pointer-events-none absolute bottom-1.5 left-1/2 h-12 w-2/5 -translate-x-1/2 border border-b-0 border-white/10" />
 
-      <span className="absolute top-2 right-3 inline-flex items-center gap-1 rounded-md bg-black/30 px-1.5 py-0.5 text-[11px] font-semibold text-emerald-200">
+      <span className="absolute top-2 start-3 inline-flex items-center gap-1 rounded-md bg-black/30 px-1.5 py-0.5 text-[11px] font-semibold text-emerald-200">
         מערך
         <span className="font-mono font-bold tabular-nums" dir="ltr">
           {label}

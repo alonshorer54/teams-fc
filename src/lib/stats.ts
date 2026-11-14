@@ -1,5 +1,6 @@
 import {
   isFillerId,
+  isLevelEvening,
   recordPlacements,
   teamsIn,
   type MatchRecord,
@@ -120,8 +121,12 @@ export function computeHistoryStats(history: MatchRecord[]): HistoryStats {
 
     if (!placements) continue;
 
+    // A level evening is a draw for everyone, even when it was marked "all first"
+    const level = isLevelEvening(placements, teams);
+
     if (!lastResolved) {
-      const teamsAt = (place: Placement) => teams.filter((t) => placements[t] === place);
+      const teamsAt = (place: Placement) =>
+        level ? [] : teams.filter((t) => placements[t] === place);
       lastResolved = {
         record,
         winners: teamsAt(1).flatMap((t) => realMembers(record, t).map((p) => p.id)),
@@ -147,7 +152,7 @@ export function computeHistoryStats(history: MatchRecord[]): HistoryStats {
         entry.played++;
 
         const team = teamOfPlayer(record, p.id) ?? t;
-        const outcome = outcomeOf(placements[team] ?? teams.length, teams.length);
+        const outcome = level ? 'draw' : outcomeOf(placements[team] ?? teams.length, teams.length);
 
         if (outcome === 'win') entry.wins++;
         else if (outcome === 'loss') entry.losses++;

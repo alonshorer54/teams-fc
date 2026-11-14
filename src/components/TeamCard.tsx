@@ -378,7 +378,7 @@ function ColorPicker({
   return (
     <>
       <div className="fixed inset-0 z-20" onClick={onClose} aria-hidden />
-      <div className="absolute top-full left-3 z-30 mt-1 w-56 rounded-xl border border-slate-700 bg-slate-900 p-2 shadow-2xl shadow-black/60">
+      <div className="absolute top-full end-3 z-30 mt-1 w-56 rounded-xl border border-slate-700 bg-slate-900 p-2 shadow-2xl shadow-black/60">
         <p className="px-1 pb-1.5 text-[10px] font-bold text-slate-400">
           צבע הקבוצה
         </p>
@@ -389,7 +389,7 @@ function ColorPicker({
               <li key={t}>
                 <button
                   onClick={() => onPick(t)}
-                  className="flex w-full items-center gap-1.5 rounded-lg px-2 py-1.5 text-right text-[11px] font-semibold text-slate-200 transition hover:bg-slate-800"
+                  className="flex w-full items-center gap-1.5 rounded-lg px-2 py-1.5 text-start text-[11px] font-semibold text-slate-200 transition hover:bg-slate-800"
                   title={
                     taken
                       ? `החלפת הצבעים בין ${TEAM_META[current].name} ל${TEAM_META[t].name}`
@@ -398,7 +398,7 @@ function ColorPicker({
                 >
                   <span className={`size-3 shrink-0 rounded-full ${TEAM_META[t].dot}`} />
                   <span className="truncate">{TEAM_META[t].name}</span>
-                  {taken && <span className="mr-auto text-[9px] text-slate-500">החלפה</span>}
+                  {taken && <span className="ms-auto text-[9px] text-slate-500">החלפה</span>}
                 </button>
               </li>
             );

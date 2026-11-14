@@ -372,6 +372,18 @@ function SquadApp({
     return history.map((r) => squadOnly(r, (id) => ids.has(id)));
   }, [history, squadKey]);
 
+  // Names of players since deleted, from the evenings they played — a deleted player who
+  // still owes money stays on the payments list under their name instead of vanishing
+  const formerNames = useMemo(() => {
+    const names = new Map<string, string>();
+    for (const r of [...rawHistory].reverse()) {
+      for (const p of [...teamsIn(r.teams).flatMap((t) => r.teams[t] ?? []), ...(r.cancelled ?? [])]) {
+        names.set(p.id, p.name);
+      }
+    }
+    return names;
+  }, [rawHistory]);
+
   // רצפי ניצחון/הפסד מההיסטוריה — מוצגים ליד השמות בזמן בחירת המשתתפים
   const streaks = useMemo(() => streakByPlayer(computeHistoryStats(history)), [history]);
 
@@ -828,7 +840,7 @@ function SquadApp({
               </>
             )}
           </span>
-          <button className="btn-ghost mr-auto !py-1.5 text-xs" onClick={exitDemo}>
+          <button className="btn-ghost ms-auto !py-1.5 text-xs" onClick={exitDemo}>
             <X size={13} />
             {isGuest ? 'חזרה למסך הפתיחה' : 'יציאה ממצב דוגמה'}
           </button>
@@ -871,11 +883,20 @@ function SquadApp({
               <BackupCard
                 players={players}
                 history={history}
+                settings={settings}
                 notify={notify}
-                onImport={(nextPlayers, nextHistory) => {
-                  void store.flush(nextPlayers, nextHistory);
-                  setRealDraft(() => emptyDraft(todayISO()));
-                }}
+                onImport={(backup) =>
+                  store.flush(normalizePlayers(backup.players), backup.history, {
+                    ...settings,
+                    // A backup carries the money owed and the priorities; the round starts fresh
+                    ...(backup.settings?.payments && { payments: backup.settings.payments }),
+                    ...(backup.settings?.priorities && {
+                      priorities: backup.settings.priorities,
+                      prioritiesVersion: backup.settings.prioritiesVersion ?? 1,
+                    }),
+                    round: emptyDraft(todayISO()),
+                  })
+                }
               />
             )}
           </div>
@@ -904,8 +925,11 @@ function SquadApp({
             history={history}
             statsHistory={squadHistory}
             onDelete={(id) => {
+              // The evening's rating corrections go with it, as when its result is cleared
+              const undone = history.find((r) => r.id === id)?.ratingCheck?.changes ?? [];
+              if (undone.length) applyToPlayers((prev) => revertChanges(prev, undone));
               setHistory((prev) => prev.filter((r) => r.id !== id));
-              notify('ההגרלה נמחקה');
+              notify(undone.length ? 'ההגרלה נמחקה, והתיקונים לדירוג שלה בוטלו' : 'ההגרלה נמחקה');
             }}
             onSetResult={setResult}
             onRestore={restoreRecord}
@@ -917,6 +941,7 @@ function SquadApp({
         {tab === 'payments' && (
           <PaymentsView
             players={players}
+            formerNames={formerNames}
             // במצב דוגמה הגבייה חיה בזיכרון, כמו כל השאר, ולא נוגעת בגבייה האמיתית
             payments={payments}
             onChange={setPayments}

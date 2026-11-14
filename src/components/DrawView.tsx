@@ -30,12 +30,16 @@ import {
 import {
   BALANCE_GRADES,
   balanceLevel,
+  addToTeam,
   computeStats,
   describeBonds,
   findTeamOf,
   generateLineup,
+  keepOnly,
   movePlayer,
   recentPairWeights,
+  replaceInLineup,
+  smallestTeam,
   swapPlayers,
   teamSizeList,
 } from '../lib/balance';
@@ -80,6 +84,48 @@ function dropStaleReplacement(
   // עדיין מחליף מישהו אחר — נשאר במחזור
   if (!staleInId || remaining.some((s) => s.inId === staleInId)) return selectedIds;
   return selectedIds.filter((x) => x !== staleInId);
+}
+
+/**
+ * Carries a change to who's playing into teams that were already drawn. Without it the teams
+ * kept whoever cancelled (and saved them as having played and owing money), while the
+ * replacement and anyone added later were in no team at all.
+ *
+ * A replacement takes the exact spot of the player they replace; someone who comes back gets
+ * their spot back from the replacement who left; anyone else new goes to the smallest team.
+ * Players who left stay in the stored lineup but out of sight (see `keepOnly` in DrawView),
+ * so a replacement chosen a minute later still finds their spot.
+ */
+function followRoster(prev: Draft, next: Draft): Draft {
+  if (!next.lineup) return next;
+  let lineup = next.lineup;
+  let baseline = next.baseline;
+  const both = (change: (l: Lineup) => Lineup) => {
+    lineup = change(lineup);
+    baseline = baseline && change(baseline);
+  };
+
+  for (const s of next.substitutions) {
+    if (prev.substitutions.some((x) => x.outId === s.outId && x.inId === s.inId)) continue;
+    // A replacement for the replacement takes over the spot the first one already holds
+    const earlier = prev.substitutions.find((x) => x.outId === s.outId)?.inId;
+    const spot = earlier && findTeamOf(lineup, earlier) ? earlier : s.outId;
+    both((l) => replaceInLineup(l, spot, s.inId));
+  }
+
+  const playing = new Set([...next.selectedIds, ...next.fillers.map((f) => f.id)]);
+  for (const id of next.selectedIds) {
+    if (findTeamOf(lineup, id)) continue;
+    const stoodIn = prev.substitutions.find((x) => x.outId === id && !playing.has(x.inId))?.inId;
+    if (stoodIn && findTeamOf(lineup, stoodIn)) {
+      both((l) => replaceInLineup(l, stoodIn, id));
+      continue;
+    }
+    const team = smallestTeam(keepOnly(lineup, playing));
+    if (team) both((l) => addToTeam(l, id, team));
+  }
+
+  return { ...next, lineup, baseline };
 }
 
 export function DrawView({
@@ -132,8 +178,6 @@ export function DrawView({
     selectedIds,
     cancelledIds,
     substitutions,
-    lineup,
-    baseline,
     matchDate,
     teamCount,
     fillers,
@@ -149,6 +193,25 @@ export function DrawView({
     const set = new Set(selectedIds);
     return [...players.filter((p) => set.has(p.id)), ...fillers.map(fillerAsPlayer)];
   }, [players, selectedIds, fillers]);
+
+  // The teams as they stand: whoever left the round since the draw is out of them
+  const poolIds = useMemo(() => new Set(pool.map((p) => p.id)), [pool]);
+  const lineup = useMemo(
+    () => (draft.lineup ? keepOnly(draft.lineup, poolIds) : null),
+    [draft.lineup, poolIds],
+  );
+  const baseline = useMemo(
+    () => (draft.baseline ? keepOnly(draft.baseline, poolIds) : null),
+    [draft.baseline, poolIds],
+  );
+  /** Playing this round but in no team — joined after the draw in a way that didn't place them */
+  const unplaced = useMemo(
+    () => (lineup ? pool.filter((p) => !findTeamOf(lineup, p.id)) : []),
+    [lineup, pool],
+  );
+  /** A change to who's playing, carried into the teams if they were already drawn */
+  const setRoster = (change: (prev: typeof draft) => typeof draft) =>
+    setDraft((p) => followRoster(p, change(p)));
 
   /** הצבעים שההגרלה תשתמש בהם — מההרכב הקיים, או מהגדרת המחזור */
   const teamIds = useMemo(
@@ -393,7 +456,7 @@ export function DrawView({
           setLastChange(null);
         }}
         onToggle={(id) =>
-          setDraft((p) => {
+          setRoster((p) => {
             const leaving = p.selectedIds.includes(id);
             return {
               ...p,
@@ -404,7 +467,7 @@ export function DrawView({
           })
         }
         onCancel={(id) =>
-          setDraft((p) => ({
+          setRoster((p) => ({
             ...p,
             cancelledIds: p.cancelledIds.includes(id) ? p.cancelledIds : [...p.cancelledIds, id],
             // מי שביטל יורד אוטומטית מרשימת המשחקים
@@ -414,7 +477,7 @@ export function DrawView({
           }))
         }
         onUncancel={(id) =>
-          setDraft((p) => {
+          setRoster((p) => {
             // הוא חוזר לשחק, ולכן המחליף שנכנס במקומו כבר לא נחוץ
             const substitutions = p.substitutions.filter((s) => s.outId !== id);
             const selected = dropStaleReplacement(
@@ -431,7 +494,7 @@ export function DrawView({
           })
         }
         onSubstitute={(outId, inId) =>
-          setDraft((p) => {
+          setRoster((p) => {
             const substitutions = [
               ...p.substitutions.filter((s) => s.outId !== outId),
               { outId, inId },
@@ -533,7 +596,14 @@ export function DrawView({
             <button
               className="btn-ghost"
               onClick={() => {
+                if (unplaced.length) {
+                  notify(`⚠️ ${unplaced.map((p) => p.name).join(', ')} לא בשום קבוצה — שבצו או הגרילו מחדש`);
+                  return;
+                }
                 const outcome = onSaveHistory(lineup, matchDate, cancelledIds);
+                // The stored teams become exactly what was saved, without players who left the
+                // round — so marking this evening's result recognises it and clears the round
+                setDraft((p) => ({ ...p, lineup, baseline }));
                 notify(
                   outcome === 'resultCleared'
                     ? 'הקבוצות של הערב עודכנו — התוצאה שסומנה נמחקה, צריך לסמן אותה שוב'
@@ -581,6 +651,21 @@ export function DrawView({
         />
       ) : (
         <>
+          {unplaced.length > 0 && (
+            <div className="flex flex-wrap items-center gap-2 rounded-xl border border-amber-500/40 bg-amber-500/10 px-4 py-2.5 text-sm text-amber-200">
+              <span>
+                <b>{unplaced.map((p) => p.name).join(', ')}</b> משחק{unplaced.length > 1 ? 'ים' : ''} השבוע
+                אבל לא בשום קבוצה.
+              </span>
+              <button
+                className="btn-ghost ms-auto !py-1.5 text-xs"
+                onClick={() => setDraft((p) => followRoster(p, p))}
+              >
+                שיבוץ בקבוצות הקטנות
+              </button>
+            </div>
+          )}
+
           {diff?.changed && (
             <ChangeReport
               diff={diff}
@@ -609,7 +694,7 @@ export function DrawView({
               <ArrowLeftRight size={15} />
               <b>{selectedName}</b> נבחר — לחצו על שחקן אחר להחלפה, או על כותרת קבוצה כדי להעביר אליה.
               <button
-                className="mr-auto text-xs font-semibold text-emerald-300/80 underline"
+                className="ms-auto text-xs font-semibold text-emerald-300/80 underline"
                 onClick={() => setSelectedPlayer(null)}
               >
                 ביטול
@@ -809,7 +894,7 @@ function BondsPanel({ bonds }: { bonds: ReturnType<typeof describeBonds> }) {
   return (
     <div className="card overflow-hidden">
       <button
-        className="flex w-full items-center justify-between gap-3 px-4 py-3 text-right transition hover:bg-slate-800/40"
+        className="flex w-full items-center justify-between gap-3 px-4 py-3 text-start transition hover:bg-slate-800/40"
         onClick={() => setOpen((v) => !v)}
       >
         <h3 className="text-xs font-bold tracking-wide text-slate-400">

@@ -166,6 +166,9 @@ create policy "helpers update team" on public.kohot_data for update to authentic
 
 -- On a helper's write: every existing player must still be there, unchanged — except the
 -- rating, by at most one automatic correction step (0.1) for a recorded result or its undo.
+-- And that step has to be the one recorded: a rating may only move by what this same write
+-- adds to (or removes from) the corrections in history. Without that, 0.1 per save was no
+-- limit at all — forty saves moved a rating by four points.
 -- New players may be added with any rating. The owner is not limited.
 create or replace function public.kohot_guard_helper_write()
 returns trigger
@@ -176,6 +179,8 @@ as $$
 declare
   v_old jsonb;
   v_new jsonb;
+  v_delta numeric;
+  v_expected numeric;
 begin
   -- The owner, and server-side roles that carry no user at all
   if auth.uid() is null or auth.uid() = old.user_id then
@@ -190,6 +195,10 @@ begin
   -- If a helper could reset it, the owner's own device would replay whatever corrections
   -- the helper wrote into history — and save the result with the owner's rights.
   if (new.settings -> 'ratingDriftSince') is distinct from (old.settings -> 'ratingDriftSince') then
+    raise exception 'helpers cannot change how ratings are recomputed' using errcode = '42501';
+  end if;
+  -- The rules version triggers the same full replay on the owner's device when it changes
+  if (new.settings -> 'ratingRulesVersion') is distinct from (old.settings -> 'ratingRulesVersion') then
     raise exception 'helpers cannot change how ratings are recomputed' using errcode = '42501';
   end if;
 
@@ -223,6 +232,30 @@ begin
     if (v_new - 'rating') <> (v_old - 'rating')
        or abs(coalesce((v_new ->> 'rating')::numeric, 0) - coalesce((v_old ->> 'rating')::numeric, 0)) > 0.1001 then
       raise exception 'helpers cannot edit existing players' using errcode = '42501';
+    end if;
+
+    -- How far the corrections recorded in history moved for this player in this write
+    v_delta := coalesce((v_new ->> 'rating')::numeric, 0) - coalesce((v_old ->> 'rating')::numeric, 0);
+    v_expected :=
+      coalesce((
+        select sum((c ->> 'to')::numeric - (c ->> 'from')::numeric)
+        from pg_catalog.jsonb_array_elements(new.history) as r,
+             pg_catalog.jsonb_array_elements(coalesce(r -> 'ratingCheck' -> 'changes', '[]'::jsonb)) as c
+        where c ->> 'playerId' = v_old ->> 'id'
+      ), 0)
+      - coalesce((
+        select sum((c ->> 'to')::numeric - (c ->> 'from')::numeric)
+        from pg_catalog.jsonb_array_elements(old.history) as r,
+             pg_catalog.jsonb_array_elements(coalesce(r -> 'ratingCheck' -> 'changes', '[]'::jsonb)) as c
+        where c ->> 'playerId' = v_old ->> 'id'
+      ), 0);
+    -- The rating may fall short of the recorded step (it stops at 1 and 5), never go past it
+    -- or the other way. Below 0.0001 is float noise, not a change.
+    if abs(v_delta) > 0.0001
+       and (abs(v_expected) <= 0.0001
+            or sign(v_delta) <> sign(v_expected)
+            or abs(v_delta) > abs(v_expected) + 0.0001) then
+      raise exception 'helpers cannot edit existing players (rating without a recorded correction)' using errcode = '42501';
     end if;
   end loop;
 

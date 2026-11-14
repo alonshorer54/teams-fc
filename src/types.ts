@@ -38,12 +38,12 @@ export type Placement = number;
 export type Placements = TeamMap<Placement>;
 
 /**
- * נקודות לכל מקום — הבסיס לכל הסטטיסטיקות.
- * מקום ראשון = 1, אחרון = 0, והשאר פרוסים שווה ביניהם.
- * ב-3 קבוצות זה נותן בדיוק 1 / 0.5 / 0 כמו בגרסאות הקודמות.
+ * Every team finished in the same place — a level evening, a draw for everyone. With two
+ * teams that is how a draw is marked (both first), so "first" alone doesn't mean a win.
  */
-export const placementPoints = (place: Placement, teamCount: number): number =>
-  teamCount > 1 ? (teamCount - place) / (teamCount - 1) : 1;
+export const isLevelEvening = (placements: Placements, teams: readonly TeamId[]): boolean =>
+  teams.length > 0 &&
+  teams.every((t) => (placements[t] ?? teams.length) === (placements[teams[0]] ?? teams.length));
 
 /** תיאור קריא של מקום. בשתי קבוצות אין "אמצע" — רק ראשונה ואחרונה. */
 export function placementMeta(place: Placement, teamCount: number): {

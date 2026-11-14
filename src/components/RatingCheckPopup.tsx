@@ -122,7 +122,7 @@ export function RatingCheckPopup({
                             </span>
                           );
                         })}
-                        <span className="mr-1 font-mono text-[10px] text-slate-500 tabular-nums">
+                        <span className="ms-1 font-mono text-[10px] text-slate-500 tabular-nums">
                           המד: {c.gauge > 0 ? '+' : ''}
                           {c.gauge}
                         </span>

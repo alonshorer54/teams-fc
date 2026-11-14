@@ -86,7 +86,7 @@ function AttendanceSection({ report }: { report: ReturnType<typeof computeAttend
                     className="rounded-lg bg-rose-500/15 px-2 py-1 text-[11px] font-semibold text-rose-200"
                   >
                     {p.name}
-                    <span className="mr-1 font-mono opacity-80">{p.weeksSinceLast} שבועות</span>
+                    <span className="ms-1 font-mono opacity-80">{p.weeksSinceLast} שבועות</span>
                   </li>
                 ))}
               </ul>
@@ -107,7 +107,7 @@ function AttendanceSection({ report }: { report: ReturnType<typeof computeAttend
                     title={`היה ${Math.round(p.earlierRate * 100)}% ועכשיו ${Math.round(p.recentRate * 100)}%`}
                   >
                     {p.name}
-                    <span className="mr-1 font-mono opacity-80">
+                    <span className="ms-1 font-mono opacity-80">
                       {Math.round(p.earlierRate * 100)}% ← {Math.round(p.recentRate * 100)}%
                     </span>
                   </li>
@@ -165,7 +165,7 @@ function AttendanceRow({
 
   return (
     <tr>
-      <td className={`max-w-[8rem] truncate py-1.5 pl-2 font-semibold ${tone}`}>{player.name}</td>
+      <td className={`max-w-[8rem] truncate py-1.5 pe-2 font-semibold ${tone}`}>{player.name}</td>
       <td className="py-1.5">
         <div className="flex gap-[3px]">
           {player.weeks.map((w, i) => (
@@ -177,7 +177,7 @@ function AttendanceRow({
           ))}
         </div>
       </td>
-      <td className="w-24 py-1.5 pr-2 text-left font-mono text-[10px] whitespace-nowrap text-slate-500 tabular-nums">
+      <td className="w-24 py-1.5 ps-2 text-end font-mono text-[10px] whitespace-nowrap text-slate-500 tabular-nums">
         {player.playedCount}/{player.totalWeeks}
         {player.weeksSinceLast === null
           ? ' · אף פעם'
@@ -401,7 +401,7 @@ function CancellersSection({
               <span className="shrink-0 font-mono text-slate-400 tabular-nums">
                 {c.cancellations}/{c.appearances}
               </span>
-              <span className="w-10 shrink-0 text-left font-mono text-rose-300 tabular-nums">
+              <span className="w-10 shrink-0 text-end font-mono text-rose-300 tabular-nums">
                 {Math.round(c.rate * 100)}%
               </span>
             </div>

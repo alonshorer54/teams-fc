@@ -1,14 +1,26 @@
 import {
+  ALL_TEAM_IDS,
   DEFAULT_TEAM_COUNT,
   MAX_TEAMS,
   MIN_TEAMS,
+  cleanPositions,
+  isPlayerPhoto,
   type DrawConstraint,
   type Filler,
+  type HistoryPlayer,
   type Lineup,
   type MatchRecord,
+  type Placements,
   type Player,
+  type RatingChangeRecord,
+  type TeamId,
 } from '../types';
-import { DEFAULT_PRIORITIES, PRIORITIES_VERSION, type CriterionSetting } from './criteria';
+import {
+  DEFAULT_PRIORITIES,
+  PRIORITIES_VERSION,
+  normalizePriorities,
+  type CriterionSetting,
+} from './criteria';
 
 // המפתחות נשמרו בשמם המקורי כדי שנתונים קיימים אצל משתמשים לא יאבדו בשינוי השם
 export const STORAGE_KEYS = {
@@ -16,7 +28,40 @@ export const STORAGE_KEYS = {
   history: 'kohot.history.v1',
   draft: 'kohot.draft.v1',
   settings: 'kohot.settings.v1',
+  /** A local change that hasn't reached the cloud yet — see useSyncedStore */
+  pending: 'kohot.pending.v1',
+  /** Whose squad the local copy is, so it never gets uploaded into someone else's account */
+  owner: 'kohot.owner.v1',
 } as const;
+
+/**
+ * The squad data is the signed-in person's; what's left on the device after signing out is
+ * someone else's to read, and was uploaded as the squad of the next new account to sign in.
+ * Device preferences (team view, share layout) stay. Returns false, and keeps everything, when
+ * a change still hasn't reached the cloud — clearing would lose it.
+ */
+export function clearLocalSquads(): boolean {
+  try {
+    const keys = Object.keys(localStorage);
+    if (keys.some((k) => k === STORAGE_KEYS.pending || k.startsWith(`${STORAGE_KEYS.pending}@`))) {
+      return false;
+    }
+    const squadKeys = [
+      STORAGE_KEYS.players,
+      STORAGE_KEYS.history,
+      STORAGE_KEYS.draft,
+      STORAGE_KEYS.settings,
+      STORAGE_KEYS.owner,
+      'kohot.squad.v1',
+    ];
+    for (const k of keys) {
+      if (squadKeys.some((s) => k === s || k.startsWith(`${s}@`))) localStorage.removeItem(k);
+    }
+    return true;
+  } catch {
+    return true;
+  }
+}
 
 /** גבייה שבועית — מתאפסת רק בכפתור "איפוס". */
 export interface PaymentRound {
@@ -181,28 +226,153 @@ export interface BackupFile {
   exportedAt: string;
   players: Player[];
   history: MatchRecord[];
+  /** From version 2: the money owed and the draw priorities. Older files have none. */
+  settings?: Partial<Pick<AppSettings, 'payments' | 'priorities' | 'prioritiesVersion'>>;
 }
 
 /** מייצא את כל הנתונים לקובץ גיבוי חיצוני. */
-export function exportAll(players: Player[], history: MatchRecord[]): string {
+export function exportAll(players: Player[], history: MatchRecord[], settings?: AppSettings): string {
   const backup: BackupFile = {
-    version: 1,
+    version: 2,
     exportedAt: new Date().toISOString(),
     players,
     history,
+    ...(settings && {
+      settings: {
+        payments: settings.payments,
+        priorities: settings.priorities,
+        prioritiesVersion: settings.prioritiesVersion,
+      },
+    }),
   };
   return JSON.stringify(backup, null, 2);
 }
 
 /** מוריד את הגיבוי כקובץ JSON. */
-export function downloadBackup(players: Player[], history: MatchRecord[]): void {
-  const blob = new Blob([exportAll(players, history)], { type: 'application/json' });
+export function downloadBackup(players: Player[], history: MatchRecord[], settings?: AppSettings): void {
+  const blob = new Blob([exportAll(players, history, settings)], { type: 'application/json' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
   a.download = `kohot-backup-${new Date().toISOString().slice(0, 10)}.json`;
   a.click();
   URL.revokeObjectURL(url);
+}
+
+/* ---- Checking a backup file field by field ----
+ * An imported file syncs to every device straight away. One malformed record (a team that
+ * isn't a list, a rating that isn't a number) crashed the app on all of them, so anything
+ * that isn't exactly the shape the app writes is dropped here. */
+
+const isObj = (v: unknown): v is Record<string, unknown> =>
+  !!v && typeof v === 'object' && !Array.isArray(v);
+const isStr = (v: unknown): v is string => typeof v === 'string';
+const isNum = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v);
+const strings = (v: unknown): string[] => (Array.isArray(v) ? v.filter(isStr) : []);
+const TEAM_KEYS: readonly string[] = ALL_TEAM_IDS;
+
+function cleanPlayer(v: unknown): Player | null {
+  if (!isObj(v) || !isStr(v.id) || !isStr(v.name) || !isNum(v.rating)) return null;
+  return {
+    id: v.id,
+    name: v.name,
+    rating: Math.min(5, Math.max(1, v.rating)),
+    friendIds: strings(v.friendIds),
+    loveIds: strings(v.loveIds),
+    hateIds: strings(v.hateIds),
+    positions: Array.isArray(v.positions) ? cleanPositions(v.positions) : ['any'],
+    ...(v.isManager === true && { isManager: true }),
+    ...(isPlayerPhoto(v.photo) && { photo: v.photo }),
+  };
+}
+
+function cleanHistoryPlayer(v: unknown): HistoryPlayer | null {
+  if (!isObj(v) || !isStr(v.id) || !isStr(v.name) || !isNum(v.rating)) return null;
+  return { id: v.id, name: v.name, rating: v.rating };
+}
+
+const historyPlayers = (v: unknown): HistoryPlayer[] =>
+  Array.isArray(v) ? v.map(cleanHistoryPlayer).filter((p): p is HistoryPlayer => !!p) : [];
+
+function cleanChange(c: unknown): RatingChangeRecord | null {
+  if (!isObj(c) || !isStr(c.playerId) || !isStr(c.name) || !isNum(c.from) || !isNum(c.to) || !isNum(c.gauge)) {
+    return null;
+  }
+  return {
+    playerId: c.playerId,
+    name: c.name,
+    from: c.from,
+    to: c.to,
+    gauge: c.gauge,
+    recent: Array.isArray(c.recent) ? c.recent.filter(isNum) : [],
+  };
+}
+
+function cleanRecord(v: unknown): MatchRecord | null {
+  if (!isObj(v) || !isStr(v.id) || !isStr(v.date) || !isObj(v.teams)) return null;
+  const teamsIn = v.teams;
+  const teams: MatchRecord['teams'] = {};
+  for (const t of TEAM_KEYS) if (t in teamsIn) teams[t as TeamId] = historyPlayers(teamsIn[t]);
+  if (!Object.keys(teams).length) return null;
+
+  const placements: Placements = {};
+  if (isObj(v.placements)) {
+    for (const t of TEAM_KEYS) {
+      const place = v.placements[t];
+      if (isNum(place)) placements[t as TeamId] = place;
+    }
+  }
+  const changes =
+    isObj(v.ratingCheck) && Array.isArray(v.ratingCheck.changes)
+      ? v.ratingCheck.changes.map(cleanChange).filter((c): c is RatingChangeRecord => !!c)
+      : null;
+  const substitutions = Array.isArray(v.substitutions)
+    ? v.substitutions.flatMap((s) => {
+        const out = isObj(s) ? cleanHistoryPlayer(s.out) : null;
+        const inn = isObj(s) ? cleanHistoryPlayer(s.in) : null;
+        return out && inn ? [{ out, in: inn }] : [];
+      })
+    : [];
+  const result =
+    v.result === 'draw' || (isStr(v.result) && TEAM_KEYS.includes(v.result))
+      ? (v.result as MatchRecord['result'])
+      : undefined;
+
+  return {
+    id: v.id,
+    date: v.date,
+    savedAt: isStr(v.savedAt) ? v.savedAt : '',
+    ...(isStr(v.title) && { title: v.title }),
+    teams,
+    ...(Object.keys(placements).length > 0 && { placements }),
+    ...(result && { result }),
+    cancelled: historyPlayers(v.cancelled),
+    substitutions,
+    ...(changes && { ratingCheck: { changes } }),
+  };
+}
+
+function cleanPaymentRound(v: unknown, nested = false): PaymentRound | null {
+  if (!isObj(v) || !isStr(v.matchDate)) return null;
+  const paid: PaymentRound['paid'] = {};
+  if (isObj(v.paid)) {
+    for (const [id, mark] of Object.entries(v.paid)) {
+      if (isObj(mark) && isStr(mark.at) && isStr(mark.method) && mark.method in PAYMENT_METHODS) {
+        paid[id] = { at: mark.at, method: mark.method as PaymentMethod };
+      }
+    }
+  }
+  const earlier =
+    !nested && Array.isArray(v.earlier)
+      ? v.earlier.map((r) => cleanPaymentRound(r, true)).filter((r): r is PaymentRound => !!r)
+      : [];
+  return {
+    matchDate: v.matchDate,
+    amount: isNum(v.amount) && v.amount >= 0 ? v.amount : 0,
+    paid,
+    ...(Array.isArray(v.playerIds) && { playerIds: strings(v.playerIds) }),
+    ...(earlier.length > 0 && { earlier }),
+  };
 }
 
 /**
@@ -217,22 +387,35 @@ export function parseBackup(raw: string): BackupFile {
     throw new Error('הקובץ אינו קובץ JSON תקין');
   }
 
-  if (!data || typeof data !== 'object') throw new Error('מבנה הקובץ אינו מוכר');
-  const obj = data as Partial<BackupFile>;
+  if (!isObj(data)) throw new Error('מבנה הקובץ אינו מוכר');
+  if (!Array.isArray(data.players)) throw new Error('לא נמצאה רשימת שחקנים בקובץ');
 
-  if (!Array.isArray(obj.players)) throw new Error('לא נמצאה רשימת שחקנים בקובץ');
-
-  const players = obj.players.filter(
-    (p): p is Player =>
-      !!p && typeof p.id === 'string' && typeof p.name === 'string' && typeof p.rating === 'number',
-  );
+  const players = data.players.map(cleanPlayer).filter((p): p is Player => !!p);
   if (!players.length) throw new Error('לא נמצאו שחקנים תקינים בקובץ');
 
-  const history = Array.isArray(obj.history)
-    ? obj.history.filter(
-        (r): r is MatchRecord => !!r && typeof r.id === 'string' && !!r.teams && typeof r.date === 'string',
-      )
+  const history = Array.isArray(data.history)
+    ? data.history.map(cleanRecord).filter((r): r is MatchRecord => !!r)
     : [];
 
-  return { version: obj.version ?? 1, exportedAt: obj.exportedAt ?? '', players, history };
+  const saved = isObj(data.settings) ? data.settings : {};
+  const payments = cleanPaymentRound(saved.payments);
+  const priorities = Array.isArray(saved.priorities)
+    ? normalizePriorities(
+        saved.priorities
+          .filter((s) => isObj(s) && isStr(s.id) && typeof s.enabled === 'boolean')
+          .map((s) => ({ id: s.id, enabled: s.enabled }) as CriterionSetting),
+        isNum(saved.prioritiesVersion) ? saved.prioritiesVersion : 1,
+      )
+    : null;
+
+  return {
+    version: isNum(data.version) ? data.version : 1,
+    exportedAt: isStr(data.exportedAt) ? data.exportedAt : '',
+    players,
+    history,
+    settings: {
+      ...(payments && { payments }),
+      ...(priorities && { priorities, prioritiesVersion: PRIORITIES_VERSION }),
+    },
+  };
 }

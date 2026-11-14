@@ -55,7 +55,7 @@ export function FormatPanel({
   return (
     <section className="card overflow-hidden">
       <button
-        className="flex w-full items-center justify-between gap-3 px-4 py-3.5 text-right transition hover:bg-slate-800/40"
+        className="flex w-full items-center justify-between gap-3 px-4 py-3.5 text-start transition hover:bg-slate-800/40"
         onClick={() => setOpen((v) => !v)}
       >
         <div className="min-w-0">
@@ -102,7 +102,7 @@ export function FormatPanel({
                   }`}
                 >
                   {n} קבוצות
-                  <span className="mr-1.5 text-[10px] font-semibold opacity-70">
+                  <span className="ms-1.5 text-[10px] font-semibold opacity-70">
                     {n === 2 ? 'לבן · שחור' : 'לבן · שחור · צבעוני'}
                   </span>
                 </button>
@@ -115,7 +115,7 @@ export function FormatPanel({
             <div className="mb-2 flex flex-wrap items-center gap-2">
               <p className="text-[11px] font-bold tracking-wide text-slate-400">
                 שחקנים משלימים
-                <span className="mr-1.5 rounded bg-violet-500/20 px-1.5 font-mono text-[10px] text-violet-300 tabular-nums">
+                <span className="ms-1.5 rounded bg-violet-500/20 px-1.5 font-mono text-[10px] text-violet-300 tabular-nums">
                   {fillers.length}
                 </span>
               </p>
@@ -189,7 +189,7 @@ export function FormatPanel({
                     </div>
 
                     <button
-                      className="mr-auto rounded-lg p-1.5 text-slate-400 transition hover:bg-rose-500/15 hover:text-rose-300"
+                      className="ms-auto rounded-lg p-1.5 text-slate-400 transition hover:bg-rose-500/15 hover:text-rose-300"
                       title="הסרת המשלים"
                       aria-label={`הסרת ${f.name}`}
                       onClick={() => onSetFillers(fillers.filter((x) => x.id !== f.id))}

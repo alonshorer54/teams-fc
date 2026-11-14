@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import type { Session } from '@supabase/supabase-js';
 import { isCloudConfigured, supabase, translateAuthError } from '../lib/supabase';
+import { clearLocalSquads } from '../lib/storage';
 
 /** Where Supabase sends the user back after Google */
 const redirectUrl = () => `${window.location.origin}${import.meta.env.BASE_URL}`;
@@ -71,6 +72,10 @@ export function useAuth() {
   };
 
   const signOut = async () => {
+    // The squad lives in the cloud; the copy on this device goes with the person signing out,
+    // unless a change in it never reached the cloud — it waits for the same account to return.
+    // Cleared first, so the signed-out screen that mounts next doesn't read it back in
+    clearLocalSquads();
     await supabase?.auth.signOut();
   };
 

@@ -44,7 +44,7 @@ export function PrioritiesPanel({
   return (
     <section className="card overflow-hidden">
       <button
-        className="flex w-full items-center justify-between gap-3 px-4 py-3 text-right transition hover:bg-slate-800/40"
+        className="flex w-full items-center justify-between gap-3 px-4 py-3 text-start transition hover:bg-slate-800/40"
         onClick={() => setOpen((v) => !v)}
       >
         <div className="min-w-0">

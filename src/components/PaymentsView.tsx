@@ -26,19 +26,34 @@ import { ConfirmDialog, EmptyState, Modal } from './ui';
  *
  * הגבייה של הערב האחרון למעלה; ערבים קודמים שעוד חייבים בהם מכווצים מתחתיה.
  */
+/** Someone on a payment list: a player in the squad, or one deleted since who still owes */
+type Payer = Pick<Player, 'id' | 'name' | 'isManager'> & { deleted?: boolean };
+
 export function PaymentsView({
-  players,
+  players: squad,
+  formerNames,
   payments,
   onChange,
   notify,
 }: {
   players: Player[];
+  /** Names of deleted players, from the evenings they played */
+  formerNames: Map<string, string>;
   payments: PaymentRound;
   onChange: (updater: (prev: PaymentRound) => PaymentRound) => void;
   notify: (msg: string) => void;
 }) {
   const [openEarlier, setOpenEarlier] = useState<string | null>(null);
   const { earlier = [], ...current } = payments;
+  // Deleting a player mustn't quietly wipe what they owe: they stay on the list, marked
+  const known = new Set(squad.map((p) => p.id));
+  const listed = new Set([current, ...earlier].flatMap((r) => r.playerIds ?? []));
+  const players: Payer[] = [
+    ...squad,
+    ...[...listed]
+      .filter((id) => !known.has(id))
+      .map((id) => ({ id, name: formerNames.get(id) ?? 'שחקן שנמחק', deleted: true })),
+  ];
   const hasCurrent = rosterOf(players, current).length > 0;
 
   if (!hasCurrent && earlier.length === 0) {
@@ -106,7 +121,7 @@ export function PaymentsView({
 }
 
 /** מי ברשימת הגבייה, המנהל ראשון ואז לפי שם */
-function rosterOf(players: Player[], round: PaymentRound): Player[] {
+function rosterOf(players: Payer[], round: PaymentRound): Payer[] {
   const ids = new Set(round.playerIds ?? []);
   return players
     .filter((p) => ids.has(p.id))
@@ -125,7 +140,7 @@ function RoundCard({
   notify,
 }: {
   round: PaymentRound;
-  players: Player[];
+  players: Payer[];
   onChange: (change: (r: PaymentRound) => PaymentRound) => void;
   onClose: () => void;
   notify: (msg: string) => void;
@@ -278,6 +293,11 @@ function RoundCard({
                     >
                       {p.name}
                     </span>
+                    {p.deleted && (
+                      <span className="shrink-0 rounded bg-slate-700/60 px-1.5 text-[10px] text-slate-400">
+                        נמחק מהמאגר
+                      </span>
+                    )}
                     {p.isManager && (
                       <ShieldCheck size={12} className="shrink-0 text-amber-400" aria-label="מנהל" />
                     )}

@@ -971,6 +971,37 @@ export function removeFromLineup(lineup: Lineup, playerId: string): Lineup {
   return next;
 }
 
+/** The team with the fewest players — where someone who joins after the draw goes. */
+export function smallestTeam(lineup: Lineup): TeamId | null {
+  let best: TeamId | null = null;
+  for (const t of lineupTeams(lineup)) {
+    if (best === null || membersOf(lineup, t).length < membersOf(lineup, best).length) best = t;
+  }
+  return best;
+}
+
+/** Adds a player to a team, unless they're already somewhere in the lineup. */
+export function addToTeam(lineup: Lineup, playerId: string, team: TeamId): Lineup {
+  if (findTeamOf(lineup, playerId) || !(team in lineup)) return lineup;
+  const next = cloneLineup(lineup);
+  next[team] = [...next[team]!, playerId];
+  return next;
+}
+
+/** Puts `inId` in the exact spot `outId` held — a replacement takes the place of whoever cancelled. */
+export function replaceInLineup(lineup: Lineup, outId: string, inId: string): Lineup {
+  const team = findTeamOf(lineup, outId);
+  if (!team || findTeamOf(lineup, inId)) return lineup;
+  const next = cloneLineup(lineup);
+  next[team] = next[team]!.map((id) => (id === outId ? inId : id));
+  return next;
+}
+
+/** The lineup with only the given players — drops whoever left the round after the draw. */
+export function keepOnly(lineup: Lineup, ids: ReadonlySet<string>): Lineup {
+  const next = cloneLineup(lineup);
+  for (const t of lineupTeams(next)) next[t] = next[t]!.filter((id) => ids.has(id));
+  return next;
+}
+
 export const round1 = (n: number) => Math.round(n * 10) / 10;
-export const fmtRating = (n: number) => n.toFixed(1);
-export const fmtAvg = (n: number) => n.toFixed(2);

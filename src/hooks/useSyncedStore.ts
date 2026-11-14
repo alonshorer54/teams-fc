@@ -3,7 +3,9 @@ import type { MatchRecord, Player } from '../types';
 import {
   STORAGE_KEYS,
   defaultSettings,
+  loadJSON,
   normalizeSettings,
+  saveJSON,
   type AppSettings,
 } from '../lib/storage';
 import { TABLE, isCloudConfigured, supabase } from '../lib/supabase';
@@ -13,11 +15,28 @@ export type SyncStatus = 'local' | 'loading' | 'synced' | 'saving' | 'error';
 
 const SAVE_DEBOUNCE_MS = 900;
 
+/** A save that failed for a reason other than a conflict is tried again after this, doubling up to the max */
+const RETRY_FIRST_MS = 5_000;
+const RETRY_MAX_MS = 120_000;
+
 /** קוד השגיאה ש-PostgREST מחזיר כשעמודה לא קיימת בסכמה */
 const MISSING_COLUMN = 'PGRST204';
 
 const fingerprint = (players: Player[], history: MatchRecord[], settings: AppSettings) =>
   JSON.stringify({ players, history, settings });
+
+/**
+ * A local change that hasn't reached the cloud, kept in localStorage so it survives the app
+ * being closed or reloaded. `base` is the row's updated_at the change was made on top of;
+ * `writing` is the updated_at of a save that was on its way when the page went away.
+ */
+interface Pending {
+  base: string | null;
+  writing?: string;
+}
+
+const PENDING_LOST =
+  'שינויים שנעשו במכשיר הזה ולא הגיעו לענן לא נשמרו — הקבוצה עודכנה בינתיים ממכשיר אחר';
 
 /**
  * מחזיק את השחקנים, ההיסטוריה וההגדרות, ומסנכרן אותם בין localStorage לענן.
@@ -42,11 +61,17 @@ export function useSyncedStore(userId: string | null, isOwner = true) {
   const [error, setError] = useState<string | null>(null);
   /** האם עמודת ההגדרות קיימת בענן */
   const [settingsSynced, setSettingsSynced] = useState(true);
+  /** Bumped to make the save effect look again: after a failed save, back online, back on screen */
+  const [retryTick, setRetryTick] = useState(0);
+  /** Bumped to load again after the first load failed for lack of network */
+  const [loadAttempt, setLoadAttempt] = useState(0);
 
   /** טביעת האצבע של המידע שכבר נמצא בענן — מונע כתיבות מיותרות ולולאות הד. */
   const cloudFingerprint = useRef<string | null>(null);
   const hydrated = useRef(false);
   const saveTimer = useRef<number | undefined>(undefined);
+  const retryTimer = useRef<number | undefined>(undefined);
+  const retryDelay = useRef(RETRY_FIRST_MS);
   const supportsSettings = useRef(true);
   /**
    * The row's updated_at as this device last saw it. A save only goes through if the row
@@ -69,6 +94,38 @@ export function useSyncedStore(userId: string | null, isOwner = true) {
   /** שינוי ממכשיר אחר הגיע בזמן ששמרנו, ועוד לא נלקח */
   const missedRemote = useRef(false);
 
+  const readPending = useCallback(() => loadJSON<Pending | null>(keys.pending, null), [keys.pending]);
+  const writePending = useCallback((p: Pending | null) => {
+    if (p) saveJSON(keys.pending, p);
+    else {
+      try {
+        localStorage.removeItem(keys.pending);
+      } catch {
+        // storage blocked: nothing was kept there either
+      }
+    }
+  }, [keys.pending]);
+
+  const scheduleRetry = useCallback(() => {
+    window.clearTimeout(retryTimer.current);
+    retryTimer.current = window.setTimeout(() => setRetryTick((n) => n + 1), retryDelay.current);
+    retryDelay.current = Math.min(retryDelay.current * 2, RETRY_MAX_MS);
+  }, []);
+
+  // A save that failed offline goes out as soon as there's a network, or the app is opened again
+  useEffect(() => {
+    const again = () => {
+      if (document.visibilityState === 'visible') setRetryTick((n) => n + 1);
+    };
+    window.addEventListener('online', again);
+    document.addEventListener('visibilitychange', again);
+    return () => {
+      window.removeEventListener('online', again);
+      document.removeEventListener('visibilitychange', again);
+      window.clearTimeout(retryTimer.current);
+    };
+  }, []);
+
   /** Replaces local state with what the database holds, after a refused or conflicting save. */
   const adoptCloud = useCallback(async (unlessSaving = false): Promise<boolean> => {
     const client = supabase;
@@ -83,6 +140,7 @@ export function useSyncedStore(userId: string | null, isOwner = true) {
     }
     adoptions.current += 1;
     missedRemote.current = false;
+    writePending(null);
     const cloudSettings = normalizeSettings((data.settings ?? {}) as Partial<AppSettings>);
     cloudFingerprint.current = fingerprint(data.players ?? [], data.history ?? [], cloudSettings);
     cloudUpdatedAt.current = data.updated_at ?? null;
@@ -90,7 +148,7 @@ export function useSyncedStore(userId: string | null, isOwner = true) {
     setHistory((data.history ?? []) as MatchRecord[]);
     setSettings(cloudSettings);
     return true;
-  }, [userId, setPlayers, setHistory, setSettings]);
+  }, [userId, setPlayers, setHistory, setSettings, writePending]);
 
   /* ------------------------- טעינה ראשונית מהענן ------------------------- */
 
@@ -126,6 +184,8 @@ export function useSyncedStore(userId: string | null, isOwner = true) {
       if (fetchError) {
         setError(fetchError.message);
         setStatus('error');
+        // Offline at start: try again once there's a network, rather than staying stuck
+        scheduleRetryLoad();
         return;
       }
 
@@ -136,13 +196,32 @@ export function useSyncedStore(userId: string | null, isOwner = true) {
           hasSettingsColumn && data.settings
             ? normalizeSettings(data.settings as Partial<AppSettings>)
             : settings;
+        const cloudPrint = fingerprint(cloudPlayers, cloudHistory, cloudSettings);
+        cloudUpdatedAt.current = data.updated_at ?? null;
+        cloudFingerprint.current = cloudPrint;
 
+        // A change made here that never reached the cloud (no signal, app closed or reloaded
+        // in the middle of a save). If nobody saved since, it is newer than the cloud: keep
+        // it, and the save effect sends it. Otherwise the cloud wins, and the person is told.
+        const pending = readPending();
+        const localIsNewer =
+          !!pending &&
+          !!data.updated_at &&
+          (pending.base === data.updated_at || pending.writing === data.updated_at);
+
+        if (localIsNewer) {
+          if (isOwner) saveJSON(STORAGE_KEYS.owner, userId);
+          hydrated.current = true;
+          setStatus('saving');
+          setRetryTick((n) => n + 1);
+          return;
+        }
+
+        if (pending && fingerprint(players, history, settings) !== cloudPrint) setError(PENDING_LOST);
+        writePending(null);
         setPlayers(cloudPlayers);
         setHistory(cloudHistory);
         if (hasSettingsColumn && data.settings) setSettings(cloudSettings);
-
-        cloudFingerprint.current = fingerprint(cloudPlayers, cloudHistory, cloudSettings);
-        cloudUpdatedAt.current = data.updated_at ?? null;
         setLastSyncedAt(data.updated_at ?? new Date().toISOString());
       } else if (!isOwner) {
         // A helper never creates a squad; a missing row means access was removed
@@ -150,29 +229,50 @@ export function useSyncedStore(userId: string | null, isOwner = true) {
         setStatus('error');
         return;
       } else {
-        // התחברות ראשונה — מעלים את מה שכבר קיים במכשיר
-        const ok = await upsertRow(client, userId, players, history, settings, supportsSettings, isOwner, null);
+        // התחברות ראשונה — מעלים את מה שכבר קיים במכשיר, אבל רק אם הוא לא של חשבון אחר
+        const localOwner = loadJSON<string | null>(STORAGE_KEYS.owner, null);
+        const mine = !localOwner || localOwner === userId;
+        const first = mine
+          ? { players, history, settings }
+          : { players: [] as Player[], history: [] as MatchRecord[], settings: defaultSettings() };
+        if (!mine) {
+          setPlayers(first.players);
+          setHistory(first.history);
+          setSettings(first.settings);
+        }
+        const ok = await upsertRow(client, userId, first.players, first.history, first.settings, supportsSettings, isOwner, null);
         if (cancelled) return;
         if (!ok.success) {
           setError(ok.message ?? 'שמירה ראשונית נכשלה');
           setStatus('error');
           return;
         }
-        cloudFingerprint.current = fingerprint(players, history, settings);
+        writePending(null);
+        cloudFingerprint.current = fingerprint(first.players, first.history, first.settings);
         cloudUpdatedAt.current = ok.updatedAt;
         setLastSyncedAt(new Date().toISOString());
       }
 
+      if (isOwner) saveJSON(STORAGE_KEYS.owner, userId);
       hydrated.current = true;
       setStatus('synced');
     })();
+
+    // The first load failed (no network): load again when it's back, by remounting the effect
+    function scheduleRetryLoad() {
+      const again = () => {
+        window.removeEventListener('online', again);
+        if (!cancelled) setLoadAttempt((n) => n + 1);
+      };
+      window.addEventListener('online', again);
+    }
 
     return () => {
       cancelled = true;
     };
     // טעינה חד-פעמית לכל משתמש; הנתונים המקומיים נקראים כאן בכוונה כערך התחלתי
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [userId]);
+  }, [userId, loadAttempt]);
 
   /* --------------------------- שמירה אוטומטית --------------------------- */
 
@@ -185,6 +285,7 @@ export function useSyncedStore(userId: string | null, isOwner = true) {
       // אין שינוי אמיתי — למשל סימון שבוטל בתוך ההשהיה. אין שמירה שתיתקל בהתנגשות,
       // אז שינוי ממכשיר אחר שדילגנו עליו בינתיים נלקח כאן
       if (!inFlight.current) {
+        writePending(null);
         if (missedRemote.current) {
           missedRemote.current = false;
           void adoptCloud(true);
@@ -193,6 +294,11 @@ export function useSyncedStore(userId: string | null, isOwner = true) {
       }
       return;
     }
+
+    // Recorded before the save is even scheduled: closing the app inside the debounce, or a
+    // reload for a new version, must not lose this change
+    const pending = readPending();
+    if (!pending) writePending({ base: cloudUpdatedAt.current });
 
     setStatus('saving');
     timerArmed.current = true;
@@ -210,6 +316,7 @@ export function useSyncedStore(userId: string | null, isOwner = true) {
           if (adoptions.current !== adoptedBefore) return;
           const updatedAt = new Date().toISOString();
           ownWrites.current.add(updatedAt);
+          writePending({ base: cloudUpdatedAt.current, writing: updatedAt });
           const result = await upsertRow(
             client,
             userId,
@@ -223,19 +330,32 @@ export function useSyncedStore(userId: string | null, isOwner = true) {
           );
           if (!result.success) {
             ownWrites.current.delete(updatedAt);
+            writePending({ base: cloudUpdatedAt.current });
             setError(result.message ?? 'השמירה נכשלה');
             setStatus('error');
+            // No network (or a passing server error): the change stays here and goes out later
+            if (result.retry) {
+              scheduleRetry();
+              return;
+            }
             // A conflicting or refused change would otherwise be retried with every later edit;
             // take what the database holds, so the next edit starts from the real squad
             if ((result.conflict || !isOwner) && !(await adoptCloud())) setError('אין גישה לקבוצה הזו');
             return;
           }
+          retryDelay.current = RETRY_FIRST_MS;
           setSettingsSynced(supportsSettings.current);
           cloudFingerprint.current = current;
           cloudUpdatedAt.current = result.updatedAt;
           setLastSyncedAt(result.updatedAt);
           setError(null);
-          if (!timerArmed.current && inFlight.current === 1) setStatus('synced');
+          if (!timerArmed.current && inFlight.current === 1) {
+            writePending(null);
+            setStatus('synced');
+          } else {
+            // Another change is already waiting; it now builds on this save
+            writePending({ base: result.updatedAt });
+          }
         } finally {
           inFlight.current -= 1;
           if (!isSaving() && missedRemote.current) {
@@ -248,6 +368,7 @@ export function useSyncedStore(userId: string | null, isOwner = true) {
         .catch((e: unknown) => {
           setError(e instanceof Error ? e.message : 'השמירה נכשלה');
           setStatus('error');
+          scheduleRetry();
         });
     }, SAVE_DEBOUNCE_MS);
 
@@ -256,7 +377,7 @@ export function useSyncedStore(userId: string | null, isOwner = true) {
       // שינוי שבוטל לפני שנשלח לא ישאיר את הדגל דלוק לתמיד; שינוי חדש ידליק אותו שוב
       timerArmed.current = false;
     };
-  }, [players, history, settings, userId, isOwner, adoptCloud]);
+  }, [players, history, settings, userId, isOwner, adoptCloud, retryTick, readPending, writePending, scheduleRetry]);
 
   /* ------------------- האזנה לשינויים ממכשירים אחרים ------------------- */
 
@@ -282,7 +403,7 @@ export function useSyncedStore(userId: string | null, isOwner = true) {
           // שינוי ממכשיר אחר בזמן שינוי מקומי שעוד לא הגיע לענן: אימוץ עכשיו היה מחזיר
           // את המסך למצב שלפני הלחיצות האחרונות. השמירה שלנו תיתקל בהתנגשות ותאמץ את
           // הענן בעצמה, ואם לא תהיה שמירה — הוא נלקח כשהכל נרגע
-          if (isSaving()) {
+          if (isSaving() || readPending()) {
             missedRemote.current = true;
             return;
           }
@@ -323,17 +444,23 @@ export function useSyncedStore(userId: string | null, isOwner = true) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [userId, setPlayers, setHistory, setSettings, adoptCloud]);
 
-  /** דחיפה מיידית לענן — לשימוש אחרי ייבוא גיבוי. */
+  /**
+   * דחיפה מיידית לענן — לשימוש אחרי ייבוא גיבוי.
+   * Resolves to whether the cloud took it; on false the change stays on this device and the
+   * regular save keeps trying.
+   */
   const flush = useCallback(
-    async (nextPlayers: Player[], nextHistory: MatchRecord[]) => {
+    async (nextPlayers: Player[], nextHistory: MatchRecord[], nextSettings?: AppSettings): Promise<boolean> => {
+      const sendSettings = nextSettings ?? settings;
       setPlayers(nextPlayers);
       setHistory(nextHistory);
+      if (nextSettings) setSettings(nextSettings);
       const client = supabase;
-      if (!client || !userId) return;
+      if (!client || !userId) return true;
 
       // בתור עם השמירות הרגילות, מאותה סיבה
       inFlight.current += 1;
-      const step = saveChain.current.then(async () => {
+      const step = saveChain.current.then(async (): Promise<boolean> => {
         try {
           const updatedAt = new Date().toISOString();
           ownWrites.current.add(updatedAt);
@@ -342,7 +469,7 @@ export function useSyncedStore(userId: string | null, isOwner = true) {
             userId,
             nextPlayers,
             nextHistory,
-            settings,
+            sendSettings,
             supportsSettings,
             isOwner,
             cloudUpdatedAt.current,
@@ -350,21 +477,32 @@ export function useSyncedStore(userId: string | null, isOwner = true) {
           );
           if (!result.success) {
             ownWrites.current.delete(updatedAt);
+            setError(result.message ?? 'השמירה נכשלה');
+            setStatus('error');
             if (result.conflict) await adoptCloud();
-            return;
+            else scheduleRetry();
+            return false;
           }
-          cloudFingerprint.current = fingerprint(nextPlayers, nextHistory, settings);
+          cloudFingerprint.current = fingerprint(nextPlayers, nextHistory, sendSettings);
           cloudUpdatedAt.current = result.updatedAt;
           setLastSyncedAt(result.updatedAt);
+          setError(null);
           setStatus('synced');
+          return true;
         } finally {
           inFlight.current -= 1;
         }
       });
-      saveChain.current = step.catch(() => undefined);
-      await step;
+      saveChain.current = step.then(
+        () => undefined,
+        () => undefined,
+      );
+      return step.catch(() => {
+        scheduleRetry();
+        return false;
+      });
     },
-    [userId, isOwner, settings, setPlayers, setHistory, adoptCloud],
+    [userId, isOwner, settings, setPlayers, setHistory, setSettings, adoptCloud, scheduleRetry],
   );
 
   return {
@@ -390,20 +528,37 @@ const helperKeys = (ownerId: string) => ({
   players: `${STORAGE_KEYS.players}@${ownerId}`,
   history: `${STORAGE_KEYS.history}@${ownerId}`,
   settings: `${STORAGE_KEYS.settings}@${ownerId}`,
+  pending: `${STORAGE_KEYS.pending}@${ownerId}`,
 });
 
 /** What the database's helper rule says, in words a helper can act on */
 const helperMessage = (message: string) =>
-  /existing players|remove players/.test(message)
+  /existing players|remove players|ratings/.test(message)
     ? 'עוזר לא יכול לשנות או למחוק שחקן קיים — השינוי לא נשמר'
     : message;
 
 const CONFLICT_MESSAGE = 'הקבוצה עודכנה באותו רגע ממכשיר אחר — השינוי האחרון שלך לא נשמר. אפשר לעשות אותו שוב';
 
+const OFFLINE_MESSAGE = 'אין חיבור לענן — השינוי שמור במכשיר ויישלח כשהחיבור יחזור';
+
 const isMissingSettings = (error: { code?: string; message: string }) =>
   error.code === MISSING_COLUMN || /settings/i.test(error.message);
 
-type SaveResult = { success: boolean; updatedAt: string; message?: string; conflict?: boolean };
+/**
+ * A failure that says nothing about the change itself — no network, a timeout, the server
+ * briefly down. Postgres refusals (the helper rule, RLS) carry a SQLSTATE code instead.
+ */
+const isTransient = (error: { code?: string; message: string }) =>
+  !error.code || /fetch|network|load failed|timeout/i.test(error.message);
+
+type SaveResult = {
+  success: boolean;
+  updatedAt: string;
+  message?: string;
+  conflict?: boolean;
+  /** Worth sending again later: nothing was wrong with the change */
+  retry?: boolean;
+};
 
 /**
  * Writes the document. When the row is already known (`expected` is the updated_at this
@@ -424,6 +579,10 @@ async function upsertRow(
   expected: string | null,
   updatedAt = new Date().toISOString(),
 ): Promise<SaveResult> {
+  const failed = (error: { code?: string; message: string }): SaveResult =>
+    isTransient(error)
+      ? { success: false, updatedAt, retry: true, message: OFFLINE_MESSAGE }
+      : { success: false, updatedAt, message: isOwner ? error.message : helperMessage(error.message) };
 
   if (expected) {
     const write = (withSettings: boolean) =>
@@ -443,9 +602,7 @@ async function upsertRow(
       supportsSettings.current = false;
       ({ data, error } = await write(false));
     }
-    if (error) {
-      return { success: false, updatedAt, message: isOwner ? error.message : helperMessage(error.message) };
-    }
+    if (error) return failed(error);
     // Nothing matched: the row moved on since this device last saw it (or access is gone)
     if (!data?.length) return { success: false, updatedAt, conflict: true, message: CONFLICT_MESSAGE };
     return { success: true, updatedAt };
@@ -458,12 +615,10 @@ async function upsertRow(
   if (supportsSettings.current) {
     const { error } = await client.from(TABLE).upsert({ ...base, settings });
     if (!error) return { success: true, updatedAt };
-    if (!isMissingSettings(error)) return { success: false, updatedAt, message: error.message };
+    if (!isMissingSettings(error)) return failed(error);
     supportsSettings.current = false; // ננסה שוב בלי ההגדרות
   }
 
   const { error } = await client.from(TABLE).upsert(base);
-  return error
-    ? { success: false, updatedAt, message: error.message }
-    : { success: true, updatedAt };
+  return error ? failed(error) : { success: true, updatedAt };
 }

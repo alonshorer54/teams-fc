@@ -116,7 +116,7 @@ export function RoundPanel({
   return (
     <section className="card overflow-hidden">
       <button
-        className="flex w-full items-center justify-between gap-3 px-4 py-3.5 text-right transition hover:bg-slate-800/40"
+        className="flex w-full items-center justify-between gap-3 px-4 py-3.5 text-start transition hover:bg-slate-800/40"
         onClick={() => setOpen((v) => !v)}
       >
         <div className="min-w-0">
@@ -315,7 +315,7 @@ function ReplacementPicker({
   );
 
   return (
-    <div className="mt-1.5 mr-3 rounded-xl border border-sky-500/30 bg-sky-500/5 p-3">
+    <div className="mt-1.5 ms-3 rounded-xl border border-sky-500/30 bg-sky-500/5 p-3">
       <div className="mb-2 flex items-center justify-between gap-2">
         <p className="flex items-center gap-1.5 text-[11px] font-bold text-sky-300">
           <UserPlus size={12} />

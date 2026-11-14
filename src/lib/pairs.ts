@@ -1,5 +1,6 @@
 import {
   isFillerId,
+  isLevelEvening,
   recordPlacements,
   teamsIn,
   type MatchRecord,
@@ -114,14 +115,16 @@ export function computePairChemistry(history: MatchRecord[]): PairReport {
 
   for (const { record, placements } of resolved) {
     const teams = teamsIn(record.teams);
+    // A level evening (with two teams: both marked first) is a draw, not a win for everyone
+    const level = isLevelEvening(placements, teams);
 
     for (const team of teams) {
       // משלימים הם שחקני דמה של ערב אחד — זוג איתם לא מלמד כלום
       const members = (record.teams[team] ?? []).filter((p) => !isFillerId(p.id));
       const place = placements[team] ?? teams.length;
-      const won = place <= 1;
+      const won = !level && place <= 1;
       // "אמצע" — לא ניצחון ולא הפסד; עם 2 קבוצות אין מצב כזה
-      const lost = !won && place >= teams.length;
+      const lost = !level && !won && place >= teams.length;
 
       for (const p of members) {
         const entry = solo.get(p.id) ?? { wins: 0, losses: 0, name: p.name };

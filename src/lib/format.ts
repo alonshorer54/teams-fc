@@ -1,4 +1,4 @@
-import { POSITION_META, TEAM_META, teamsIn, type TeamId, type TeamMap } from '../types';
+import { POSITION_META, TEAM_META, teamsIn, type TeamMap } from '../types';
 import type { FieldPosition } from './formation';
 
 /** שמות השחקנים לכל קבוצה משתתפת — הקלט של כל מסלולי השיתוף. */
@@ -131,5 +131,3 @@ export async function copyToClipboard(text: string): Promise<boolean> {
     }
   }
 }
-
-export const teamLabel = (id: TeamId) => TEAM_META[id].name;

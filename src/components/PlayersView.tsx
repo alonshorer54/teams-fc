@@ -65,9 +65,9 @@ export function PlayersView({
       {/* סרגל פעולות */}
       <div className="card flex flex-col gap-3 p-4 sm:flex-row sm:items-center">
         <div className="relative flex-1">
-          <Search size={16} className="absolute top-1/2 right-3 -translate-y-1/2 text-slate-500" />
+          <Search size={16} className="absolute top-1/2 start-3 -translate-y-1/2 text-slate-500" />
           <input
-            className="input pr-9"
+            className="input ps-9"
             placeholder="חיפוש שחקן..."
             value={query}
             onChange={(e) => setQuery(e.target.value)}

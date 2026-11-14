@@ -37,7 +37,7 @@ begin
       (2,  'helper',   true, 'count', 'select count(*) from public.kohot_data where user_id = %1$L', '1', 'עוזר: רואה את הקבוצה'),
       (3,  'helper',   true, 'write', 'update public.kohot_data set players = players || ''[{"id":"rls-new","name":"RLS","rating":4.5,"friendIds":[],"loveIds":[],"hateIds":[],"positions":["any"]}]''::jsonb where user_id = %1$L', 'עבר', 'עוזר: מוסיף שחקן חדש (דירוג 4.5)'),
       (4,  'helper',   true, 'write', 'update public.kohot_data set history = ''[{"id":"rls-round"}]''::jsonb || history where user_id = %1$L', 'עבר', 'עוזר: רושם בהיסטוריה'),
-      (5,  'helper',   true, 'write', 'update public.kohot_data set players = jsonb_set(players, ''{0,rating}'', to_jsonb(((players->0->>''rating'')::numeric + 0.1))) where user_id = %1$L', 'עבר', 'עוזר: תיקון אוטומטי של 0.1 בדירוג'),
+      (5,  'helper',   true, 'write', 'update public.kohot_data set players = jsonb_set(players, ''{0,rating}'', to_jsonb(((players->0->>''rating'')::numeric + 0.1))) where user_id = %1$L', 'חסום', 'עוזר: לא יכול להזיז דירוג ב-0.1 בלי תיקון רשום בהיסטוריה'),
       (6,  'helper',   true, 'write', 'update public.kohot_data set players = jsonb_set(players, ''{0,rating}'', to_jsonb(((players->0->>''rating'')::numeric + 0.5))) where user_id = %1$L', 'חסום', 'עוזר: לא יכול לשנות דירוג של שחקן קיים'),
       (7,  'helper',   true, 'write', 'update public.kohot_data set players = jsonb_set(players, ''{0,name}'', ''"RLS renamed"'') where user_id = %1$L', 'חסום', 'עוזר: לא יכול לשנות שם של שחקן קיים'),
       (8,  'helper',   true, 'write', 'update public.kohot_data set players = jsonb_set(players, ''{0,positions}'', ''["gk"]'') where user_id = %1$L', 'חסום', 'עוזר: לא יכול לשנות עמדה של שחקן קיים'),
@@ -55,7 +55,9 @@ begin
       (20, 'helper',   true, 'write', 'update public.kohot_data set history = jsonb_build_array(jsonb_build_object(''id'', ''rls-y'', ''ratingCheck'', jsonb_build_object(''changes'', jsonb_build_array(jsonb_build_object(''playerId'', players->0->>''id'', ''from'', 3, ''to'', 3.1))))) || history where user_id = %1$L', 'עבר', 'עוזר: תיקון רגיל של 0.1 נרשם'),
       (21, 'helper',   false, 'count', 'select count(*) from public.kohot_data where user_id = %1$L', '0', 'מוזמן שעוד לא אישר: לא רואה את הקבוצה'),
       (22, 'helper',   false, 'write', 'update public.kohot_members set accepted = true where owner_id = %1$L and user_id = auth.uid()', 'עבר', 'מוזמן: יכול לאשר את ההזמנה של עצמו'),
-      (23, 'helper',   true, 'write', 'update public.kohot_members set owner_email = ''x@example.com'' where owner_id = %1$L and user_id = auth.uid()', 'חסום', 'עוזר: לא יכול לשנות פרטים אחרים בחברות שלו')
+      (23, 'helper',   true, 'write', 'update public.kohot_members set owner_email = ''x@example.com'' where owner_id = %1$L and user_id = auth.uid()', 'חסום', 'עוזר: לא יכול לשנות פרטים אחרים בחברות שלו'),
+      (24, 'helper',   true, 'write', 'update public.kohot_data set players = jsonb_set(players, ''{0,rating}'', to_jsonb(((players->0->>''rating'')::numeric + 0.1))), history = jsonb_build_array(jsonb_build_object(''id'', ''rls-z'', ''ratingCheck'', jsonb_build_object(''changes'', jsonb_build_array(jsonb_build_object(''playerId'', players->0->>''id'', ''from'', (players->0->>''rating'')::numeric, ''to'', (players->0->>''rating'')::numeric + 0.1))))) || history where user_id = %1$L', 'עבר', 'עוזר: תיקון אוטומטי של 0.1 יחד עם הרישום שלו בהיסטוריה'),
+      (25, 'helper',   true, 'write', 'update public.kohot_data set settings = jsonb_set(settings, ''{ratingRulesVersion}'', ''99'') where user_id = %1$L', 'חסום', 'עוזר: לא יכול לשנות את גרסת כללי הדירוג')
     ) as v(ord, who, accepted, kind, stmt, expected, label)
     order by ord
   loop

@@ -125,7 +125,7 @@ export function HistoryView({
           <article key={record.id} className="card overflow-hidden">
             <header className="flex items-center gap-2 px-4 py-3">
               <button
-                className="flex min-w-0 flex-1 items-center gap-3 text-right"
+                className="flex min-w-0 flex-1 items-center gap-3 text-start"
                 onClick={() => setExpanded(isOpen ? null : record.id)}
               >
                 <CalendarDays size={17} className="shrink-0 text-emerald-400" />
@@ -167,7 +167,7 @@ export function HistoryView({
                 </div>
                 <ChevronDown
                   size={16}
-                  className={`mr-auto shrink-0 text-slate-500 transition-transform ${isOpen ? 'rotate-180' : ''}`}
+                  className={`ms-auto shrink-0 text-slate-500 transition-transform ${isOpen ? 'rotate-180' : ''}`}
                 />
               </button>
 
@@ -253,7 +253,7 @@ export function HistoryView({
                                 {p.name}
                                 {isFillerId(p.id) && (
                                   <span
-                                    className="mr-1.5 rounded bg-violet-500/20 px-1 text-[9px] font-bold text-violet-300"
+                                    className="ms-1.5 rounded bg-violet-500/20 px-1 text-[9px] font-bold text-violet-300"
                                     title="שחקן משלים — לא נספר בסטטיסטיקות"
                                   >
                                     משלים
@@ -338,6 +338,12 @@ export function HistoryView({
           <>
             למחוק את ההגרלה מ־
             <b className="text-slate-100">{pendingDelete && formatHebrewDate(pendingDelete.date)}</b>?
+            {pendingDelete?.ratingCheck?.changes.some((c) => Number(c.to) !== Number(c.from)) && (
+              <>
+                <br />
+                תיקוני הדירוג שהערב הזה גרם יבוטלו יחד איתו.
+              </>
+            )}
           </>
         }
         onCancel={() => setPendingDelete(null)}
@@ -560,7 +566,7 @@ function StatsPanel({
                       className="rounded-lg bg-amber-500/15 px-2 py-1 text-[11px] font-semibold text-amber-200"
                     >
                       {p.name}
-                      <span className="mr-1 font-mono opacity-80">{Math.abs(p.streak)} ברצף</span>
+                      <span className="ms-1 font-mono opacity-80">{Math.abs(p.streak)} ברצף</span>
                     </li>
                   ))}
                 </ul>
@@ -595,7 +601,7 @@ function PlayerTable({
         <table className="w-full min-w-[34rem] text-xs">
           <thead>
             <tr className="text-[10px] text-slate-500">
-              <th className="px-2 py-1.5 text-right font-semibold">שחקן</th>
+              <th className="px-2 py-1.5 text-start font-semibold">שחקן</th>
               <th className="px-2 py-1.5 text-center font-semibold">שבועות</th>
               <th className="px-2 py-1.5 text-center font-semibold" title="בכמה שבועות הקבוצה שלו ניצחה הרבה">
                 ניצח
