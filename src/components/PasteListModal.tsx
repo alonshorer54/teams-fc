@@ -9,7 +9,8 @@ export interface NewPlayerDraft {
   rating: number;
 }
 
-const RATING_OPTIONS = [1, 1.5, 2, 2.5, 3, 3.5, 4, 4.5, 5];
+// בקפיצות של 0.1, כמו בטופס השחקן — בחצאים בלבד אי אפשר היה לתת 3.7
+const RATING_OPTIONS = Array.from({ length: 41 }, (_, i) => (10 + i) / 10);
 
 /**
  * מדביקים טקסט חופשי מהקבוצה בוואטסאפ (סקר, רשימה ממוספרת, שמות בשורות)
