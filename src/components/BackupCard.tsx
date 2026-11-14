@@ -2,6 +2,7 @@ import { useRef, useState } from 'react';
 import { Download, HardDriveDownload, Upload } from 'lucide-react';
 import type { MatchRecord, Player } from '../types';
 import { downloadBackup, parseBackup, type AppSettings, type BackupFile } from '../lib/storage';
+import type { FlushResult } from '../hooks/useSyncedStore';
 import { ConfirmDialog } from './ui';
 
 /**
@@ -19,8 +20,7 @@ export function BackupCard({
   players: Player[];
   history: MatchRecord[];
   settings: AppSettings;
-  /** Resolves to whether the cloud took the import */
-  onImport: (backup: BackupFile) => Promise<boolean>;
+  onImport: (backup: BackupFile) => Promise<FlushResult>;
   notify: (msg: string) => void;
 }) {
   const fileInput = useRef<HTMLInputElement>(null);
@@ -98,14 +98,16 @@ export function BackupCard({
         onConfirm={async () => {
           if (!pending || importing) return;
           setImporting(true);
-          const saved = await onImport(pending);
+          const outcome = await onImport(pending);
           setImporting(false);
           setPending(null);
-          // Only claim success once the cloud has it; otherwise it's on this device, still trying
+          // Only claim success once the cloud has it
           notify(
-            saved
+            outcome === 'saved'
               ? 'הנתונים יובאו בהצלחה ✔'
-              : '⚠️ הנתונים יובאו למכשיר הזה, אבל עוד לא נשמרו בענן — ננסה שוב אוטומטית',
+              : outcome === 'later'
+                ? '⚠️ הנתונים יובאו למכשיר הזה, אבל עוד לא נשמרו בענן — ננסה שוב אוטומטית'
+                : '⚠️ הייבוא לא נשמר — הקבוצה עודכנה באותו רגע ממכשיר אחר. נסו לייבא שוב',
           );
         }}
       />

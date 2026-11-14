@@ -13,6 +13,8 @@ import { useLocalStorage } from './useLocalStorage';
 
 export type SyncStatus = 'local' | 'loading' | 'synced' | 'saving' | 'error';
 
+export type FlushResult = 'saved' | 'later' | 'refused';
+
 const SAVE_DEBOUNCE_MS = 900;
 
 /** A save that failed for a reason other than a conflict is tried again after this, doubling up to the max */
@@ -31,6 +33,8 @@ const fingerprint = (players: Player[], history: MatchRecord[], settings: AppSet
  * `writing` is the updated_at of a save that was on its way when the page went away.
  */
 interface Pending {
+  /** The account whose squad this is — a marker left by someone else means nothing here */
+  owner: string;
   base: string | null;
   writing?: string;
 }
@@ -61,6 +65,8 @@ export function useSyncedStore(userId: string | null, isOwner = true) {
   const [error, setError] = useState<string | null>(null);
   /** האם עמודת ההגדרות קיימת בענן */
   const [settingsSynced, setSettingsSynced] = useState(true);
+  /** Something the person must hear about even though syncing carries on (changes that were lost) */
+  const [notice, setNotice] = useState<string | null>(null);
   /** Bumped to make the save effect look again: after a failed save, back online, back on screen */
   const [retryTick, setRetryTick] = useState(0);
   /** Bumped to load again after the first load failed for lack of network */
@@ -72,6 +78,8 @@ export function useSyncedStore(userId: string | null, isOwner = true) {
   const saveTimer = useRef<number | undefined>(undefined);
   const retryTimer = useRef<number | undefined>(undefined);
   const retryDelay = useRef(RETRY_FIRST_MS);
+  /** A change failed to send for lack of network and is waiting to go out again */
+  const retryWaiting = useRef(false);
   const supportsSettings = useRef(true);
   /**
    * The row's updated_at as this device last saw it. A save only goes through if the row
@@ -94,9 +102,12 @@ export function useSyncedStore(userId: string | null, isOwner = true) {
   /** שינוי ממכשיר אחר הגיע בזמן ששמרנו, ועוד לא נלקח */
   const missedRemote = useRef(false);
 
-  const readPending = useCallback(() => loadJSON<Pending | null>(keys.pending, null), [keys.pending]);
-  const writePending = useCallback((p: Pending | null) => {
-    if (p) saveJSON(keys.pending, p);
+  const readPending = useCallback(() => {
+    const p = loadJSON<Pending | null>(keys.pending, null);
+    return p && p.owner === userId ? p : null;
+  }, [keys.pending, userId]);
+  const writePending = useCallback((p: Omit<Pending, 'owner'> | null) => {
+    if (p && userId) saveJSON(keys.pending, { ...p, owner: userId });
     else {
       try {
         localStorage.removeItem(keys.pending);
@@ -104,9 +115,10 @@ export function useSyncedStore(userId: string | null, isOwner = true) {
         // storage blocked: nothing was kept there either
       }
     }
-  }, [keys.pending]);
+  }, [keys.pending, userId]);
 
   const scheduleRetry = useCallback(() => {
+    retryWaiting.current = true;
     window.clearTimeout(retryTimer.current);
     retryTimer.current = window.setTimeout(() => setRetryTick((n) => n + 1), retryDelay.current);
     retryDelay.current = Math.min(retryDelay.current * 2, RETRY_MAX_MS);
@@ -217,7 +229,7 @@ export function useSyncedStore(userId: string | null, isOwner = true) {
           return;
         }
 
-        if (pending && fingerprint(players, history, settings) !== cloudPrint) setError(PENDING_LOST);
+        if (pending && fingerprint(players, history, settings) !== cloudPrint) setNotice(PENDING_LOST);
         writePending(null);
         setPlayers(cloudPlayers);
         setHistory(cloudHistory);
@@ -258,17 +270,21 @@ export function useSyncedStore(userId: string | null, isOwner = true) {
       setStatus('synced');
     })();
 
-    // The first load failed (no network): load again when it's back, by remounting the effect
+    // The first load failed: load again when the network is back, or in a while anyway (a
+    // server error while online never fires 'online'), by running this effect again
+    let loadRetry: number | undefined;
+    const loadAgain = () => {
+      if (!cancelled) setLoadAttempt((n) => n + 1);
+    };
     function scheduleRetryLoad() {
-      const again = () => {
-        window.removeEventListener('online', again);
-        if (!cancelled) setLoadAttempt((n) => n + 1);
-      };
-      window.addEventListener('online', again);
+      window.addEventListener('online', loadAgain, { once: true });
+      loadRetry = window.setTimeout(loadAgain, 15_000);
     }
 
     return () => {
       cancelled = true;
+      window.removeEventListener('online', loadAgain);
+      window.clearTimeout(loadRetry);
     };
     // טעינה חד-פעמית לכל משתמש; הנתונים המקומיים נקראים כאן בכוונה כערך התחלתי
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -314,6 +330,15 @@ export function useSyncedStore(userId: string | null, isOwner = true) {
         try {
           // המכשיר אימץ את הענן בינתיים: מה שחיכה כאן כבר לא המצב שלו
           if (adoptions.current !== adoptedBefore) return;
+          // Already in the cloud — a save queued twice (a retry or the app coming back to the
+          // screen while the first was on its way). Sending the whole document again is waste
+          if (current === cloudFingerprint.current) {
+            if (!timerArmed.current && inFlight.current === 1) {
+              writePending(null);
+              setStatus('synced');
+            }
+            return;
+          }
           const updatedAt = new Date().toISOString();
           ownWrites.current.add(updatedAt);
           writePending({ base: cloudUpdatedAt.current, writing: updatedAt });
@@ -344,6 +369,7 @@ export function useSyncedStore(userId: string | null, isOwner = true) {
             return;
           }
           retryDelay.current = RETRY_FIRST_MS;
+          retryWaiting.current = false;
           setSettingsSynced(supportsSettings.current);
           cloudFingerprint.current = current;
           cloudUpdatedAt.current = result.updatedAt;
@@ -358,7 +384,9 @@ export function useSyncedStore(userId: string | null, isOwner = true) {
           }
         } finally {
           inFlight.current -= 1;
-          if (!isSaving() && missedRemote.current) {
+          // A change waiting to be sent again isn't thrown away for the remote one: its retry
+          // meets the conflict and takes the cloud then, with the message that says so
+          if (!isSaving() && !retryWaiting.current && missedRemote.current) {
             missedRemote.current = false;
             void adoptCloud(true);
           }
@@ -403,7 +431,7 @@ export function useSyncedStore(userId: string | null, isOwner = true) {
           // שינוי ממכשיר אחר בזמן שינוי מקומי שעוד לא הגיע לענן: אימוץ עכשיו היה מחזיר
           // את המסך למצב שלפני הלחיצות האחרונות. השמירה שלנו תיתקל בהתנגשות ותאמץ את
           // הענן בעצמה, ואם לא תהיה שמירה — הוא נלקח כשהכל נרגע
-          if (isSaving() || readPending()) {
+          if (isSaving() || retryWaiting.current) {
             missedRemote.current = true;
             return;
           }
@@ -446,21 +474,26 @@ export function useSyncedStore(userId: string | null, isOwner = true) {
 
   /**
    * דחיפה מיידית לענן — לשימוש אחרי ייבוא גיבוי.
-   * Resolves to whether the cloud took it; on false the change stays on this device and the
-   * regular save keeps trying.
+   * Resolves to what happened: `saved` in the cloud; `later` — kept on this device and sent
+   * again automatically; `refused` — someone saved at the same moment, and the device took
+   * their version instead, so the change is gone and has to be made again.
    */
   const flush = useCallback(
-    async (nextPlayers: Player[], nextHistory: MatchRecord[], nextSettings?: AppSettings): Promise<boolean> => {
+    async (
+      nextPlayers: Player[],
+      nextHistory: MatchRecord[],
+      nextSettings?: AppSettings,
+    ): Promise<FlushResult> => {
       const sendSettings = nextSettings ?? settings;
       setPlayers(nextPlayers);
       setHistory(nextHistory);
       if (nextSettings) setSettings(nextSettings);
       const client = supabase;
-      if (!client || !userId) return true;
+      if (!client || !userId) return 'saved';
 
       // בתור עם השמירות הרגילות, מאותה סיבה
       inFlight.current += 1;
-      const step = saveChain.current.then(async (): Promise<boolean> => {
+      const step = saveChain.current.then(async (): Promise<FlushResult> => {
         try {
           const updatedAt = new Date().toISOString();
           ownWrites.current.add(updatedAt);
@@ -479,16 +512,20 @@ export function useSyncedStore(userId: string | null, isOwner = true) {
             ownWrites.current.delete(updatedAt);
             setError(result.message ?? 'השמירה נכשלה');
             setStatus('error');
-            if (result.conflict) await adoptCloud();
-            else scheduleRetry();
-            return false;
+            if (result.conflict) {
+              await adoptCloud();
+              return 'refused';
+            }
+            scheduleRetry();
+            return 'later';
           }
+          retryWaiting.current = false;
           cloudFingerprint.current = fingerprint(nextPlayers, nextHistory, sendSettings);
           cloudUpdatedAt.current = result.updatedAt;
           setLastSyncedAt(result.updatedAt);
           setError(null);
           setStatus('synced');
-          return true;
+          return 'saved';
         } finally {
           inFlight.current -= 1;
         }
@@ -497,9 +534,9 @@ export function useSyncedStore(userId: string | null, isOwner = true) {
         () => undefined,
         () => undefined,
       );
-      return step.catch(() => {
+      return step.catch((): FlushResult => {
         scheduleRetry();
-        return false;
+        return 'later';
       });
     },
     [userId, isOwner, settings, setPlayers, setHistory, setSettings, adoptCloud, scheduleRetry],
@@ -513,6 +550,8 @@ export function useSyncedStore(userId: string | null, isOwner = true) {
     settings,
     setSettings,
     settingsSynced,
+    notice,
+    clearNotice: () => setNotice(null),
     status,
     lastSyncedAt,
     error,

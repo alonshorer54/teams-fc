@@ -107,9 +107,11 @@ function followRoster(prev: Draft, next: Draft): Draft {
 
   for (const s of next.substitutions) {
     if (prev.substitutions.some((x) => x.outId === s.outId && x.inId === s.inId)) continue;
-    // A replacement for the replacement takes over the spot the first one already holds
+    // A replacement for the replacement takes over the spot the first one held — but only if
+    // the first one is out of the round; one still replacing someone else keeps their spot
     const earlier = prev.substitutions.find((x) => x.outId === s.outId)?.inId;
-    const spot = earlier && findTeamOf(lineup, earlier) ? earlier : s.outId;
+    const earlierGone = !!earlier && !next.selectedIds.includes(earlier);
+    const spot = earlierGone && findTeamOf(lineup, earlier) ? earlier : s.outId;
     both((l) => replaceInLineup(l, spot, s.inId));
   }
 

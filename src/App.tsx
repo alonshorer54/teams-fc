@@ -824,6 +824,20 @@ function SquadApp({
         </div>
       )}
 
+      {!isDemo && store.notice && (
+        <div className="mb-4 flex items-start gap-2.5 rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-xs leading-relaxed text-amber-200">
+          <Database size={15} className="mt-0.5 shrink-0" />
+          <span className="flex-1">{store.notice}</span>
+          <button
+            className="shrink-0 rounded p-0.5 hover:bg-amber-500/20"
+            aria-label="סגירה"
+            onClick={store.clearNotice}
+          >
+            <X size={14} />
+          </button>
+        </div>
+      )}
+
       {isDemo && (
         <div className="mb-4 flex flex-wrap items-center gap-2.5 rounded-xl border border-violet-500/40 bg-violet-500/10 px-4 py-3 text-xs text-violet-200">
           <FlaskConical size={15} className="shrink-0" />

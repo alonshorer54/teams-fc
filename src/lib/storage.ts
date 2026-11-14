@@ -357,7 +357,15 @@ function cleanPaymentRound(v: unknown, nested = false): PaymentRound | null {
   const paid: PaymentRound['paid'] = {};
   if (isObj(v.paid)) {
     for (const [id, mark] of Object.entries(v.paid)) {
-      if (isObj(mark) && isStr(mark.at) && isStr(mark.method) && mark.method in PAYMENT_METHODS) {
+      // Own keys only: `in` also accepts "constructor", and a "__proto__" id would replace
+      // the map's prototype instead of adding an entry
+      if (id === '__proto__') continue;
+      if (
+        isObj(mark) &&
+        isStr(mark.at) &&
+        isStr(mark.method) &&
+        Object.prototype.hasOwnProperty.call(PAYMENT_METHODS, mark.method)
+      ) {
         paid[id] = { at: mark.at, method: mark.method as PaymentMethod };
       }
     }
